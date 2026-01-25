@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package contextcore;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Modality of the unit payload
+enum Modality {
+    TEXT = 0;
+    AUDIO = 1;
+    SPATIAL = 2;
+    IMAGE = 3;
+}
+
+// Metrics for observability
+message UnitMetrics {
+    int64 latency_ms = 1;
+    double cost_usd = 2;
+    int32 tokens_used = 3;
+    double cost_limit_usd = 4; // Max budget for this unit lifecycle
+}
+
+// Security scopes for capability-based access control
+message SecurityScopes {
+    repeated string read = 1;  // E.g. ["catalog:read", "price:historical"]
+    repeated string write = 2; // E.g. ["product:patch", "stock:update"]
+}
+
+// Chain of Thought step
+message CotStep {
+    string agent = 1;
+    string action = 2;
+    string status = 3; // "success", "failure", "pending"
+    google.protobuf.Timestamp timestamp = 4;
+}
+
+// The core atom of ContextUnity
+message ContextUnit {
+    string unit_id = 1;           // UUIDv4
+    string trace_id = 2;          // UUIDv4 cross-service trace
+    string parent_unit_id = 3;    // Optional parent reference
+    
+    Modality modality = 4;
+    google.protobuf.Struct payload = 5; // The actual data
+    
+    repeated string provenance = 6;     // Data journey labels
+    repeated CotStep chain_of_thought = 7;
+    
+    UnitMetrics metrics = 8;
+    SecurityScopes security = 9;
+    
+    google.protobuf.Timestamp created_at = 10;
+}

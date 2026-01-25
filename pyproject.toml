@@ -1,0 +1,39 @@
+[project]
+name = "contextcore"
+version = "0.1.0"
+description = "The Kernel of ContextUnity"
+requires-python = ">=3.12"
+dependencies = [
+    "grpcio>=1.62.0",
+    "protobuf>=4.25.0",
+    "pydantic>=2.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "grpcio-tools>=1.62.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+]

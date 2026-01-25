@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package contextbrain;
+
+import "context_unit.proto";
+
+// Intelligence and Memory Hub
+service BrainService {
+    // Semantic/Hybrid search for relevant context (RAG)
+    rpc QueryMemory(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    
+    // Write new knowledge/observations into memory
+    rpc Memorize(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
+    // Extract concepts and update Knowledge Graph (Gardener agent)
+    rpc UpdateGraph(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Retrieve unrecognized items needing manual/agentic verification
+    rpc GetPendingVerifications(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+
+    // Episodic Memory: Record an interaction
+    rpc AddEpisode(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Entity Memory: Store persistent user facts
+    rpc UpsertFact(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Catalog Taxonomy: Bi-directional sync
+    rpc UpsertTaxonomy(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetTaxonomy(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+}

@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package contextcommerce;
+
+import "context_unit.proto";
+
+// Service for managing the canonical product catalog (PIM)
+service CommerceService {
+    // Propose a change to a product (Mutator agent)
+    rpc ProposePatch(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
+    // Finalize/Confirm a product update in source of truth
+    rpc ConfirmPatch(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
+    // Get canonical product data for a given SKU/ID
+    rpc GetProduct(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+}
+
+// Service for data ingestion and synchronization
+service HarvesterService {
+    // Trigger extraction from a specific dealer source
+    rpc TriggerImport(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
+    // Match raw dealer products against the canonical database (Matcher agent)
+    rpc RunMatching(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
+    // Sync status or price back to a channel (e.g. Horoshop)
+    rpc SyncToChannel(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+}
