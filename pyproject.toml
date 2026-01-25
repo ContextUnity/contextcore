@@ -5,6 +5,7 @@ description = "The Kernel of ContextUnity"
 requires-python = ">=3.12"
 dependencies = [
     "grpcio>=1.62.0",
+    "pre-commit>=4.5.1",
     "protobuf>=4.25.0",
     "pydantic>=2.6.0",
 ]
