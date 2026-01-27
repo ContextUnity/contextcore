@@ -249,11 +249,11 @@ uv run pytest tests/test_sdk.py
 
 ContextCore is integrated into all ContextUnity services:
 
-- **ContextRouter** — AI Gateway uses ContextUnit for all requests
-- **ContextBrain** — SmartMemory uses ContextUnit for RAG operations
-- **ContextCommerce** — E-commerce platform uses ContextUnit for agents
-- **ContextWorker** — Background tasks use ContextUnit for workflows
-- **ContextShield** — Security layer validates ContextUnit for security
+- **ContextRouter** — The "Mind": AI Gateway and agent orchestration.
+- **ContextBrain** — The "Memory": Centralized RAG retrieval and vector storage.
+- **ContextCommerce** — The "Store": E-commerce platform with agent integration.
+- **ContextWorker** — The "Hands": Background tasks and temporal workflows.
+- **ContextShield** — The "Guard": Security layer validating provenance.
 
 ## License
 
