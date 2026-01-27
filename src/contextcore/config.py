@@ -77,7 +77,9 @@ class SharedConfig(BaseModel):
         if v is None:
             return v
         if not v.startswith(("redis://", "rediss://", "unix://")):
-            raise ValueError("Redis URL must start with redis://, rediss://, or unix://")
+            raise ValueError(
+                "Redis URL must start with redis://, rediss://, or unix://"
+            )
         return v
 
     @field_validator("log_level", mode="before")
@@ -90,7 +92,9 @@ class SharedConfig(BaseModel):
             try:
                 return LogLevel[v.upper()]
             except KeyError:
-                raise ValueError(f"Invalid log level: {v}. Must be one of {[e.value for e in LogLevel]}")
+                raise ValueError(
+                    f"Invalid log level: {v}. Must be one of {[e.value for e in LogLevel]}"
+                )
         raise ValueError(f"Log level must be string or LogLevel enum, got {type(v)}")
 
     model_config = {
@@ -119,7 +123,8 @@ def load_shared_config_from_env() -> SharedConfig:
     return SharedConfig(
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         redis_url=os.getenv("REDIS_URL"),
-        otel_enabled=os.getenv("OTEL_ENABLED", "false").lower() in ("true", "1", "yes", "on"),
+        otel_enabled=os.getenv("OTEL_ENABLED", "false").lower()
+        in ("true", "1", "yes", "on"),
         otel_endpoint=os.getenv("OTEL_ENDPOINT"),
         service_name=os.getenv("SERVICE_NAME"),
         service_version=os.getenv("SERVICE_VERSION"),

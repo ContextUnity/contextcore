@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from .sdk import ContextUnit
+
 
 class BaseTransformer(ABC):
     """Logic pipes: pure-ish transformation over ContextUnit."""
+
     def __init__(self):
         self._params: Dict[str, Any] = {}
 
@@ -18,8 +20,10 @@ class BaseTransformer(ABC):
     async def transform(self, unit: ContextUnit) -> ContextUnit:
         raise NotImplementedError
 
+
 class Transformer(BaseTransformer):
     """Convenience base class for transformers."""
+
     name: str = "transformer"
 
     async def transform(self, unit: ContextUnit) -> ContextUnit:

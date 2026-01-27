@@ -12,7 +12,7 @@ from __future__ import annotations
 import secrets
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Literal
+from typing import Any, Iterable, Literal
 
 from .sdk import ContextUnit, SecurityScopes
 
@@ -20,12 +20,12 @@ from .sdk import ContextUnit, SecurityScopes
 @dataclass(frozen=True)
 class ContextToken:
     """Authorization token for ContextUnit operations.
-    
+
     ContextToken provides:
     - token_id: Unique identifier for audit trails
     - permissions: List of capability strings (e.g., "catalog:read", "product:write")
     - exp_unix: Expiration timestamp (None = no expiration)
-    
+
     The token's permissions are validated against ContextUnit.security.scopes
     to enforce capability-based access control.
     """
@@ -47,7 +47,7 @@ class ContextToken:
 
     def can_read(self, scopes: SecurityScopes) -> bool:
         """Check if token can read from the given security scopes.
-        
+
         Returns True if:
         - Any token permission matches any read scope, OR
         - Read scopes are empty (no restrictions)
@@ -58,7 +58,7 @@ class ContextToken:
 
     def can_write(self, scopes: SecurityScopes) -> bool:
         """Check if token can write to the given security scopes.
-        
+
         Returns True if:
         - Any token permission matches any write scope, OR
         - Write scopes are empty (no restrictions)
@@ -73,12 +73,14 @@ class TokenBuilder:
 
     Part of the ContextUnit protocol. Creates and validates ContextToken instances
     that integrate with ContextUnit.security for capability-based access control.
-    
+
     Note: This is a minimal implementation. Services may extend this with
     service-specific configuration (e.g., Config, private keys).
     """
 
-    def __init__(self, *, enabled: bool = True, private_key_path: str | None = None) -> None:
+    def __init__(
+        self, *, enabled: bool = True, private_key_path: str | None = None
+    ) -> None:
         self._enabled = enabled
         self._private_key_path = private_key_path
 
@@ -90,19 +92,21 @@ class TokenBuilder:
         self, *, user_ctx: dict[str, Any], permissions: Iterable[str], ttl_s: float
     ) -> ContextToken:
         """Create a new root token with specified permissions.
-        
+
         Args:
             user_ctx: User context (reserved for future datalog facts)
             permissions: Capability strings (e.g., ["catalog:read", "product:write"])
             ttl_s: Time-to-live in seconds
-            
+
         Returns:
             New ContextToken instance
         """
         _ = user_ctx  # reserved for future datalog facts
         token_id = secrets.token_urlsafe(16)
         exp_unix = time.time() + float(ttl_s)
-        return ContextToken(token_id=token_id, permissions=tuple(permissions), exp_unix=exp_unix)
+        return ContextToken(
+            token_id=token_id, permissions=tuple(permissions), exp_unix=exp_unix
+        )
 
     def attenuate(
         self,
@@ -112,12 +116,12 @@ class TokenBuilder:
         ttl_s: float | None = None,
     ) -> ContextToken:
         """Create a new token with reduced permissions (attenuation).
-        
+
         Args:
             token: Original token to attenuate
             permissions: New permission set (None = keep original)
             ttl_s: New TTL (None = keep original)
-            
+
         Returns:
             New ContextToken with attenuated permissions
         """
@@ -125,11 +129,13 @@ class TokenBuilder:
         if ttl_s is not None:
             exp_unix = min(exp_unix or (time.time() + ttl_s), time.time() + ttl_s)
         perms = token.permissions if permissions is None else tuple(permissions)
-        return ContextToken(token_id=token.token_id, permissions=perms, exp_unix=exp_unix)
+        return ContextToken(
+            token_id=token.token_id, permissions=perms, exp_unix=exp_unix
+        )
 
     def verify(self, token: ContextToken, *, required_permission: str) -> None:
         """Verify token has required permission.
-        
+
         Raises:
             PermissionError: If token is missing, expired, or lacks permission
         """
@@ -142,25 +148,31 @@ class TokenBuilder:
         if required_permission not in token.permissions:
             raise PermissionError(f"Missing permission: {required_permission}")
 
-    def verify_unit_access(self, token: ContextToken, unit: ContextUnit, *, operation: Literal["read", "write"] = "read") -> None:
+    def verify_unit_access(
+        self,
+        token: ContextToken,
+        unit: ContextUnit,
+        *,
+        operation: Literal["read", "write"] = "read",
+    ) -> None:
         """Verify token can access ContextUnit based on its security scopes.
-        
+
         Args:
             token: ContextToken to verify
             unit: ContextUnit to check access for
             operation: "read" or "write"
-            
+
         Raises:
             PermissionError: If token cannot access the unit
         """
         if not self._enabled:
             return
-        
+
         if not isinstance(token, ContextToken):
             raise PermissionError("Missing token")
         if token.is_expired():
             raise PermissionError("Token expired")
-        
+
         scopes = unit.security
         if operation == "read":
             if not token.can_read(scopes):

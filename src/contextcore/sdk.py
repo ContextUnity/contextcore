@@ -2,17 +2,28 @@
 
 from __future__ import annotations
 
+# IMPORTANT: Import google well-known types FIRST, before any other imports
+# that might trigger loading of our pb2 files through circular imports.
+# Our pb2 files depend on struct.proto and timestamp.proto
+try:
+    from google.protobuf import struct_pb2 as _struct_pb2  # noqa: F401
+    from google.protobuf import timestamp_pb2 as _timestamp_pb2  # noqa: F401
+except ImportError:
+    pass  # protobuf not installed, gRPC features won't work
+
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+
 class CotStep(BaseModel):
     agent: str
     action: str
     status: str = "pending"
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 
 class UnitMetrics(BaseModel):
     """Metrics for tracking unit processing costs and performance."""
@@ -22,9 +33,11 @@ class UnitMetrics(BaseModel):
     tokens_used: int = 0
     cost_limit_usd: float = 0.0
 
+
 class SecurityScopes(BaseModel):
     read: list[str] = Field(default_factory=list)
     write: list[str] = Field(default_factory=list)
+
 
 class ContextUnit(BaseModel):
     """Core data structure for ContextUnity protocol - atomic unit of data exchange."""
@@ -32,29 +45,29 @@ class ContextUnit(BaseModel):
     unit_id: UUID = Field(default_factory=uuid4)
     trace_id: UUID = Field(default_factory=uuid4)
     parent_unit_id: UUID | None = None
-    
+
     modality: str = "text"
     payload: dict[str, Any] = Field(default_factory=dict)
-    
+
     provenance: list[str] = Field(default_factory=list)
     chain_of_thought: list["CotStep"] = Field(default_factory=list)
-    
+
     metrics: UnitMetrics = Field(default_factory=UnitMetrics)
     security: SecurityScopes = Field(default_factory=SecurityScopes)
-    
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_protobuf(self, pb_module):
         """Converts Pydantic model to Protobuf message."""
         from google.protobuf.struct_pb2 import Struct
         from google.protobuf.timestamp_pb2 import Timestamp
-        
+
         payload_struct = Struct()
         payload_struct.update(self.payload)
-        
+
         created_at_pb = Timestamp()
         created_at_pb.FromDatetime(self.created_at)
-        
+
         # Convert chain_of_thought to protobuf CotStep messages
         cot_steps = []
         for step in self.chain_of_thought:
@@ -67,7 +80,7 @@ class ContextUnit(BaseModel):
                 timestamp=step_timestamp,
             )
             cot_steps.append(cot_pb)
-        
+
         # Convert metrics to protobuf
         metrics_pb = None
         if self.metrics:
@@ -77,7 +90,7 @@ class ContextUnit(BaseModel):
                 tokens_used=self.metrics.tokens_used,
                 cost_limit_usd=self.metrics.cost_limit_usd,
             )
-        
+
         # Convert security scopes to protobuf
         security_pb = None
         if self.security:
@@ -85,18 +98,18 @@ class ContextUnit(BaseModel):
                 read=list(self.security.read),
                 write=list(self.security.write),
             )
-        
+
         unit_pb = pb_module.ContextUnit(
             unit_id=str(self.unit_id),
             trace_id=str(self.trace_id),
             parent_unit_id=str(self.parent_unit_id) if self.parent_unit_id else "",
-            modality=0, # Need mapping for enum
+            modality=0,  # Need mapping for enum
             payload=payload_struct,
             provenance=self.provenance,
             chain_of_thought=cot_steps,
             metrics=metrics_pb,
             security=security_pb,
-            created_at=created_at_pb
+            created_at=created_at_pb,
         )
         return unit_pb
 
@@ -114,7 +127,7 @@ class ContextUnit(BaseModel):
                     timestamp=step_pb.timestamp.ToDatetime(),
                 )
             )
-        
+
         # Convert metrics from protobuf
         metrics = None
         if unit_pb.metrics:
@@ -124,7 +137,7 @@ class ContextUnit(BaseModel):
                 tokens_used=unit_pb.metrics.tokens_used,
                 cost_limit_usd=unit_pb.metrics.cost_limit_usd,
             )
-        
+
         # Convert security scopes from protobuf
         security = None
         if unit_pb.security:
@@ -132,84 +145,129 @@ class ContextUnit(BaseModel):
                 read=list(unit_pb.security.read),
                 write=list(unit_pb.security.write),
             )
-        
+
         return cls(
             unit_id=UUID(unit_pb.unit_id),
             trace_id=UUID(unit_pb.trace_id),
-            parent_unit_id=UUID(unit_pb.parent_unit_id) if unit_pb.parent_unit_id else None,
+            parent_unit_id=UUID(unit_pb.parent_unit_id)
+            if unit_pb.parent_unit_id
+            else None,
             payload=dict(unit_pb.payload),
             provenance=list(unit_pb.provenance),
             chain_of_thought=cot_steps,
             metrics=metrics,
             security=security,
-            created_at=unit_pb.created_at.ToDatetime()
+            created_at=unit_pb.created_at.ToDatetime(),
         )
 
-import grpc
+
+import grpc  # noqa: E402
+import os  # noqa: E402
+import logging  # noqa: E402
+from typing import List  # noqa: E402
+
 try:
-    from contextcore import brain_pb2, brain_pb2_grpc
+    # Import our pb2 files (well-known types already imported at top of file)
+    from . import context_unit_pb2
+    from . import (
+        brain_pb2,
+        brain_pb2_grpc,
+        worker_pb2,
+        worker_pb2_grpc,
+    )
 except ImportError:
-    # Handle cases where protos aren't generated yet
+    # Handle cases where protos aren't generated yet or different import path
+    context_unit_pb2 = None
     brain_pb2, brain_pb2_grpc = None, None
+    worker_pb2, worker_pb2_grpc = None, None
+
+logger = logging.getLogger(__name__)
+
 
 class BrainClient:
     """
-    Client for interacting with ContextBrain gRPC service.
+    Client for interacting with ContextBrain.
+    Supports 'local' (library) and 'grpc' (network) modes.
     """
-    def __init__(self, host: str = "localhost:50051"):
-        self.channel = grpc.insecure_channel(host)
-        if brain_pb2_grpc:
-            self.stub = brain_pb2_grpc.BrainServiceStub(self.channel)
+
+    def __init__(self, host: str | None = None, mode: str | None = None):
+        self.mode = mode or os.getenv("CONTEXT_BRAIN_MODE", "grpc")
+        self.host = host or os.getenv("CONTEXT_BRAIN_URL", "localhost:50051")
+        self._stub = None
+        self._service = None
+
+        if self.mode == "grpc":
+            if not brain_pb2_grpc:
+                raise ImportError("Brain gRPC protos not available")
+            self.channel = grpc.aio.insecure_channel(self.host)
+            self._stub = brain_pb2_grpc.BrainServiceStub(self.channel)
         else:
-            self.stub = None
+            try:
+                from contextbrain import BrainService
+
+                self._service = BrainService()
+            except ImportError:
+                logger.error(
+                    "Brain local mode requested but contextbrain not installed"
+                )
+                raise
 
     async def query_memory(self, unit: ContextUnit) -> List[ContextUnit]:
-        """Query semantic memory."""
-        if not self.stub:
-            raise ImportError("Protos not generated")
-        unit_pb = unit.to_protobuf(brain_pb2)
-        response_stream = self.stub.QueryMemory(unit_pb)
-        
+        unit_pb = unit.to_protobuf(context_unit_pb2)
         results = []
-        async for res_pb in response_stream:
-            results.append(ContextUnit.from_protobuf(res_pb))
+        if self.mode == "grpc":
+            # gRPC returns an async stream
+            async for res_pb in self._stub.QueryMemory(unit_pb):
+                results.append(ContextUnit.from_protobuf(res_pb))
+        else:
+            async for res_pb in self._service.QueryMemory(unit_pb, context=None):
+                results.append(ContextUnit.from_protobuf(res_pb))
         return results
-
-    async def memorize(self, unit: ContextUnit) -> ContextUnit:
-        """Store unit in memory."""
-        if not self.stub:
-            raise ImportError("Protos not generated")
-        unit_pb = unit.to_protobuf(brain_pb2)
-        res_pb = await self.stub.Memorize(unit_pb)
-        return ContextUnit.from_protobuf(res_pb)
-
-    async def add_episode(self, unit: ContextUnit) -> ContextUnit:
-        """Record conversation event."""
-        if not self.stub: raise ImportError("Protos not generated")
-        unit_pb = unit.to_protobuf(brain_pb2)
-        res_pb = await self.stub.AddEpisode(unit_pb)
-        return ContextUnit.from_protobuf(res_pb)
-
-    async def upsert_fact(self, unit: ContextUnit) -> ContextUnit:
-        """Record user fact."""
-        if not self.stub: raise ImportError("Protos not generated")
-        unit_pb = unit.to_protobuf(brain_pb2)
-        res_pb = await self.stub.UpsertFact(unit_pb)
-        return ContextUnit.from_protobuf(res_pb)
 
     async def upsert_taxonomy(self, unit: ContextUnit) -> ContextUnit:
-        """Sync taxonomy entry to DB."""
-        if not self.stub: raise ImportError("Protos not generated")
-        unit_pb = unit.to_protobuf(brain_pb2)
-        res_pb = await self.stub.UpsertTaxonomy(unit_pb)
+        unit_pb = unit.to_protobuf(context_unit_pb2)
+        if self.mode == "grpc":
+            res_pb = await self._stub.UpsertTaxonomy(unit_pb)
+        else:
+            res_pb = await self._service.UpsertTaxonomy(unit_pb, context=None)
         return ContextUnit.from_protobuf(res_pb)
 
-    async def get_taxonomy(self, unit: ContextUnit) -> List[ContextUnit]:
-        """Fetch taxonomy entries for a domain."""
-        if not self.stub: raise ImportError("Protos not generated")
-        unit_pb = unit.to_protobuf(brain_pb2)
-        stream = self.stub.GetTaxonomy(unit_pb)
-        results = []
-        async for res_pb in stream:
-            results.append(ContextUnit.from_protobuf(res_pb))
-        return results
+
+class WorkerClient:
+    """
+    Client for interacting with ContextWorker.
+    Supports 'grpc' (network) and 'local' (direct Temporal client) modes.
+    """
+
+    def __init__(self, host: str | None = None, mode: str | None = None):
+        self.mode = mode or os.getenv("CONTEXT_WORKER_MODE", "grpc")
+        self.host = host or os.getenv("CONTEXT_WORKER_URL", "localhost:50052")
+        self.temporal_host = os.getenv("TEMPORAL_HOST", "localhost:7233")
+        self._stub = None
+
+        if self.mode == "grpc":
+            if not worker_pb2_grpc:
+                raise ImportError("Worker gRPC protos not available")
+            self.channel = grpc.insecure_channel(self.host)
+            self._stub = worker_pb2_grpc.WorkerServiceStub(self.channel)
+
+    async def start_workflow(self, unit: ContextUnit) -> ContextUnit:
+        unit_pb = unit.to_protobuf(context_unit_pb2)
+
+        if self.mode == "grpc":
+            res_pb = self._stub.StartWorkflow(unit_pb)
+            return ContextUnit.from_protobuf(res_pb)
+        else:
+            from temporalio.client import Client
+            from contextworker.workflows import HarvesterImportWorkflow
+
+            client = await Client.connect(self.temporal_host)
+            url = unit.payload.get("url")
+            handle = await client.start_workflow(
+                HarvesterImportWorkflow.run,
+                url,
+                id=f"harvest-{unit.unit_id}",
+                task_queue="harvester-tasks",
+            )
+            unit.payload["workflow_id"] = handle.id
+            return unit
