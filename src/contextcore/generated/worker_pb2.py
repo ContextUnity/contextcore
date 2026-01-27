@@ -4,34 +4,32 @@
 # source: worker.proto
 # Protobuf Python Version: 6.31.1
 """Generated protocol buffer code."""
+
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
+
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC,
-    6,
-    31,
-    1,
-    '',
-    'worker.proto'
+    _runtime_version.Domain.PUBLIC, 6, 31, 1, "", "worker.proto"
 )
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
 
 
-from . import context_unit_pb2 as context__unit__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0cworker.proto\x12\rcontextworker\x1a\x12\x63ontext_unit.proto2\xdc\x01\n\rWorkerService\x12\x43\n\rStartWorkflow\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\rGetTaskStatus\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x41\n\x0b\x45xecuteCode\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnitb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
+    b"\n\x0cworker.proto\x12\rcontextworker\x1a\x12\x63ontext_unit.proto2\xdc\x01\n\rWorkerService\x12\x43\n\rStartWorkflow\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\rGetTaskStatus\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x41\n\x0b\x45xecuteCode\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnitb\x06proto3"
+)
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'worker_pb2', _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "worker_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-  DESCRIPTOR._loaded_options = None
-  _globals['_WORKERSERVICE']._serialized_start=52
-  _globals['_WORKERSERVICE']._serialized_end=272
+    DESCRIPTOR._loaded_options = None
+    _globals["_WORKERSERVICE"]._serialized_start = 52
+    _globals["_WORKERSERVICE"]._serialized_end = 272
 # @@protoc_insertion_point(module_scope)
