@@ -2,28 +2,44 @@ syntax = "proto3";
 
 package contextcommerce;
 
-import "context_unit.proto";
-
-// Service for managing the canonical product catalog (PIM)
-service CommerceService {
-    // Propose a change to a product (Mutator agent)
-    rpc ProposePatch(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
-    // Finalize/Confirm a product update in source of truth
-    rpc ConfirmPatch(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
-    // Get canonical product data for a given SKU/ID
-    rpc GetProduct(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+message Product {
+    string id = 1;
+    string sku = 2;
+    string name = 3;
+    string description = 4;
+    float price = 5;
+    string currency = 6;
+    int32 stock_quantity = 7;
+    map<string, string> attributes = 8;
 }
 
-// Service for data ingestion and synchronization
-service HarvesterService {
-    // Trigger extraction from a specific dealer source
-    rpc TriggerImport(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
-    // Match raw dealer products against the canonical database (Matcher agent)
-    rpc RunMatching(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
-    // Sync status or price back to a channel (e.g. Horoshop)
-    rpc SyncToChannel(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+message GetProductRequest {
+    string tenant_id = 1;
+    string id = 2;
+    string sku = 3;
+}
+
+message ProductResponse {
+    Product product = 1;
+}
+
+message UpdateProductRequest {
+    string tenant_id = 1;
+    string id = 2;
+    map<string, string> patch = 3; // JSON patch or flat map
+}
+
+service CommerceService {
+    rpc GetProduct(GetProductRequest) returns (ProductResponse);
+    rpc UpdateProduct(UpdateProductRequest) returns (ProductResponse);
+    rpc TriggerHarvest(HarvestRequest) returns (HarvestResponse);
+}
+
+message HarvestRequest {
+    string supplier_code = 1;
+}
+
+message HarvestResponse {
+    string job_id = 1;
+    string status = 2;
 }

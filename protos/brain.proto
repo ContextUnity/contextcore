@@ -2,29 +2,82 @@ syntax = "proto3";
 
 package contextbrain;
 
-import "context_unit.proto";
+enum SourceType {
+    SOURCE_TYPE_UNSPECIFIED = 0;
+    SOURCE_TYPE_CHUNK = 1;
+    SOURCE_TYPE_CONCEPT = 2;
+}
 
-// Intelligence and Memory Hub
+message SearchRequest {
+    string tenant_id = 1;
+    string query_text = 2;
+    repeated float query_vector = 3;
+    int32 limit = 4;
+    float min_score = 5;
+    repeated string source_types = 6;
+}
+
+message SearchResult {
+    string id = 1;
+    string content = 2;
+    float score = 3;
+    string source_type = 4;
+    map<string, string> metadata = 5;
+}
+
+message SearchResponse {
+    repeated SearchResult results = 1;
+}
+
+message GraphSearchRequest {
+    string tenant_id = 1;
+    repeated string entrypoint_ids = 2;
+    int32 max_hops = 3;
+    repeated string allowed_relations = 4;
+}
+
+message GraphEdge {
+    string source_id = 1;
+    string target_id = 2;
+    string relation = 3;
+    float weight = 4;
+}
+
+message GraphSearchResponse {
+    repeated SearchResult nodes = 1;
+    repeated GraphEdge edges = 2;
+}
+
 service BrainService {
-    // Semantic/Hybrid search for relevant context (RAG)
-    rpc QueryMemory(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    // Semantic/Hybrid search
+    rpc Search(SearchRequest) returns (SearchResponse);
     
-    // Write new knowledge/observations into memory
-    rpc Memorize(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    // Graph Traversal
+    rpc GraphSearch(GraphSearchRequest) returns (GraphSearchResponse);
+
+    // Gardener: Get items needing classification
+    rpc GetPendingVerifications(PendingRequest) returns (stream PendingItem);
     
-    // Extract concepts and update Knowledge Graph (Gardener agent)
-    rpc UpdateGraph(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    // Gardener: Write enrichment results
+    rpc SubmitVerification(VerificationResult) returns (VerificationAck);
+}
 
-    // Retrieve unrecognized items needing manual/agentic verification
-    rpc GetPendingVerifications(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+message PendingRequest {
+    string tenant_id = 1;
+    int32 limit = 2;
+}
 
-    // Episodic Memory: Record an interaction
-    rpc AddEpisode(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+message PendingItem {
+    string id = 1;
+    string content = 2;
+    string context_json = 3;
+}
 
-    // Entity Memory: Store persistent user facts
-    rpc UpsertFact(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+message VerificationResult {
+    string id = 1;
+    string enrichment_json = 2;
+}
 
-    // Catalog Taxonomy: Bi-directional sync
-    rpc UpsertTaxonomy(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    rpc GetTaxonomy(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+message VerificationAck {
+    bool success = 1;
 }
