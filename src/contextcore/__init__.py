@@ -15,6 +15,7 @@ from .sdk import (
     SecurityScopes,
     CotStep,
     UnitMetrics,
+    SearchResult,
 )
 from .tokens import ContextToken, TokenBuilder
 
@@ -38,6 +39,7 @@ __all__ = [
     "SecurityScopes",
     "CotStep",
     "UnitMetrics",
+    "SearchResult",
     # Tokens
     "ContextToken",
     "TokenBuilder",

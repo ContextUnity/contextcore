@@ -194,7 +194,7 @@ Capability-based access control for security:
 
 ## Documentation
 
-- **[Full Documentation](contextcore-fulldoc.md)** — complete documentation of all components
+- **[Full Documentation](./contextcore-fulldoc.md)** — complete documentation of all components
 - **[Online Docs](https://contextcore.dev)** — documentation website
 - **[Logging Guide](docs/LOGGING.md)** — detailed logging guide
 

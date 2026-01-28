@@ -74,6 +74,84 @@ message CreateKGRelationResponse {
 }
 
 // =====================================================
+// Upsert Messages
+// =====================================================
+
+message UpsertRequest {
+    string tenant_id = 1;
+    string content = 2;
+    string source_type = 3;
+    map<string, string> metadata = 4;
+}
+
+message UpsertResponse {
+    string id = 1;
+    bool success = 2;
+}
+
+// =====================================================
+// NewsEngine Messages (Pink Pony)
+// =====================================================
+
+message NewsItem {
+    string id = 1;
+    string tenant_id = 2;
+    string url = 3;
+    string headline = 4;
+    string summary = 5;
+    string category = 6;
+    string source_api = 7;  // "perplexity" or "serper"
+    map<string, string> metadata = 8;
+    string harvested_at = 9;
+}
+
+message UpsertNewsItemRequest {
+    string tenant_id = 1;
+    NewsItem item = 2;
+    string item_type = 3;  // "raw" or "fact"
+}
+
+message UpsertNewsItemResponse {
+    string id = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message GetNewsItemsRequest {
+    string tenant_id = 1;
+    string item_type = 2;  // "raw" or "fact"
+    int32 limit = 3;
+    string since = 4;  // ISO datetime
+}
+
+message GetNewsItemsResponse {
+    repeated NewsItem items = 1;
+}
+
+message NewsPost {
+    string id = 1;
+    string tenant_id = 2;
+    string fact_id = 3;
+    string agent = 4;
+    string headline = 5;
+    string content = 6;
+    string emoji = 7;
+    string fact_url = 8;
+    string scheduled_at = 9;
+    string published_at = 10;
+}
+
+message UpsertNewsPostRequest {
+    string tenant_id = 1;
+    NewsPost post = 2;
+}
+
+message UpsertNewsPostResponse {
+    string id = 1;
+    bool success = 2;
+}
+
+// =====================================================
 // Core Brain Service Definition
 // =====================================================
 
@@ -86,4 +164,13 @@ service BrainService {
 
     // Create Knowledge Graph relation
     rpc CreateKGRelation(CreateKGRelationRequest) returns (CreateKGRelationResponse);
+    
+    // Upsert content
+    rpc Upsert(UpsertRequest) returns (UpsertResponse);
+    
+    // NewsEngine operations
+    rpc UpsertNewsItem(UpsertNewsItemRequest) returns (UpsertNewsItemResponse);
+    rpc GetNewsItems(GetNewsItemsRequest) returns (GetNewsItemsResponse);
+    rpc UpsertNewsPost(UpsertNewsPostRequest) returns (UpsertNewsPostResponse);
 }
+

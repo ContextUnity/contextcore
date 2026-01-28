@@ -1,14 +1,32 @@
 [project]
 name = "contextcore"
-version = "0.1.0"
-description = "The Kernel of ContextUnity"
-requires-python = ">=3.12"
+version = "0.2.0"
+description = "The Kernel of ContextUnity — shared types, gRPC contracts, and security tokens"
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [
+    { name = "Pylypchuk Oleksii", email = "oleksii.pylypchuk@tuta.com" },
+]
+license = { file = "LICENSE.md" }
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
 dependencies = [
     "grpcio>=1.62.0",
     "pre-commit>=4.5.1",
     "protobuf>=4.25.0",
     "pydantic>=2.6.0",
 ]
+
+[project.urls]
+Homepage = "https://contextcore.dev"
+Documentation = "https://contextcore.dev"
+Repository = "https://github.com/ContextUnity/contextcore"
+Issues = "https://github.com/ContextUnity/contextcore/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -26,6 +44,7 @@ build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
+    "grpcio-tools>=1.76.0",
     "ruff>=0.14.14",
 ]
 

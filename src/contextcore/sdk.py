@@ -25,6 +25,16 @@ class CotStep(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class SearchResult(BaseModel):
+    """Result from Brain semantic search."""
+
+    id: str = ""
+    content: str = ""
+    score: float = 0.0
+    source_type: str = ""
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
 class UnitMetrics(BaseModel):
     """Metrics for tracking unit processing costs and performance."""
 
@@ -233,25 +243,86 @@ class BrainClient:
                 )
                 raise
 
-    async def query_memory(self, unit: ContextUnit) -> List[ContextUnit]:
-        unit_pb = unit.to_protobuf(context_unit_pb2)
-        results = []
+    async def search(
+        self,
+        tenant_id: str,
+        query_text: str,
+        limit: int = 5,
+        source_types: List[str] | None = None,
+    ) -> List[SearchResult]:
+        """Search for similar content in Brain.
+
+        Returns:
+            List of SearchResult with content, score, and metadata.
+            Score is the semantic similarity (0.0 to 1.0).
+        """
         if self.mode == "grpc":
-            # gRPC returns an async stream
-            async for res_pb in self._stub.QueryMemory(unit_pb):
-                results.append(ContextUnit.from_protobuf(res_pb))
+            request = brain_pb2.SearchRequest(
+                tenant_id=tenant_id,
+                query_text=query_text,
+                limit=limit,
+                source_types=source_types or [],
+            )
+            response = await self._stub.Search(request)
+            results = []
+            for r in response.results:
+                results.append(SearchResult(
+                    id=r.id,
+                    content=r.content,
+                    score=r.score,
+                    source_type=r.source_type,
+                    metadata=dict(r.metadata),
+                ))
+            return results
         else:
-            async for res_pb in self._service.QueryMemory(unit_pb, context=None):
-                results.append(ContextUnit.from_protobuf(res_pb))
-        return results
+            # Local mode - use service directly
+            from contextbrain import BrainService
+            if not self._service:
+                self._service = BrainService()
+            # For local, we'd need to implement this in BrainService
+            logger.warning("Local mode search not fully implemented yet")
+            return []
+
+    async def upsert(
+        self,
+        tenant_id: str,
+        content: str,
+        source_type: str,
+        metadata: Dict[str, str] | None = None,
+    ) -> str:
+        """Upsert content to Brain. Returns the ID of the stored item."""
+        if self.mode == "grpc":
+            request = brain_pb2.UpsertRequest(
+                tenant_id=tenant_id,
+                content=content,
+                source_type=source_type,
+                metadata=metadata or {},
+            )
+            response = await self._stub.Upsert(request)
+            return response.id
+        else:
+            logger.warning("Local mode upsert not implemented yet")
+            return ""
+
+    async def query_memory(self, unit: ContextUnit) -> List[ContextUnit]:
+        """Query memory (deprecated, use search instead)."""
+        tenant_id = unit.payload.get("tenant_id", "default") if unit.payload else "default"
+        return await self.search(
+            tenant_id=tenant_id,
+            query_text=unit.payload.get("content", "") if unit.payload else "",
+            limit=5,
+        )
 
     async def upsert_taxonomy(self, unit: ContextUnit) -> ContextUnit:
-        unit_pb = unit.to_protobuf(context_unit_pb2)
-        if self.mode == "grpc":
-            res_pb = await self._stub.UpsertTaxonomy(unit_pb)
-        else:
-            res_pb = await self._service.UpsertTaxonomy(unit_pb, context=None)
-        return ContextUnit.from_protobuf(res_pb)
+        """Upsert to taxonomy (deprecated, use upsert instead)."""
+        tenant_id = unit.payload.get("tenant_id", "default") if unit.payload else "default"
+        await self.upsert(
+            tenant_id=tenant_id,
+            content=unit.payload.get("content", "") if unit.payload else "",
+            source_type=unit.payload.get("source_type", "unknown") if unit.payload else "unknown",
+            metadata={},
+        )
+        return unit
 
     # =========================================================================
     # Commerce / Gardener Methods
