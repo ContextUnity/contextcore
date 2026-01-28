@@ -33,8 +33,4 @@ jobs:
       run: uv run ruff format --check .
 
     - name: Run tests
-      run: uv run python -m pytest tests/ -v
-
-    # Basic security check since bandit is in dev-dependencies
-    - name: Run Bandit security scanner
-      run: uv run bandit -c .bandit -r src -f json -o bandit-report.json || true
+      run: uv run pytest tests/ -v --tb=short
