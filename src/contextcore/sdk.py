@@ -266,17 +266,20 @@ class BrainClient:
             response = await self._stub.Search(request)
             results = []
             for r in response.results:
-                results.append(SearchResult(
-                    id=r.id,
-                    content=r.content,
-                    score=r.score,
-                    source_type=r.source_type,
-                    metadata=dict(r.metadata),
-                ))
+                results.append(
+                    SearchResult(
+                        id=r.id,
+                        content=r.content,
+                        score=r.score,
+                        source_type=r.source_type,
+                        metadata=dict(r.metadata),
+                    )
+                )
             return results
         else:
             # Local mode - use service directly
             from contextbrain import BrainService
+
             if not self._service:
                 self._service = BrainService()
             # For local, we'd need to implement this in BrainService
@@ -288,7 +291,7 @@ class BrainClient:
         tenant_id: str,
         content: str,
         source_type: str,
-        metadata: Dict[str, str] | None = None,
+        metadata: dict[str, str] | None = None,
     ) -> str:
         """Upsert content to Brain. Returns the ID of the stored item."""
         if self.mode == "grpc":
@@ -306,7 +309,9 @@ class BrainClient:
 
     async def query_memory(self, unit: ContextUnit) -> List[ContextUnit]:
         """Query memory (deprecated, use search instead)."""
-        tenant_id = unit.payload.get("tenant_id", "default") if unit.payload else "default"
+        tenant_id = (
+            unit.payload.get("tenant_id", "default") if unit.payload else "default"
+        )
         return await self.search(
             tenant_id=tenant_id,
             query_text=unit.payload.get("content", "") if unit.payload else "",
@@ -315,11 +320,15 @@ class BrainClient:
 
     async def upsert_taxonomy(self, unit: ContextUnit) -> ContextUnit:
         """Upsert to taxonomy (deprecated, use upsert instead)."""
-        tenant_id = unit.payload.get("tenant_id", "default") if unit.payload else "default"
+        tenant_id = (
+            unit.payload.get("tenant_id", "default") if unit.payload else "default"
+        )
         await self.upsert(
             tenant_id=tenant_id,
             content=unit.payload.get("content", "") if unit.payload else "",
-            source_type=unit.payload.get("source_type", "unknown") if unit.payload else "unknown",
+            source_type=unit.payload.get("source_type", "unknown")
+            if unit.payload
+            else "unknown",
             metadata={},
         )
         return unit
