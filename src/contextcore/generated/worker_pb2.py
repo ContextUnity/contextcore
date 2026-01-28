@@ -19,8 +19,6 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-
-
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b"\n\x0cworker.proto\x12\rcontextworker\x1a\x12\x63ontext_unit.proto2\xdc\x01\n\rWorkerService\x12\x43\n\rStartWorkflow\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\rGetTaskStatus\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x41\n\x0b\x45xecuteCode\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnitb\x06proto3"
 )

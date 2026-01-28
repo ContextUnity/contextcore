@@ -19,8 +19,6 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-
-
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b"\n\x0e\x63ommerce.proto\x12\x0f\x63ontextcommerce\x1a\x12\x63ontext_unit.proto2\xdb\x01\n\x0f\x43ommerceService\x12\x42\n\x0cProposePatch\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x42\n\x0c\x43onfirmPatch\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12@\n\nGetProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit2\xdf\x01\n\x10HarvesterService\x12\x43\n\rTriggerImport\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x41\n\x0bRunMatching\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\rSyncToChannel\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnitb\x06proto3"
 )

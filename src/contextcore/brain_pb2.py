@@ -19,10 +19,8 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-
-
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b"\n\x0b\x62rain.proto\x12\x0c\x63ontextbrain\x1a\x12\x63ontext_unit.proto2\xb6\x04\n\x0c\x42rainService\x12\x43\n\x0bQueryMemory\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12>\n\x08Memorize\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x41\n\x0bUpdateGraph\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12O\n\x17GetPendingVerifications\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12@\n\nAddEpisode\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12@\n\nUpsertFact\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0eUpsertTaxonomy\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bGetTaxonomy\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x62\x06proto3"
+    b'\n\x0b\x62rain.proto\x12\x0c\x63ontextbrain"\x84\x01\n\rSearchRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x12\n\nquery_text\x18\x02 \x01(\t\x12\x14\n\x0cquery_vector\x18\x03 \x03(\x02\x12\r\n\x05limit\x18\x04 \x01(\x05\x12\x11\n\tmin_score\x18\x05 \x01(\x02\x12\x14\n\x0csource_types\x18\x06 \x03(\t"\xbc\x01\n\x0cSearchResult\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\t\x12\r\n\x05score\x18\x03 \x01(\x02\x12\x13\n\x0bsource_type\x18\x04 \x01(\t\x12:\n\x08metadata\x18\x05 \x03(\x0b\x32(.contextbrain.SearchResult.MetadataEntry\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01"=\n\x0eSearchResponse\x12+\n\x07results\x18\x01 \x03(\x0b\x32\x1a.contextbrain.SearchResult"l\n\x12GraphSearchRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x16\n\x0e\x65ntrypoint_ids\x18\x02 \x03(\t\x12\x10\n\x08max_hops\x18\x03 \x01(\x05\x12\x19\n\x11\x61llowed_relations\x18\x04 \x03(\t"S\n\tGraphEdge\x12\x11\n\tsource_id\x18\x01 \x01(\t\x12\x11\n\ttarget_id\x18\x02 \x01(\t\x12\x10\n\x08relation\x18\x03 \x01(\t\x12\x0e\n\x06weight\x18\x04 \x01(\x02"h\n\x13GraphSearchResponse\x12)\n\x05nodes\x18\x01 \x03(\x0b\x32\x1a.contextbrain.SearchResult\x12&\n\x05\x65\x64ges\x18\x02 \x03(\x0b\x32\x17.contextbrain.GraphEdge"\x8e\x01\n\x17\x43reateKGRelationRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x13\n\x0bsource_type\x18\x02 \x01(\t\x12\x11\n\tsource_id\x18\x03 \x01(\t\x12\x10\n\x08relation\x18\x04 \x01(\t\x12\x13\n\x0btarget_type\x18\x05 \x01(\t\x12\x11\n\ttarget_id\x18\x06 \x01(\t"+\n\x18\x43reateKGRelationResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08*Y\n\nSourceType\x12\x1b\n\x17SOURCE_TYPE_UNSPECIFIED\x10\x00\x12\x15\n\x11SOURCE_TYPE_CHUNK\x10\x01\x12\x17\n\x13SOURCE_TYPE_CONCEPT\x10\x02\x32\x8a\x02\n\x0c\x42rainService\x12\x43\n\x06Search\x12\x1b.contextbrain.SearchRequest\x1a\x1c.contextbrain.SearchResponse\x12R\n\x0bGraphSearch\x12 .contextbrain.GraphSearchRequest\x1a!.contextbrain.GraphSearchResponse\x12\x61\n\x10\x43reateKGRelation\x12%.contextbrain.CreateKGRelationRequest\x1a&.contextbrain.CreateKGRelationResponseb\x06proto3'
 )
 
 _globals = globals()
@@ -30,6 +28,28 @@ _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "brain_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
     DESCRIPTOR._loaded_options = None
-    _globals["_BRAINSERVICE"]._serialized_start = 50
-    _globals["_BRAINSERVICE"]._serialized_end = 616
+    _globals["_SEARCHRESULT_METADATAENTRY"]._loaded_options = None
+    _globals["_SEARCHRESULT_METADATAENTRY"]._serialized_options = b"8\001"
+    _globals["_SOURCETYPE"]._serialized_start = 909
+    _globals["_SOURCETYPE"]._serialized_end = 998
+    _globals["_SEARCHREQUEST"]._serialized_start = 30
+    _globals["_SEARCHREQUEST"]._serialized_end = 162
+    _globals["_SEARCHRESULT"]._serialized_start = 165
+    _globals["_SEARCHRESULT"]._serialized_end = 353
+    _globals["_SEARCHRESULT_METADATAENTRY"]._serialized_start = 306
+    _globals["_SEARCHRESULT_METADATAENTRY"]._serialized_end = 353
+    _globals["_SEARCHRESPONSE"]._serialized_start = 355
+    _globals["_SEARCHRESPONSE"]._serialized_end = 416
+    _globals["_GRAPHSEARCHREQUEST"]._serialized_start = 418
+    _globals["_GRAPHSEARCHREQUEST"]._serialized_end = 526
+    _globals["_GRAPHEDGE"]._serialized_start = 528
+    _globals["_GRAPHEDGE"]._serialized_end = 611
+    _globals["_GRAPHSEARCHRESPONSE"]._serialized_start = 613
+    _globals["_GRAPHSEARCHRESPONSE"]._serialized_end = 717
+    _globals["_CREATEKGRELATIONREQUEST"]._serialized_start = 720
+    _globals["_CREATEKGRELATIONREQUEST"]._serialized_end = 862
+    _globals["_CREATEKGRELATIONRESPONSE"]._serialized_start = 864
+    _globals["_CREATEKGRELATIONRESPONSE"]._serialized_end = 907
+    _globals["_BRAINSERVICE"]._serialized_start = 1001
+    _globals["_BRAINSERVICE"]._serialized_end = 1267
 # @@protoc_insertion_point(module_scope)

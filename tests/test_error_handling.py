@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import time
-from uuid import uuid4
 
 import pytest
 
 from contextcore import (
     ContextToken,
     ContextUnit,
-    LogLevel,
     SecurityScopes,
     SharedConfig,
     TokenBuilder,
@@ -155,6 +153,7 @@ class TestErrorHandling:
     def test_context_unit_chain_of_thought_invalid_status(self) -> None:
         """Test CotStep with custom status (should work, status is just a string)."""
         from contextcore import CotStep
+
         step = CotStep(agent="test", action="test", status="custom_status")
         assert step.status == "custom_status"
 

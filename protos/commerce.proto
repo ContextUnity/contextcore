@@ -2,6 +2,16 @@ syntax = "proto3";
 
 package contextcommerce;
 
+import "google/protobuf/struct.proto";
+
+// =====================================================
+// Commerce Service - Product & Harvester Operations
+// =====================================================
+
+// =====================================================
+// Base Product Messages
+// =====================================================
+
 message Product {
     string id = 1;
     string sku = 2;
@@ -26,20 +36,125 @@ message ProductResponse {
 message UpdateProductRequest {
     string tenant_id = 1;
     string id = 2;
-    map<string, string> patch = 3; // JSON patch or flat map
+    map<string, string> patch = 3;
 }
 
-service CommerceService {
-    rpc GetProduct(GetProductRequest) returns (ProductResponse);
-    rpc UpdateProduct(UpdateProductRequest) returns (ProductResponse);
-    rpc TriggerHarvest(HarvestRequest) returns (HarvestResponse);
+// =====================================================
+// Dealer Product Messages (for Harvester)
+// =====================================================
+
+message DealerProduct {
+    int64 id = 1;
+    string name = 2;
+    string category = 3;
+    string description = 4;
+    string brand_name = 5;
+    google.protobuf.Struct params = 6;
+    google.protobuf.Struct enrichment = 7;
 }
+
+message GetProductsRequest {
+    string tenant_id = 1;
+    repeated int64 product_ids = 2;
+}
+
+message GetProductsResponse {
+    repeated DealerProduct products = 1;
+}
+
+message UpdateEnrichmentRequest {
+    string tenant_id = 1;
+    int64 product_id = 2;
+    google.protobuf.Struct enrichment = 3;
+    string trace_id = 4;
+    string status = 5;
+}
+
+message UpdateEnrichmentResponse {
+    bool success = 1;
+}
+
+message UpsertDealerProductRequest {
+    string tenant_id = 1;
+    string dealer_code = 2;
+    string dealer_name = 3;
+    string sku = 4;
+    string name = 5;
+    string category = 6;
+    string brand_name = 7;
+    int32 quantity = 8;
+    double price_retail = 9;
+    string currency = 10;
+    google.protobuf.Struct params = 11;
+    string status = 12;  // raw, enriched, pending_human
+    string trace_id = 13;
+}
+
+message UpsertDealerProductResponse {
+    bool success = 1;
+    int64 product_id = 2;
+    string message = 3;
+}
+
+// =====================================================
+// Gardener / Human-in-the-Loop Messages
+// =====================================================
+
+message PendingRequest {
+    string tenant_id = 1;
+    int32 limit = 2;
+}
+
+message PendingItem {
+    string id = 1;
+    string content = 2;
+    string context_json = 3;
+}
+
+message VerificationResult {
+    string id = 1;
+    string enrichment_json = 2;
+}
+
+message VerificationAck {
+    bool success = 1;
+}
+
+// =====================================================
+// Harvest Messages
+// =====================================================
 
 message HarvestRequest {
     string supplier_code = 1;
+    string tenant_id = 2;
+    string trace_id = 3;
 }
 
 message HarvestResponse {
     string job_id = 1;
     string status = 2;
+}
+
+// =====================================================
+// Commerce Service Definition
+// =====================================================
+
+service CommerceService {
+    // Product CRUD
+    rpc GetProduct(GetProductRequest) returns (ProductResponse);
+    rpc UpdateProduct(UpdateProductRequest) returns (ProductResponse);
+
+    // Dealer Products (Harvester)
+    rpc GetProducts(GetProductsRequest) returns (GetProductsResponse);
+    rpc UpsertDealerProduct(UpsertDealerProductRequest) returns (UpsertDealerProductResponse);
+    rpc UpdateEnrichment(UpdateEnrichmentRequest) returns (UpdateEnrichmentResponse);
+
+    // Harvester trigger
+    rpc TriggerHarvest(HarvestRequest) returns (HarvestResponse);
+
+    // Gardener: Get items needing classification
+    rpc GetPendingVerifications(PendingRequest) returns (stream PendingItem);
+
+    // Gardener: Write enrichment results
+    rpc SubmitVerification(VerificationResult) returns (VerificationAck);
 }

@@ -3,7 +3,7 @@
 
 import grpc
 
-from . import context_unit_pb2 as context__unit__pb2
+from contextcore import commerce_pb2 as commerce__pb2
 
 GRPC_GENERATED_VERSION = "1.76.0"
 GRPC_VERSION = grpc.__version__
@@ -29,7 +29,11 @@ if _version_not_supported:
 
 
 class CommerceServiceStub(object):
-    """Service for managing the canonical product catalog (PIM)"""
+    """=====================================================
+    Commerce Service Definition
+    =====================================================
+
+    """
 
     def __init__(self, channel):
         """Constructor.
@@ -37,43 +41,107 @@ class CommerceServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.ProposePatch = channel.unary_unary(
-            "/contextcommerce.CommerceService/ProposePatch",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-        self.ConfirmPatch = channel.unary_unary(
-            "/contextcommerce.CommerceService/ConfirmPatch",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
         self.GetProduct = channel.unary_unary(
             "/contextcommerce.CommerceService/GetProduct",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
+            request_serializer=commerce__pb2.GetProductRequest.SerializeToString,
+            response_deserializer=commerce__pb2.ProductResponse.FromString,
+            _registered_method=True,
+        )
+        self.UpdateProduct = channel.unary_unary(
+            "/contextcommerce.CommerceService/UpdateProduct",
+            request_serializer=commerce__pb2.UpdateProductRequest.SerializeToString,
+            response_deserializer=commerce__pb2.ProductResponse.FromString,
+            _registered_method=True,
+        )
+        self.GetProducts = channel.unary_unary(
+            "/contextcommerce.CommerceService/GetProducts",
+            request_serializer=commerce__pb2.GetProductsRequest.SerializeToString,
+            response_deserializer=commerce__pb2.GetProductsResponse.FromString,
+            _registered_method=True,
+        )
+        self.UpsertDealerProduct = channel.unary_unary(
+            "/contextcommerce.CommerceService/UpsertDealerProduct",
+            request_serializer=commerce__pb2.UpsertDealerProductRequest.SerializeToString,
+            response_deserializer=commerce__pb2.UpsertDealerProductResponse.FromString,
+            _registered_method=True,
+        )
+        self.UpdateEnrichment = channel.unary_unary(
+            "/contextcommerce.CommerceService/UpdateEnrichment",
+            request_serializer=commerce__pb2.UpdateEnrichmentRequest.SerializeToString,
+            response_deserializer=commerce__pb2.UpdateEnrichmentResponse.FromString,
+            _registered_method=True,
+        )
+        self.TriggerHarvest = channel.unary_unary(
+            "/contextcommerce.CommerceService/TriggerHarvest",
+            request_serializer=commerce__pb2.HarvestRequest.SerializeToString,
+            response_deserializer=commerce__pb2.HarvestResponse.FromString,
+            _registered_method=True,
+        )
+        self.GetPendingVerifications = channel.unary_stream(
+            "/contextcommerce.CommerceService/GetPendingVerifications",
+            request_serializer=commerce__pb2.PendingRequest.SerializeToString,
+            response_deserializer=commerce__pb2.PendingItem.FromString,
+            _registered_method=True,
+        )
+        self.SubmitVerification = channel.unary_unary(
+            "/contextcommerce.CommerceService/SubmitVerification",
+            request_serializer=commerce__pb2.VerificationResult.SerializeToString,
+            response_deserializer=commerce__pb2.VerificationAck.FromString,
             _registered_method=True,
         )
 
 
 class CommerceServiceServicer(object):
-    """Service for managing the canonical product catalog (PIM)"""
+    """=====================================================
+    Commerce Service Definition
+    =====================================================
 
-    def ProposePatch(self, request, context):
-        """Propose a change to a product (Mutator agent)"""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def ConfirmPatch(self, request, context):
-        """Finalize/Confirm a product update in source of truth"""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
+    """
 
     def GetProduct(self, request, context):
-        """Get canonical product data for a given SKU/ID"""
+        """Product CRUD"""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def UpdateProduct(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def GetProducts(self, request, context):
+        """Dealer Products (Harvester)"""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def UpsertDealerProduct(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def UpdateEnrichment(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def TriggerHarvest(self, request, context):
+        """Harvester trigger"""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def GetPendingVerifications(self, request, context):
+        """Gardener: Get items needing classification"""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def SubmitVerification(self, request, context):
+        """Gardener: Write enrichment results"""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
@@ -81,20 +149,45 @@ class CommerceServiceServicer(object):
 
 def add_CommerceServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-        "ProposePatch": grpc.unary_unary_rpc_method_handler(
-            servicer.ProposePatch,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-        ),
-        "ConfirmPatch": grpc.unary_unary_rpc_method_handler(
-            servicer.ConfirmPatch,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-        ),
         "GetProduct": grpc.unary_unary_rpc_method_handler(
             servicer.GetProduct,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            request_deserializer=commerce__pb2.GetProductRequest.FromString,
+            response_serializer=commerce__pb2.ProductResponse.SerializeToString,
+        ),
+        "UpdateProduct": grpc.unary_unary_rpc_method_handler(
+            servicer.UpdateProduct,
+            request_deserializer=commerce__pb2.UpdateProductRequest.FromString,
+            response_serializer=commerce__pb2.ProductResponse.SerializeToString,
+        ),
+        "GetProducts": grpc.unary_unary_rpc_method_handler(
+            servicer.GetProducts,
+            request_deserializer=commerce__pb2.GetProductsRequest.FromString,
+            response_serializer=commerce__pb2.GetProductsResponse.SerializeToString,
+        ),
+        "UpsertDealerProduct": grpc.unary_unary_rpc_method_handler(
+            servicer.UpsertDealerProduct,
+            request_deserializer=commerce__pb2.UpsertDealerProductRequest.FromString,
+            response_serializer=commerce__pb2.UpsertDealerProductResponse.SerializeToString,
+        ),
+        "UpdateEnrichment": grpc.unary_unary_rpc_method_handler(
+            servicer.UpdateEnrichment,
+            request_deserializer=commerce__pb2.UpdateEnrichmentRequest.FromString,
+            response_serializer=commerce__pb2.UpdateEnrichmentResponse.SerializeToString,
+        ),
+        "TriggerHarvest": grpc.unary_unary_rpc_method_handler(
+            servicer.TriggerHarvest,
+            request_deserializer=commerce__pb2.HarvestRequest.FromString,
+            response_serializer=commerce__pb2.HarvestResponse.SerializeToString,
+        ),
+        "GetPendingVerifications": grpc.unary_stream_rpc_method_handler(
+            servicer.GetPendingVerifications,
+            request_deserializer=commerce__pb2.PendingRequest.FromString,
+            response_serializer=commerce__pb2.PendingItem.SerializeToString,
+        ),
+        "SubmitVerification": grpc.unary_unary_rpc_method_handler(
+            servicer.SubmitVerification,
+            request_deserializer=commerce__pb2.VerificationResult.FromString,
+            response_serializer=commerce__pb2.VerificationAck.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -108,67 +201,11 @@ def add_CommerceServiceServicer_to_server(servicer, server):
 
 # This class is part of an EXPERIMENTAL API.
 class CommerceService(object):
-    """Service for managing the canonical product catalog (PIM)"""
+    """=====================================================
+    Commerce Service Definition
+    =====================================================
 
-    @staticmethod
-    def ProposePatch(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            "/contextcommerce.CommerceService/ProposePatch",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def ConfirmPatch(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            "/contextcommerce.CommerceService/ConfirmPatch",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
+    """
 
     @staticmethod
     def GetProduct(
@@ -187,8 +224,8 @@ class CommerceService(object):
             request,
             target,
             "/contextcommerce.CommerceService/GetProduct",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
+            commerce__pb2.GetProductRequest.SerializeToString,
+            commerce__pb2.ProductResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -200,91 +237,8 @@ class CommerceService(object):
             _registered_method=True,
         )
 
-
-class HarvesterServiceStub(object):
-    """Service for data ingestion and synchronization"""
-
-    def __init__(self, channel):
-        """Constructor.
-
-        Args:
-            channel: A grpc.Channel.
-        """
-        self.TriggerImport = channel.unary_unary(
-            "/contextcommerce.HarvesterService/TriggerImport",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-        self.RunMatching = channel.unary_unary(
-            "/contextcommerce.HarvesterService/RunMatching",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-        self.SyncToChannel = channel.unary_unary(
-            "/contextcommerce.HarvesterService/SyncToChannel",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-
-
-class HarvesterServiceServicer(object):
-    """Service for data ingestion and synchronization"""
-
-    def TriggerImport(self, request, context):
-        """Trigger extraction from a specific dealer source"""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def RunMatching(self, request, context):
-        """Match raw dealer products against the canonical database (Matcher agent)"""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def SyncToChannel(self, request, context):
-        """Sync status or price back to a channel (e.g. Horoshop)"""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-
-def add_HarvesterServiceServicer_to_server(servicer, server):
-    rpc_method_handlers = {
-        "TriggerImport": grpc.unary_unary_rpc_method_handler(
-            servicer.TriggerImport,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-        ),
-        "RunMatching": grpc.unary_unary_rpc_method_handler(
-            servicer.RunMatching,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-        ),
-        "SyncToChannel": grpc.unary_unary_rpc_method_handler(
-            servicer.SyncToChannel,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-        ),
-    }
-    generic_handler = grpc.method_handlers_generic_handler(
-        "contextcommerce.HarvesterService", rpc_method_handlers
-    )
-    server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers(
-        "contextcommerce.HarvesterService", rpc_method_handlers
-    )
-
-
-# This class is part of an EXPERIMENTAL API.
-class HarvesterService(object):
-    """Service for data ingestion and synchronization"""
-
     @staticmethod
-    def TriggerImport(
+    def UpdateProduct(
         request,
         target,
         options=(),
@@ -299,9 +253,9 @@ class HarvesterService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextcommerce.HarvesterService/TriggerImport",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
+            "/contextcommerce.CommerceService/UpdateProduct",
+            commerce__pb2.UpdateProductRequest.SerializeToString,
+            commerce__pb2.ProductResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -314,7 +268,7 @@ class HarvesterService(object):
         )
 
     @staticmethod
-    def RunMatching(
+    def GetProducts(
         request,
         target,
         options=(),
@@ -329,9 +283,9 @@ class HarvesterService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextcommerce.HarvesterService/RunMatching",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
+            "/contextcommerce.CommerceService/GetProducts",
+            commerce__pb2.GetProductsRequest.SerializeToString,
+            commerce__pb2.GetProductsResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -344,7 +298,7 @@ class HarvesterService(object):
         )
 
     @staticmethod
-    def SyncToChannel(
+    def UpsertDealerProduct(
         request,
         target,
         options=(),
@@ -359,9 +313,129 @@ class HarvesterService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextcommerce.HarvesterService/SyncToChannel",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
+            "/contextcommerce.CommerceService/UpsertDealerProduct",
+            commerce__pb2.UpsertDealerProductRequest.SerializeToString,
+            commerce__pb2.UpsertDealerProductResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def UpdateEnrichment(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextcommerce.CommerceService/UpdateEnrichment",
+            commerce__pb2.UpdateEnrichmentRequest.SerializeToString,
+            commerce__pb2.UpdateEnrichmentResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def TriggerHarvest(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextcommerce.CommerceService/TriggerHarvest",
+            commerce__pb2.HarvestRequest.SerializeToString,
+            commerce__pb2.HarvestResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def GetPendingVerifications(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            "/contextcommerce.CommerceService/GetPendingVerifications",
+            commerce__pb2.PendingRequest.SerializeToString,
+            commerce__pb2.PendingItem.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def SubmitVerification(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextcommerce.CommerceService/SubmitVerification",
+            commerce__pb2.VerificationResult.SerializeToString,
+            commerce__pb2.VerificationAck.FromString,
             options,
             channel_credentials,
             insecure,

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import time
 from datetime import datetime
 from uuid import UUID, uuid4
 
-import pytest
 
 from contextcore import ContextUnit, CotStep, SecurityScopes, UnitMetrics
 

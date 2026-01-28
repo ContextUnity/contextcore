@@ -36,7 +36,7 @@ class TestProtobufConversion:
         try:
             from contextcore.generated import context_unit_pb2
             from google.protobuf.struct_pb2 import Struct
-            from google.protobuf.timestamp_pb2 import Timestamp
+            # from google.protobuf.timestamp_pb2 import Timestamp
 
             # Create a protobuf message
             unit_pb = context_unit_pb2.ContextUnit(

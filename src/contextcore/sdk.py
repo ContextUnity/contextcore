@@ -175,32 +175,53 @@ try:
         worker_pb2,
         worker_pb2_grpc,
     )
+
+    # Commerce-specific proto (optional)
+    try:
+        from . import commerce_pb2, commerce_pb2_grpc
+    except ImportError:
+        commerce_pb2, commerce_pb2_grpc = None, None
 except ImportError:
     # Handle cases where protos aren't generated yet or different import path
     context_unit_pb2 = None
     brain_pb2, brain_pb2_grpc = None, None
     worker_pb2, worker_pb2_grpc = None, None
+    commerce_pb2, commerce_pb2_grpc = None, None
 
 logger = logging.getLogger(__name__)
 
 
 class BrainClient:
     """
-    Client for interacting with ContextBrain.
+    Client for interacting with ContextBrain (core knowledge operations).
     Supports 'local' (library) and 'grpc' (network) modes.
+
+    For commerce-specific operations (products, enrichment), use CommerceClient.
+
+    Note: TLS/mTLS support is provided by ContextShield (premium feature).
     """
 
     def __init__(self, host: str | None = None, mode: str | None = None):
         self.mode = mode or os.getenv("CONTEXT_BRAIN_MODE", "grpc")
         self.host = host or os.getenv("CONTEXT_BRAIN_URL", "localhost:50051")
         self._stub = None
+        self._commerce_stub = None
         self._service = None
+        self.channel = None
 
         if self.mode == "grpc":
             if not brain_pb2_grpc:
                 raise ImportError("Brain gRPC protos not available")
+
+            # Connection via ContextShield for TLS/mTLS (see contextshield package)
             self.channel = grpc.aio.insecure_channel(self.host)
+
             self._stub = brain_pb2_grpc.BrainServiceStub(self.channel)
+            # Commerce stub (optional, same channel)
+            if commerce_pb2_grpc:
+                self._commerce_stub = commerce_pb2_grpc.CommerceServiceStub(
+                    self.channel
+                )
         else:
             try:
                 from contextbrain import BrainService
@@ -231,6 +252,195 @@ class BrainClient:
         else:
             res_pb = await self._service.UpsertTaxonomy(unit_pb, context=None)
         return ContextUnit.from_protobuf(res_pb)
+
+    # =========================================================================
+    # Commerce / Gardener Methods
+    # =========================================================================
+
+    async def get_products(
+        self,
+        tenant_id: str,
+        product_ids: List[int],
+    ) -> List[dict]:
+        """Get products for enrichment by IDs.
+
+        Args:
+            tenant_id: Tenant identifier for isolation.
+            product_ids: List of product IDs to fetch.
+
+        Returns:
+            List of product dictionaries with id, name, category, etc.
+        """
+        if self.mode != "grpc":
+            raise NotImplementedError("get_products only supports gRPC mode")
+        if not self._commerce_stub:
+            raise ImportError("Commerce gRPC protos not available")
+
+        request = commerce_pb2.GetProductsRequest(
+            tenant_id=tenant_id,
+            product_ids=list(product_ids),
+        )
+        response = await self._commerce_stub.GetProducts(request)
+
+        products = []
+        for p in response.products:
+            products.append(
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "category": p.category,
+                    "description": p.description,
+                    "brand_name": p.brand_name,
+                    "params": dict(p.params) if p.params else {},
+                    "enrichment": dict(p.enrichment) if p.enrichment else {},
+                }
+            )
+        return products
+
+    async def update_enrichment(
+        self,
+        tenant_id: str,
+        product_id: int,
+        enrichment: dict,
+        trace_id: str,
+        status: str = "enriched",
+    ) -> bool:
+        """Update product enrichment data.
+
+        Args:
+            tenant_id: Tenant identifier.
+            product_id: Product ID.
+            enrichment: Enrichment data dictionary.
+            trace_id: Trace ID for auditing.
+            status: Enrichment status (e.g., 'enriched', 'failed').
+
+        Returns:
+            True if successful.
+        """
+        if self.mode != "grpc":
+            raise NotImplementedError("update_enrichment only supports gRPC mode")
+        if not self._commerce_stub:
+            raise ImportError("Commerce gRPC protos not available")
+
+        from google.protobuf.struct_pb2 import Struct
+
+        enrichment_struct = Struct()
+        enrichment_struct.update(enrichment)
+
+        request = commerce_pb2.UpdateEnrichmentRequest(
+            tenant_id=tenant_id,
+            product_id=product_id,
+            enrichment=enrichment_struct,
+            trace_id=trace_id,
+            status=status,
+        )
+        response = await self._commerce_stub.UpdateEnrichment(request)
+        return response.success
+
+    async def create_kg_relation(
+        self,
+        tenant_id: str,
+        source_type: str,
+        source_id: str,
+        relation: str,
+        target_type: str,
+        target_id: str,
+    ) -> bool:
+        """Create a Knowledge Graph relation.
+
+        Args:
+            tenant_id: Tenant identifier.
+            source_type: Type of source node (e.g., 'product').
+            source_id: Source node ID.
+            relation: Relation type (e.g., 'MADE_BY', 'BELONGS_TO').
+            target_type: Type of target node (e.g., 'brand', 'category').
+            target_id: Target node ID.
+
+        Returns:
+            True if successful.
+        """
+        if self.mode != "grpc":
+            raise NotImplementedError("create_kg_relation only supports gRPC mode")
+
+        request = brain_pb2.CreateKGRelationRequest(
+            tenant_id=tenant_id,
+            source_type=source_type,
+            source_id=source_id,
+            relation=relation,
+            target_type=target_type,
+            target_id=target_id,
+        )
+        response = await self._stub.CreateKGRelation(request)
+        return response.success
+
+    async def upsert_dealer_product(
+        self,
+        tenant_id: str,
+        dealer_code: str,
+        dealer_name: str,
+        sku: str,
+        name: str = "",
+        category: str = "",
+        brand_name: str = "",
+        quantity: int = 0,
+        price_retail: float | None = None,
+        currency: str = "UAH",
+        params: dict | None = None,
+        status: str = "raw",
+        trace_id: str | None = None,
+    ) -> int:
+        """Upsert dealer product via Brain gRPC.
+
+        Args:
+            tenant_id: Tenant identifier.
+            dealer_code: Supplier/dealer code.
+            dealer_name: Human-readable dealer name.
+            sku: Product SKU (unique per dealer).
+            name: Product name.
+            category: Product category path.
+            brand_name: Brand name.
+            quantity: Available quantity.
+            price_retail: Retail price.
+            currency: Currency code (default UAH).
+            params: Additional product attributes.
+            status: Product status (raw, enriched, pending_human).
+            trace_id: Trace ID for observability.
+
+        Returns:
+            Database-assigned product ID.
+        """
+        if self.mode != "grpc":
+            raise NotImplementedError("upsert_dealer_product only supports gRPC mode")
+        if not self._commerce_stub:
+            raise ImportError("Commerce gRPC protos not available")
+
+        from google.protobuf.struct_pb2 import Struct
+
+        params_struct = Struct()
+        if params:
+            params_struct.update(params)
+
+        request = commerce_pb2.UpsertDealerProductRequest(
+            tenant_id=tenant_id,
+            dealer_code=dealer_code,
+            dealer_name=dealer_name,
+            sku=sku,
+            name=name,
+            category=category,
+            brand_name=brand_name,
+            quantity=quantity,
+            price_retail=price_retail or 0.0,
+            currency=currency,
+            params=params_struct,
+            status=status,
+            trace_id=trace_id or "",
+        )
+        response = await self._commerce_stub.UpsertDealerProduct(request)
+
+        if not response.success:
+            raise RuntimeError(f"UpsertDealerProduct failed: {response.message}")
+
+        return response.product_id
 
 
 class WorkerClient:

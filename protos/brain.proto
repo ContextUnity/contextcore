@@ -2,11 +2,19 @@ syntax = "proto3";
 
 package contextbrain;
 
+// =====================================================
+// Core Brain Service - Universal Knowledge Operations
+// =====================================================
+
 enum SourceType {
     SOURCE_TYPE_UNSPECIFIED = 0;
     SOURCE_TYPE_CHUNK = 1;
     SOURCE_TYPE_CONCEPT = 2;
 }
+
+// =====================================================
+// Search Messages
+// =====================================================
 
 message SearchRequest {
     string tenant_id = 1;
@@ -29,6 +37,10 @@ message SearchResponse {
     repeated SearchResult results = 1;
 }
 
+// =====================================================
+// Knowledge Graph Messages
+// =====================================================
+
 message GraphSearchRequest {
     string tenant_id = 1;
     repeated string entrypoint_ids = 2;
@@ -48,36 +60,30 @@ message GraphSearchResponse {
     repeated GraphEdge edges = 2;
 }
 
+message CreateKGRelationRequest {
+    string tenant_id = 1;
+    string source_type = 2;
+    string source_id = 3;
+    string relation = 4;
+    string target_type = 5;
+    string target_id = 6;
+}
+
+message CreateKGRelationResponse {
+    bool success = 1;
+}
+
+// =====================================================
+// Core Brain Service Definition
+// =====================================================
+
 service BrainService {
     // Semantic/Hybrid search
     rpc Search(SearchRequest) returns (SearchResponse);
-    
+
     // Graph Traversal
     rpc GraphSearch(GraphSearchRequest) returns (GraphSearchResponse);
 
-    // Gardener: Get items needing classification
-    rpc GetPendingVerifications(PendingRequest) returns (stream PendingItem);
-    
-    // Gardener: Write enrichment results
-    rpc SubmitVerification(VerificationResult) returns (VerificationAck);
-}
-
-message PendingRequest {
-    string tenant_id = 1;
-    int32 limit = 2;
-}
-
-message PendingItem {
-    string id = 1;
-    string content = 2;
-    string context_json = 3;
-}
-
-message VerificationResult {
-    string id = 1;
-    string enrichment_json = 2;
-}
-
-message VerificationAck {
-    bool success = 1;
+    // Create Knowledge Graph relation
+    rpc CreateKGRelation(CreateKGRelationRequest) returns (CreateKGRelationResponse);
 }

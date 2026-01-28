@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
@@ -121,37 +121,38 @@ class TestSetupLogging:
         """Test logging setup with SharedConfig."""
         config = SharedConfig(log_level=LogLevel.DEBUG)
         setup_logging(config=config, json_format=False)
-        
+
         root_logger = logging.getLogger()
         assert root_logger.level == logging.DEBUG
 
     def test_setup_with_env(self) -> None:
         """Test logging setup loading from environment."""
         import os
+
         os.environ["LOG_LEVEL"] = "WARNING"
-        
+
         setup_logging(json_format=False)
-        
+
         root_logger = logging.getLogger()
         assert root_logger.level == logging.WARNING
-        
+
         # Cleanup
         os.environ.pop("LOG_LEVEL", None)
 
     def test_json_format(self, capsys: pytest.CaptureFixture) -> None:
         """Test JSON format output."""
         import json
-        
+
         config = SharedConfig(log_level=LogLevel.INFO)
         setup_logging(config=config, json_format=True)
-        
+
         logger = logging.getLogger("test")
         logger.info("Test message")
-        
+
         # Capture stderr output (where StreamHandler writes)
         captured = capsys.readouterr()
         stderr_output = captured.err.strip()
-        
+
         # Verify it's valid JSON
         assert stderr_output.startswith("{")
         data = json.loads(stderr_output)
@@ -163,14 +164,14 @@ class TestSetupLogging:
         """Test plain text format output."""
         config = SharedConfig(log_level=LogLevel.INFO)
         setup_logging(config=config, json_format=False)
-        
+
         logger = logging.getLogger("test")
         logger.info("Test message")
-        
+
         # Capture stderr output (where StreamHandler writes)
         captured = capsys.readouterr()
         stderr_output = captured.err.strip()
-        
+
         # Verify it's plain text format
         assert "INFO" in stderr_output
         assert "test" in stderr_output
@@ -185,10 +186,10 @@ class TestContextUnitLogger:
         """Test logger with trace_id."""
         trace_id = uuid4()
         logger = get_context_unit_logger("test", trace_id=trace_id)
-        
+
         with caplog.at_level(logging.INFO):
             logger.info("Test message")
-        
+
         assert len(caplog.records) > 0
         record = caplog.records[0]
         assert hasattr(record, "trace_id") or str(trace_id) in str(record)
@@ -200,21 +201,21 @@ class TestContextUnitLogger:
             trace_id=uuid4(),
             payload={"test": "data"},
         )
-        
+
         logger = get_context_unit_logger("test")
-        
+
         with caplog.at_level(logging.INFO):
             logger.info("Processing unit", unit=unit)
-        
+
         assert len(caplog.records) > 0
 
     def test_logger_without_context(self, caplog: pytest.LogCaptureFixture) -> None:
         """Test logger without trace context."""
         logger = get_context_unit_logger("test")
-        
+
         with caplog.at_level(logging.INFO):
             logger.info("Test message")
-        
+
         assert len(caplog.records) > 0
 
 
@@ -224,7 +225,7 @@ class TestContextUnitFormatter:
     def test_json_format(self) -> None:
         """Test JSON formatter."""
         from contextcore.logging import ContextUnitFormatter
-        
+
         formatter = ContextUnitFormatter(json_format=True)
         record = logging.LogRecord(
             name="test",
@@ -236,9 +237,9 @@ class TestContextUnitFormatter:
             exc_info=None,
         )
         record.trace_id = uuid4()
-        
+
         result = formatter.format(record)
-        
+
         # Should be valid JSON
         data = json.loads(result)
         assert data["level"] == "INFO"
@@ -247,7 +248,7 @@ class TestContextUnitFormatter:
     def test_plain_format(self) -> None:
         """Test plain text formatter."""
         from contextcore.logging import ContextUnitFormatter
-        
+
         formatter = ContextUnitFormatter(json_format=False)
         record = logging.LogRecord(
             name="test",
@@ -259,9 +260,9 @@ class TestContextUnitFormatter:
             exc_info=None,
         )
         record.trace_id = uuid4()
-        
+
         result = formatter.format(record)
-        
+
         # Should be plain text
         assert "INFO" in result
         assert "Test message" in result

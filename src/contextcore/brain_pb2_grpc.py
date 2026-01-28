@@ -3,7 +3,7 @@
 
 import grpc
 
-from . import context_unit_pb2 as context__unit__pb2
+from contextcore import brain_pb2 as brain__pb2
 
 GRPC_GENERATED_VERSION = "1.76.0"
 GRPC_VERSION = grpc.__version__
@@ -29,7 +29,11 @@ if _version_not_supported:
 
 
 class BrainServiceStub(object):
-    """Intelligence and Memory Hub"""
+    """=====================================================
+    Core Brain Service Definition
+    =====================================================
+
+    """
 
     def __init__(self, channel):
         """Constructor.
@@ -37,103 +41,47 @@ class BrainServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.QueryMemory = channel.unary_stream(
-            "/contextbrain.BrainService/QueryMemory",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
+        self.Search = channel.unary_unary(
+            "/contextbrain.BrainService/Search",
+            request_serializer=brain__pb2.SearchRequest.SerializeToString,
+            response_deserializer=brain__pb2.SearchResponse.FromString,
             _registered_method=True,
         )
-        self.Memorize = channel.unary_unary(
-            "/contextbrain.BrainService/Memorize",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
+        self.GraphSearch = channel.unary_unary(
+            "/contextbrain.BrainService/GraphSearch",
+            request_serializer=brain__pb2.GraphSearchRequest.SerializeToString,
+            response_deserializer=brain__pb2.GraphSearchResponse.FromString,
             _registered_method=True,
         )
-        self.UpdateGraph = channel.unary_unary(
-            "/contextbrain.BrainService/UpdateGraph",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-        self.GetPendingVerifications = channel.unary_stream(
-            "/contextbrain.BrainService/GetPendingVerifications",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-        self.AddEpisode = channel.unary_unary(
-            "/contextbrain.BrainService/AddEpisode",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-        self.UpsertFact = channel.unary_unary(
-            "/contextbrain.BrainService/UpsertFact",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-        self.UpsertTaxonomy = channel.unary_unary(
-            "/contextbrain.BrainService/UpsertTaxonomy",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-        self.GetTaxonomy = channel.unary_stream(
-            "/contextbrain.BrainService/GetTaxonomy",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
+        self.CreateKGRelation = channel.unary_unary(
+            "/contextbrain.BrainService/CreateKGRelation",
+            request_serializer=brain__pb2.CreateKGRelationRequest.SerializeToString,
+            response_deserializer=brain__pb2.CreateKGRelationResponse.FromString,
             _registered_method=True,
         )
 
 
 class BrainServiceServicer(object):
-    """Intelligence and Memory Hub"""
+    """=====================================================
+    Core Brain Service Definition
+    =====================================================
 
-    def QueryMemory(self, request, context):
-        """Semantic/Hybrid search for relevant context (RAG)"""
+    """
+
+    def Search(self, request, context):
+        """Semantic/Hybrid search"""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def Memorize(self, request, context):
-        """Write new knowledge/observations into memory"""
+    def GraphSearch(self, request, context):
+        """Graph Traversal"""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def UpdateGraph(self, request, context):
-        """Extract concepts and update Knowledge Graph (Gardener agent)"""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def GetPendingVerifications(self, request, context):
-        """Retrieve unrecognized items needing manual/agentic verification"""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def AddEpisode(self, request, context):
-        """Episodic Memory: Record an interaction"""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def UpsertFact(self, request, context):
-        """Entity Memory: Store persistent user facts"""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def UpsertTaxonomy(self, request, context):
-        """Catalog Taxonomy: Bi-directional sync"""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def GetTaxonomy(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+    def CreateKGRelation(self, request, context):
+        """Create Knowledge Graph relation"""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
@@ -141,45 +89,20 @@ class BrainServiceServicer(object):
 
 def add_BrainServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-        "QueryMemory": grpc.unary_stream_rpc_method_handler(
-            servicer.QueryMemory,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+        "Search": grpc.unary_unary_rpc_method_handler(
+            servicer.Search,
+            request_deserializer=brain__pb2.SearchRequest.FromString,
+            response_serializer=brain__pb2.SearchResponse.SerializeToString,
         ),
-        "Memorize": grpc.unary_unary_rpc_method_handler(
-            servicer.Memorize,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+        "GraphSearch": grpc.unary_unary_rpc_method_handler(
+            servicer.GraphSearch,
+            request_deserializer=brain__pb2.GraphSearchRequest.FromString,
+            response_serializer=brain__pb2.GraphSearchResponse.SerializeToString,
         ),
-        "UpdateGraph": grpc.unary_unary_rpc_method_handler(
-            servicer.UpdateGraph,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-        ),
-        "GetPendingVerifications": grpc.unary_stream_rpc_method_handler(
-            servicer.GetPendingVerifications,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-        ),
-        "AddEpisode": grpc.unary_unary_rpc_method_handler(
-            servicer.AddEpisode,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-        ),
-        "UpsertFact": grpc.unary_unary_rpc_method_handler(
-            servicer.UpsertFact,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-        ),
-        "UpsertTaxonomy": grpc.unary_unary_rpc_method_handler(
-            servicer.UpsertTaxonomy,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-        ),
-        "GetTaxonomy": grpc.unary_stream_rpc_method_handler(
-            servicer.GetTaxonomy,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+        "CreateKGRelation": grpc.unary_unary_rpc_method_handler(
+            servicer.CreateKGRelation,
+            request_deserializer=brain__pb2.CreateKGRelationRequest.FromString,
+            response_serializer=brain__pb2.CreateKGRelationResponse.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -193,40 +116,14 @@ def add_BrainServiceServicer_to_server(servicer, server):
 
 # This class is part of an EXPERIMENTAL API.
 class BrainService(object):
-    """Intelligence and Memory Hub"""
+    """=====================================================
+    Core Brain Service Definition
+    =====================================================
+
+    """
 
     @staticmethod
-    def QueryMemory(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_stream(
-            request,
-            target,
-            "/contextbrain.BrainService/QueryMemory",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def Memorize(
+    def Search(
         request,
         target,
         options=(),
@@ -241,9 +138,9 @@ class BrainService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextbrain.BrainService/Memorize",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
+            "/contextbrain.BrainService/Search",
+            brain__pb2.SearchRequest.SerializeToString,
+            brain__pb2.SearchResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -256,7 +153,7 @@ class BrainService(object):
         )
 
     @staticmethod
-    def UpdateGraph(
+    def GraphSearch(
         request,
         target,
         options=(),
@@ -271,9 +168,9 @@ class BrainService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextbrain.BrainService/UpdateGraph",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
+            "/contextbrain.BrainService/GraphSearch",
+            brain__pb2.GraphSearchRequest.SerializeToString,
+            brain__pb2.GraphSearchResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -286,37 +183,7 @@ class BrainService(object):
         )
 
     @staticmethod
-    def GetPendingVerifications(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_stream(
-            request,
-            target,
-            "/contextbrain.BrainService/GetPendingVerifications",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def AddEpisode(
+    def CreateKGRelation(
         request,
         target,
         options=(),
@@ -331,99 +198,9 @@ class BrainService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextbrain.BrainService/AddEpisode",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def UpsertFact(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            "/contextbrain.BrainService/UpsertFact",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def UpsertTaxonomy(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            "/contextbrain.BrainService/UpsertTaxonomy",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def GetTaxonomy(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_stream(
-            request,
-            target,
-            "/contextbrain.BrainService/GetTaxonomy",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
+            "/contextbrain.BrainService/CreateKGRelation",
+            brain__pb2.CreateKGRelationRequest.SerializeToString,
+            brain__pb2.CreateKGRelationResponse.FromString,
             options,
             channel_credentials,
             insecure,

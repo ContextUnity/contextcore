@@ -19,8 +19,6 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-
-
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b"\n\x0b\x62rain.proto\x12\x0c\x63ontextbrain\x1a\x12\x63ontext_unit.proto2\xb6\x04\n\x0c\x42rainService\x12\x43\n\x0bQueryMemory\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12>\n\x08Memorize\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x41\n\x0bUpdateGraph\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12O\n\x17GetPendingVerifications\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12@\n\nAddEpisode\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12@\n\nUpsertFact\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0eUpsertTaxonomy\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bGetTaxonomy\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x62\x06proto3"
 )
