@@ -1,43 +1,61 @@
 # ContextCore
 
-**The Kernel of ContextUnity** — shared library of types, gRPC contracts, and Telemetry SDK for the entire ContextUnity ecosystem.
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE.md)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![GitHub](https://img.shields.io/badge/GitHub-ContextUnity-black.svg)](https://github.com/ContextUnity/contextcore)
+[![Docs](https://img.shields.io/badge/docs-contextcore.dev-green.svg)](https://contextcore.dev)
 
-[![Documentation](https://img.shields.io/badge/docs-contextcore.dev-blue)](https://contextcore.dev)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
+> ⚠️ **Early Version**: This is an early version of ContextCore. Documentation is actively being developed, and the API may change.
 
-## Overview
+## What is ContextCore?
 
-ContextCore is the "Source of Truth" for the entire ContextUnity ecosystem. It defines the shared language (types, interfaces, protocols), ensuring all `context*` services remain synchronized and interoperable.
+ContextCore is the **Kernel** of the [ContextUnity](https://github.com/ContextUnity) ecosystem. It provides:
 
-### Key Features
-
-- **ContextUnit SDK** — atomic unit of data exchange with full observability
+- **ContextUnit** — atomic data exchange format with provenance tracking
+- **ContextToken** — capability-based security tokens for authorization
+- **gRPC Contracts** — protocol definitions for service-to-service communication
+- **Shared Configuration** — unified settings with Pydantic validation
 - **Centralized Logging** — structured logging with automatic secret redaction
-- **Shared Configuration** — unified settings via Pydantic validators
-- **ContextToken** — capability-based access control for security
-- **gRPC Protos** — "iron-clad" contracts for inter-service communication
-- **Crypto Primitives** — standardized algorithms (AES-256-GCM) for compatibility
 
-## Installation
+All `context*` services depend on ContextCore for shared types and contracts.
 
-### Using uv (Recommended)
+## What is it for?
 
-```bash
-uv add contextcore
+ContextCore is designed for:
+
+- **Type safety** — Pydantic models ensure data integrity across services
+- **Traceability** — ContextUnit provenance tracks data journey
+- **Security** — ContextToken provides capability-based authorization
+- **Interoperability** — gRPC contracts ensure consistent APIs
+
+### Core principle:
+
+> **Zero business logic.** ContextCore is purely infrastructure.
+
+## Key Features
+
+- **📦 ContextUnit SDK** — atomic unit of data exchange with full observability
+- **🔐 ContextToken** — capability-based access control with scope management
+- **📡 gRPC Protos** — "iron-clad" contracts for inter-service communication
+- **⚙️ SharedConfig** — unified settings via Pydantic validators
+- **📝 Centralized Logging** — structured logs with automatic secret redaction
+
+> **What is gRPC?** [gRPC](https://grpc.io/) is a high-performance RPC framework using Protocol Buffers. It provides type-safe, efficient service-to-service communication with built-in streaming — faster than REST APIs.
+
+## Architecture
+
 ```
-
-### Using pip
-
-```bash
-pip install contextcore
-```
-
-### Local Development
-
-```bash
-git clone https://github.com/ContextUnity/contextcore.git
-cd contextcore
-uv sync --dev
+ContextCore/
+├── sdk.py              # ContextUnit, ContextUnitBuilder, BrainClient
+├── tokens.py           # ContextToken, TokenBuilder
+├── config.py           # SharedConfig, LogLevel
+├── logging.py          # setup_logging, safe_log_value
+├── interfaces.py       # IRead, IWrite base interfaces
+│
+├── brain_pb2.py        # Generated: BrainService gRPC
+├── commerce_pb2.py     # Generated: CommerceService gRPC
+├── worker_pb2.py       # Generated: WorkerService gRPC
+└── context_unit_pb2.py # Generated: ContextUnit proto
 ```
 
 ## Quick Start
@@ -48,56 +66,14 @@ uv sync --dev
 from contextcore import ContextUnit, SecurityScopes, UnitMetrics
 from uuid import uuid4
 
-# Create a ContextUnit
 unit = ContextUnit(
     unit_id=str(uuid4()),
     trace_id=str(uuid4()),
     modality="text",
     payload={"query": "What is RAG?"},
+    provenance=["connector:telegram"],
     security=SecurityScopes(read=["knowledge:read"]),
     metrics=UnitMetrics(latency_ms=0, cost_usd=0.0, tokens_used=0)
-)
-
-# Access properties
-print(f"Unit ID: {unit.unit_id}")
-print(f"Trace ID: {unit.trace_id}")
-print(f"Payload: {unit.payload}")
-```
-
-### Centralized Logging
-
-```python
-from contextcore import setup_logging, get_context_unit_logger, SharedConfig, LogLevel
-
-# Setup logging at application startup
-config = SharedConfig(log_level=LogLevel.INFO)
-setup_logging(config=config)
-
-# Get logger with ContextUnit support
-logger = get_context_unit_logger(__name__)
-
-# Log with ContextUnit (trace_id automatically included)
-logger.info("Processing request", unit=context_unit)
-
-# Safe logging of sensitive data
-from contextcore import safe_log_value
-logger.info(f"User data: {safe_log_value(user_data)}")
-```
-
-### Shared Configuration
-
-```python
-from contextcore import SharedConfig, LogLevel, load_shared_config_from_env
-
-# Load from environment variables
-config = load_shared_config_from_env()
-
-# Or create explicitly
-config = SharedConfig(
-    log_level=LogLevel.INFO,
-    service_name="my-service",
-    service_version="1.0.0",
-    redis_url="redis://localhost:6379"
 )
 ```
 
@@ -106,165 +82,108 @@ config = SharedConfig(
 ```python
 from contextcore import ContextToken, SecurityScopes
 
-# Create a token with permissions
 token = ContextToken(
     token_id="token_123",
     permissions=("knowledge:read", "catalog:read")
 )
 
-# Check permissions
-unit = ContextUnit(
-    security=SecurityScopes(read=["knowledge:read"])
-)
-
+# Check authorization
 if token.can_read(unit.security):
     print("Access granted!")
 ```
 
-### gRPC Clients
+### Centralized Logging
 
 ```python
-from contextcore import BrainClient, ContextUnit, ContextToken
+from contextcore import setup_logging, get_context_unit_logger, SharedConfig
 
-# Create a client
-client = BrainClient(host="localhost:50051")
+config = SharedConfig(service_name="my-service")
+setup_logging(config=config)
 
-# Query memory
-unit = ContextUnit(
-    payload={"query": "What is RAG?"},
-    security=SecurityScopes(read=["knowledge:read"])
-)
-token = ContextToken(permissions=("knowledge:read",))
-
-async for result in client.query_memory(unit, token=token):
-    print(result.payload.get("content"))
+logger = get_context_unit_logger(__name__)
+logger.info("Processing request", unit=context_unit)  # trace_id auto-included
 ```
 
-## Core Components
+### gRPC Client
 
-### 1. ContextUnit (The Atomic Unit)
+```python
+from contextcore import BrainClient
 
-All data exchanges must adhere to the `ContextUnit` structure:
+client = BrainClient(host="localhost:50051")
 
-- `unit_id`: UUIDv4 unique identifier
-- `trace_id`: UUIDv4 for tracking the entire request lifecycle
-- `parent_unit_id`: Reference for tracing parent-child relationships
-- `modality`: `text`, `audio`, or `spatial`
-- `payload`: The actual message/data content
-- `provenance`: List of strings showing the data's journey
-- `metrics`: Latency (`ms`), cost (`usd`), and token usage
-- `security`: Security Scopes for capability-based access control
+results = await client.search(
+    tenant_id="my_app",
+    query_text="How does PostgreSQL work?",
+    limit=5,
+)
+```
 
-### 2. Logging & Observability
+## Installation
 
-**Centralized Logging** with automatic configuration:
+```bash
+pip install contextcore
 
-- **Structured Logging**: JSON format with automatic inclusion of `trace_id` and `unit_id`
-- **Secret Redaction**: Automatic redaction of passwords, API keys, tokens, and other secrets
-- **Safe Previews**: Length-bounded previews of data to prevent log bloat
-- **ContextUnit Integration**: Automatic trace_id propagation from ContextUnit instances
+# Using uv (recommended):
+uv add contextcore
+```
 
-### 3. Shared Configuration
+## Configuration
 
-Pydantic validators for unified settings across all products:
+```bash
+# Logging
+export LOG_LEVEL=INFO
+export SERVICE_NAME=my-service
 
-- `LOG_LEVEL`: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- `REDIS_URL`: URL for Redis connection
-- `SERVICE_NAME`: Service name for observability
-- `SERVICE_VERSION`: Service version
-- `OTEL_ENABLED`: Enable OpenTelemetry
-- `OTEL_ENDPOINT`: Endpoint for OpenTelemetry collector
+# Redis (optional)
+export REDIS_URL=redis://localhost:6379
 
-### 4. ContextToken
-
-Capability-based access control for security:
-
-- `token_id`: Unique identifier for audit trails
-- `permissions`: List of capability strings (e.g., "catalog:read", "product:write")
-- `exp_unix`: Expiration timestamp (None = no expiration)
-
-### 5. gRPC Protobuf Definitions
-
-"Iron-clad" contracts for direct inter-service communication:
-
-- `context_unit.proto` — base ContextUnit protocol
-- `brain.proto` — BrainService for RAG and knowledge management
-- `commerce.proto` — CommerceService for e-commerce operations
-- `worker.proto` — WorkerService for background tasks
-
-## Documentation
-
-- **[Full Documentation](./contextcore-fulldoc.md)** — complete documentation of all components
-- **[Online Docs](https://contextcore.dev)** — documentation website
-- **[Logging Guide](docs/LOGGING.md)** — detailed logging guide
+# OpenTelemetry (optional)
+export OTEL_ENABLED=true
+export OTEL_ENDPOINT=http://localhost:4317
+```
 
 ## Development
+
+### Prerequisites
+- Python 3.13+
+- `uv` package manager
 
 ### Setup
 
 ```bash
-# Clone repository
 git clone https://github.com/ContextUnity/contextcore.git
 cd contextcore
-
-# Install dependencies
 uv sync --dev
-
-# Run tests
-uv run pytest
-
-# Compile protobuf files
-./compile_protos.sh
-```
-
-### Project Structure
-
-```
-contextcore/
-├── src/contextcore/      # Source code
-│   ├── sdk.py            # ContextUnit SDK
-│   ├── config.py         # Shared configuration
-│   ├── tokens.py         # ContextToken implementation
-│   ├── logging.py        # Centralized logging
-│   └── interfaces.py     # Base interfaces
-├── protos/               # Protocol Buffer definitions
-├── tests/                # Test suite
-└── docs/                 # Documentation
 ```
 
 ### Running Tests
 
 ```bash
-# Run all tests
-uv run pytest
-
-# Run with coverage
-uv run pytest --cov=contextcore --cov-report=html
-
-# Run specific test file
-uv run pytest tests/test_sdk.py
+uv run pytest tests/ -v
 ```
 
-## Integration with ContextUnity Services
+### Compiling Protos
 
-ContextCore is integrated into all ContextUnity services:
+```bash
+./compile_protos.sh
+```
 
-- **ContextRouter** — The "Mind": AI Gateway and agent orchestration.
-- **ContextBrain** — The "Memory": Centralized RAG retrieval and vector storage.
-- **ContextCommerce** — The "Store": E-commerce platform with agent integration.
-- **ContextWorker** — The "Hands": Background tasks and temporal workflows.
-- **ContextShield** — The "Guard": Security layer validating provenance.
+## Documentation
+
+- [Full Documentation](https://contextcore.dev) — complete guides and API reference
+- [Technical Reference](./contextcore-fulldoc.md) — architecture deep-dive
+- [Proto Definitions](./protos/) — gRPC contract definitions
+
+## ContextUnity Ecosystem
+
+ContextCore is part of the [ContextUnity](https://github.com/ContextUnity) platform:
+
+| Service | Role | Documentation |
+|---------|------|---------------|
+| **ContextBrain** | Knowledge storage and RAG | [contextbrain.dev](https://contextbrain.dev) |
+| **ContextRouter** | AI agent orchestration | [contextrouter.dev](https://contextrouter.dev) |
+| **ContextWorker** | Background task execution | [contextworker.dev](https://contextworker.dev) |
 
 ## License
 
-MIT License — see [LICENSE.md](LICENSE.md) for details.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
-
-## Links
-
-- **Documentation**: https://contextcore.dev
-- **Repository**: https://github.com/ContextUnity/contextcore
-- **ContextUnity**: https://github.com/ContextUnity
+This project is licensed under the terms specified in [LICENSE.md](LICENSE.md).
