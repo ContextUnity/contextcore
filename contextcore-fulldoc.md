@@ -31,22 +31,34 @@ ContextCore is the "source of truth" for the entire ecosystem. Every service dep
 ├────────────────────────────────────────────────────────────────────────────┤
 │                                                                            │
 │  src/contextcore/                                                          │
-│  ├── sdk.py              ← ContextUnit, ContextUnitBuilder                 │
-│  ├── tokens.py           ← ContextToken, TokenBuilder                      │
-│  ├── config.py           ← SharedConfig, LogLevel                          │
-│  ├── logging.py          ← setup_logging, safe_log_value                   │
-│  ├── interfaces.py       ← IRead, IWrite base interfaces                   │
+│  ├── sdk/                   ← Modular SDK (400-Line Code Scale)            │
+│  │   ├── __init__.py        ← Public exports                               │
+│  │   ├── context_unit.py    ← ContextUnit, ContextUnitBuilder              │
+│  │   ├── models.py          ← Shared Pydantic models                       │
+│  │   ├── worker_client.py   ← WorkerClient                                 │
+│  │   └── brain/             ← BrainClient subpackage                       │
+│  │       ├── base.py        ← Base client class                            │
+│  │       ├── knowledge.py   ← Knowledge operations                         │
+│  │       ├── commerce.py    ← Commerce operations                          │
+│  │       └── news.py        ← News operations                              │
 │  │                                                                         │
-│  ├── brain_pb2.py        ← Generated: BrainService                         │
-│  ├── commerce_pb2.py     ← Generated: CommerceService                      │
-│  ├── worker_pb2.py       ← Generated: WorkerService                        │
-│  └── context_unit_pb2.py ← Generated: ContextUnit proto                    │
+│  ├── tokens.py              ← ContextToken, TokenBuilder                   │
+│  ├── config.py              ← SharedConfig, LogLevel                       │
+│  ├── logging.py             ← setup_logging, safe_log_value                │
+│  ├── interfaces.py          ← IRead, IWrite base interfaces                │
+│  │                                                                         │
+│  ├── brain_pb2.py           ← Generated: BrainService                      │
+│  ├── commerce_pb2.py        ← Generated: CommerceService                   │
+│  ├── worker_pb2.py          ← Generated: WorkerService                     │
+│  ├── router_pb2.py          ← Generated: RouterService                     │
+│  └── context_unit_pb2.py    ← Generated: ContextUnit proto                 │
 │                                                                            │
 │  protos/                                                                   │
-│  ├── brain.proto         ← Knowledge Store API                             │
-│  ├── commerce.proto      ← PIM API                                         │
-│  ├── worker.proto        ← Task Runner API                                 │
-│  └── context_unit.proto  ← Base ContextUnit definition                     │
+│  ├── brain.proto            ← Knowledge Store API                          │
+│  ├── commerce.proto         ← PIM API                                      │
+│  ├── worker.proto           ← Task Runner API                              │
+│  ├── router.proto           ← Router API                                   │
+│  └── context_unit.proto     ← Base ContextUnit definition                  │
 │                                                                            │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -295,7 +307,15 @@ cd contextcore && uv sync --dev
 ```
 contextcore/
 ├── src/contextcore/      # Source code
-│   ├── sdk.py            # ContextUnit SDK
+│   ├── sdk/              # Modular SDK (400-Line Code Scale)
+│   │   ├── context_unit.py    # ContextUnit, ContextUnitBuilder
+│   │   ├── models.py          # Shared Pydantic models
+│   │   ├── worker_client.py   # WorkerClient
+│   │   └── brain/             # BrainClient subpackage
+│   │       ├── base.py        # Base client class
+│   │       ├── knowledge.py   # Knowledge operations
+│   │       ├── commerce.py    # Commerce operations
+│   │       └── news.py        # News operations
 │   ├── config.py         # Shared configuration
 │   ├── tokens.py         # ContextToken implementation
 │   ├── logging.py        # Centralized logging
