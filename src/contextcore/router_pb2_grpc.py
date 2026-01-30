@@ -21,19 +21,19 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f"The grpc package installed is at version {GRPC_VERSION},"
-        + " but the generated code in worker_pb2_grpc.py depends on"
+        + " but the generated code in router_pb2_grpc.py depends on"
         + f" grpcio>={GRPC_GENERATED_VERSION}."
         + f" Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}"
         + f" or downgrade your generated code using grpcio-tools<={GRPC_VERSION}."
     )
 
 
-class WorkerServiceStub(object):
+class RouterServiceStub(object):
     """=====================================================
-    Worker Service - Background Task Orchestration
+    Router Service - AI Agent Orchestration
     =====================================================
     All methods use ContextUnit as input/output.
-    Workflow type and parameters are passed via payload.
+    Agent identification and input is passed via payload.
     =====================================================
 
     """
@@ -44,104 +44,84 @@ class WorkerServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.StartWorkflow = channel.unary_unary(
-            "/contextworker.WorkerService/StartWorkflow",
+        self.ExecuteAgent = channel.unary_unary(
+            "/contextrouter.RouterService/ExecuteAgent",
             request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
             response_deserializer=context__unit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.GetTaskStatus = channel.unary_unary(
-            "/contextworker.WorkerService/GetTaskStatus",
-            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=context__unit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-        self.ExecuteCode = channel.unary_unary(
-            "/contextworker.WorkerService/ExecuteCode",
+        self.StreamAgent = channel.unary_stream(
+            "/contextrouter.RouterService/StreamAgent",
             request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
             response_deserializer=context__unit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
 
 
-class WorkerServiceServicer(object):
+class RouterServiceServicer(object):
     """=====================================================
-    Worker Service - Background Task Orchestration
+    Router Service - AI Agent Orchestration
     =====================================================
     All methods use ContextUnit as input/output.
-    Workflow type and parameters are passed via payload.
+    Agent identification and input is passed via payload.
     =====================================================
 
     """
 
-    def StartWorkflow(self, request, context):
-        """Start a durable workflow process via Temporal
-        Request payload: {workflow_type, tenant_id, ...workflow-specific params}
-        Response payload: {workflow_id, run_id, status}
+    def ExecuteAgent(self, request, context):
+        """Execute a single turn of an agent
+        Request payload: {tenant_id, agent_id, input_text, context?: {...}}
+        Response payload: {output_text, tool_calls?: {...}, metadata?: {...}}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def GetTaskStatus(self, request, context):
-        """Get status of a running workflow/task
-        Request payload: {workflow_id}
-        Response payload: {status, result?, error?}
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def ExecuteCode(self, request, context):
-        """Execute a small segment of agent-generated code (sandboxed)
-        Request payload: {code, language?, timeout?}
-        Response payload: {result, stdout?, stderr?}
+    def StreamAgent(self, request, context):
+        """Stream agent execution (for UI with real-time output)
+        Request payload: {tenant_id, agent_id, input_text, context?: {...}}
+        Response payload: {output_text, tool_calls?: {...}, metadata?: {...}}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
 
-def add_WorkerServiceServicer_to_server(servicer, server):
+def add_RouterServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-        "StartWorkflow": grpc.unary_unary_rpc_method_handler(
-            servicer.StartWorkflow,
+        "ExecuteAgent": grpc.unary_unary_rpc_method_handler(
+            servicer.ExecuteAgent,
             request_deserializer=context__unit__pb2.ContextUnit.FromString,
             response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
         ),
-        "GetTaskStatus": grpc.unary_unary_rpc_method_handler(
-            servicer.GetTaskStatus,
-            request_deserializer=context__unit__pb2.ContextUnit.FromString,
-            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-        ),
-        "ExecuteCode": grpc.unary_unary_rpc_method_handler(
-            servicer.ExecuteCode,
+        "StreamAgent": grpc.unary_stream_rpc_method_handler(
+            servicer.StreamAgent,
             request_deserializer=context__unit__pb2.ContextUnit.FromString,
             response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-        "contextworker.WorkerService", rpc_method_handlers
+        "contextrouter.RouterService", rpc_method_handlers
     )
     server.add_generic_rpc_handlers((generic_handler,))
     server.add_registered_method_handlers(
-        "contextworker.WorkerService", rpc_method_handlers
+        "contextrouter.RouterService", rpc_method_handlers
     )
 
 
 # This class is part of an EXPERIMENTAL API.
-class WorkerService(object):
+class RouterService(object):
     """=====================================================
-    Worker Service - Background Task Orchestration
+    Router Service - AI Agent Orchestration
     =====================================================
     All methods use ContextUnit as input/output.
-    Workflow type and parameters are passed via payload.
+    Agent identification and input is passed via payload.
     =====================================================
 
     """
 
     @staticmethod
-    def StartWorkflow(
+    def ExecuteAgent(
         request,
         target,
         options=(),
@@ -156,7 +136,7 @@ class WorkerService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextworker.WorkerService/StartWorkflow",
+            "/contextrouter.RouterService/ExecuteAgent",
             context__unit__pb2.ContextUnit.SerializeToString,
             context__unit__pb2.ContextUnit.FromString,
             options,
@@ -171,7 +151,7 @@ class WorkerService(object):
         )
 
     @staticmethod
-    def GetTaskStatus(
+    def StreamAgent(
         request,
         target,
         options=(),
@@ -183,40 +163,10 @@ class WorkerService(object):
         timeout=None,
         metadata=None,
     ):
-        return grpc.experimental.unary_unary(
+        return grpc.experimental.unary_stream(
             request,
             target,
-            "/contextworker.WorkerService/GetTaskStatus",
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def ExecuteCode(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            "/contextworker.WorkerService/ExecuteCode",
+            "/contextrouter.RouterService/StreamAgent",
             context__unit__pb2.ContextUnit.SerializeToString,
             context__unit__pb2.ContextUnit.FromString,
             options,

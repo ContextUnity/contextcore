@@ -19,8 +19,10 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
+
+
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n\x0e\x63ommerce.proto\x12\x0f\x63ontextcommerce\x1a\x1cgoogle/protobuf/struct.proto"\xef\x01\n\x07Product\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0b\n\x03sku\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x04 \x01(\t\x12\r\n\x05price\x18\x05 \x01(\x02\x12\x10\n\x08\x63urrency\x18\x06 \x01(\t\x12\x16\n\x0estock_quantity\x18\x07 \x01(\x05\x12<\n\nattributes\x18\x08 \x03(\x0b\x32(.contextcommerce.Product.AttributesEntry\x1a\x31\n\x0f\x41ttributesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01"?\n\x11GetProductRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\n\n\x02id\x18\x02 \x01(\t\x12\x0b\n\x03sku\x18\x03 \x01(\t"<\n\x0fProductResponse\x12)\n\x07product\x18\x01 \x01(\x0b\x32\x18.contextcommerce.Product"\xa4\x01\n\x14UpdateProductRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\n\n\x02id\x18\x02 \x01(\t\x12?\n\x05patch\x18\x03 \x03(\x0b\x32\x30.contextcommerce.UpdateProductRequest.PatchEntry\x1a,\n\nPatchEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01"\xba\x01\n\rDealerProduct\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08\x63\x61tegory\x18\x03 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x04 \x01(\t\x12\x12\n\nbrand_name\x18\x05 \x01(\t\x12\'\n\x06params\x18\x06 \x01(\x0b\x32\x17.google.protobuf.Struct\x12+\n\nenrichment\x18\x07 \x01(\x0b\x32\x17.google.protobuf.Struct"<\n\x12GetProductsRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x13\n\x0bproduct_ids\x18\x02 \x03(\x03"G\n\x13GetProductsResponse\x12\x30\n\x08products\x18\x01 \x03(\x0b\x32\x1e.contextcommerce.DealerProduct"\x8f\x01\n\x17UpdateEnrichmentRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x12\n\nproduct_id\x18\x02 \x01(\x03\x12+\n\nenrichment\x18\x03 \x01(\x0b\x32\x17.google.protobuf.Struct\x12\x10\n\x08trace_id\x18\x04 \x01(\t\x12\x0e\n\x06status\x18\x05 \x01(\t"+\n\x18UpdateEnrichmentResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08"\x9f\x02\n\x1aUpsertDealerProductRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65\x61ler_code\x18\x02 \x01(\t\x12\x13\n\x0b\x64\x65\x61ler_name\x18\x03 \x01(\t\x12\x0b\n\x03sku\x18\x04 \x01(\t\x12\x0c\n\x04name\x18\x05 \x01(\t\x12\x10\n\x08\x63\x61tegory\x18\x06 \x01(\t\x12\x12\n\nbrand_name\x18\x07 \x01(\t\x12\x10\n\x08quantity\x18\x08 \x01(\x05\x12\x14\n\x0cprice_retail\x18\t \x01(\x01\x12\x10\n\x08\x63urrency\x18\n \x01(\t\x12\'\n\x06params\x18\x0b \x01(\x0b\x32\x17.google.protobuf.Struct\x12\x0e\n\x06status\x18\x0c \x01(\t\x12\x10\n\x08trace_id\x18\r \x01(\t"S\n\x1bUpsertDealerProductResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x12\n\nproduct_id\x18\x02 \x01(\x03\x12\x0f\n\x07message\x18\x03 \x01(\t"2\n\x0ePendingRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\r\n\x05limit\x18\x02 \x01(\x05"@\n\x0bPendingItem\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\t\x12\x14\n\x0c\x63ontext_json\x18\x03 \x01(\t"9\n\x12VerificationResult\x12\n\n\x02id\x18\x01 \x01(\t\x12\x17\n\x0f\x65nrichment_json\x18\x02 \x01(\t""\n\x0fVerificationAck\x12\x0f\n\x07success\x18\x01 \x01(\x08"L\n\x0eHarvestRequest\x12\x15\n\rsupplier_code\x18\x01 \x01(\t\x12\x11\n\ttenant_id\x18\x02 \x01(\t\x12\x10\n\x08trace_id\x18\x03 \x01(\t"1\n\x0fHarvestResponse\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t2\x82\x06\n\x0f\x43ommerceService\x12R\n\nGetProduct\x12".contextcommerce.GetProductRequest\x1a .contextcommerce.ProductResponse\x12X\n\rUpdateProduct\x12%.contextcommerce.UpdateProductRequest\x1a .contextcommerce.ProductResponse\x12X\n\x0bGetProducts\x12#.contextcommerce.GetProductsRequest\x1a$.contextcommerce.GetProductsResponse\x12p\n\x13UpsertDealerProduct\x12+.contextcommerce.UpsertDealerProductRequest\x1a,.contextcommerce.UpsertDealerProductResponse\x12g\n\x10UpdateEnrichment\x12(.contextcommerce.UpdateEnrichmentRequest\x1a).contextcommerce.UpdateEnrichmentResponse\x12S\n\x0eTriggerHarvest\x12\x1f.contextcommerce.HarvestRequest\x1a .contextcommerce.HarvestResponse\x12Z\n\x17GetPendingVerifications\x12\x1f.contextcommerce.PendingRequest\x1a\x1c.contextcommerce.PendingItem0\x01\x12[\n\x12SubmitVerification\x12#.contextcommerce.VerificationResult\x1a .contextcommerce.VerificationAckb\x06proto3'
+    b"\n\x0e\x63ommerce.proto\x12\x0f\x63ontextcommerce\x1a\x12\x63ontext_unit.proto2\xd1\x04\n\x0f\x43ommerceService\x12@\n\nGetProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\rUpdateProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bGetProducts\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12I\n\x13UpsertDealerProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x46\n\x10UpdateEnrichment\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0eTriggerHarvest\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12O\n\x17GetPendingVerifications\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12H\n\x12SubmitVerification\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnitb\x06proto3"
 )
 
 _globals = globals()
@@ -28,48 +30,6 @@ _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "commerce_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
     DESCRIPTOR._loaded_options = None
-    _globals["_PRODUCT_ATTRIBUTESENTRY"]._loaded_options = None
-    _globals["_PRODUCT_ATTRIBUTESENTRY"]._serialized_options = b"8\001"
-    _globals["_UPDATEPRODUCTREQUEST_PATCHENTRY"]._loaded_options = None
-    _globals["_UPDATEPRODUCTREQUEST_PATCHENTRY"]._serialized_options = b"8\001"
-    _globals["_PRODUCT"]._serialized_start = 66
-    _globals["_PRODUCT"]._serialized_end = 305
-    _globals["_PRODUCT_ATTRIBUTESENTRY"]._serialized_start = 256
-    _globals["_PRODUCT_ATTRIBUTESENTRY"]._serialized_end = 305
-    _globals["_GETPRODUCTREQUEST"]._serialized_start = 307
-    _globals["_GETPRODUCTREQUEST"]._serialized_end = 370
-    _globals["_PRODUCTRESPONSE"]._serialized_start = 372
-    _globals["_PRODUCTRESPONSE"]._serialized_end = 432
-    _globals["_UPDATEPRODUCTREQUEST"]._serialized_start = 435
-    _globals["_UPDATEPRODUCTREQUEST"]._serialized_end = 599
-    _globals["_UPDATEPRODUCTREQUEST_PATCHENTRY"]._serialized_start = 555
-    _globals["_UPDATEPRODUCTREQUEST_PATCHENTRY"]._serialized_end = 599
-    _globals["_DEALERPRODUCT"]._serialized_start = 602
-    _globals["_DEALERPRODUCT"]._serialized_end = 788
-    _globals["_GETPRODUCTSREQUEST"]._serialized_start = 790
-    _globals["_GETPRODUCTSREQUEST"]._serialized_end = 850
-    _globals["_GETPRODUCTSRESPONSE"]._serialized_start = 852
-    _globals["_GETPRODUCTSRESPONSE"]._serialized_end = 923
-    _globals["_UPDATEENRICHMENTREQUEST"]._serialized_start = 926
-    _globals["_UPDATEENRICHMENTREQUEST"]._serialized_end = 1069
-    _globals["_UPDATEENRICHMENTRESPONSE"]._serialized_start = 1071
-    _globals["_UPDATEENRICHMENTRESPONSE"]._serialized_end = 1114
-    _globals["_UPSERTDEALERPRODUCTREQUEST"]._serialized_start = 1117
-    _globals["_UPSERTDEALERPRODUCTREQUEST"]._serialized_end = 1404
-    _globals["_UPSERTDEALERPRODUCTRESPONSE"]._serialized_start = 1406
-    _globals["_UPSERTDEALERPRODUCTRESPONSE"]._serialized_end = 1489
-    _globals["_PENDINGREQUEST"]._serialized_start = 1491
-    _globals["_PENDINGREQUEST"]._serialized_end = 1541
-    _globals["_PENDINGITEM"]._serialized_start = 1543
-    _globals["_PENDINGITEM"]._serialized_end = 1607
-    _globals["_VERIFICATIONRESULT"]._serialized_start = 1609
-    _globals["_VERIFICATIONRESULT"]._serialized_end = 1666
-    _globals["_VERIFICATIONACK"]._serialized_start = 1668
-    _globals["_VERIFICATIONACK"]._serialized_end = 1702
-    _globals["_HARVESTREQUEST"]._serialized_start = 1704
-    _globals["_HARVESTREQUEST"]._serialized_end = 1780
-    _globals["_HARVESTRESPONSE"]._serialized_start = 1782
-    _globals["_HARVESTRESPONSE"]._serialized_end = 1831
-    _globals["_COMMERCESERVICE"]._serialized_start = 1834
-    _globals["_COMMERCESERVICE"]._serialized_end = 2604
+    _globals["_COMMERCESERVICE"]._serialized_start = 56
+    _globals["_COMMERCESERVICE"]._serialized_end = 649
 # @@protoc_insertion_point(module_scope)

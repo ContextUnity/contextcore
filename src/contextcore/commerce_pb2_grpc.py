@@ -3,7 +3,7 @@
 
 import grpc
 
-from contextcore import commerce_pb2 as commerce__pb2
+from . import context_unit_pb2 as context__unit__pb2
 
 GRPC_GENERATED_VERSION = "1.76.0"
 GRPC_VERSION = grpc.__version__
@@ -30,9 +30,15 @@ if _version_not_supported:
 
 class CommerceServiceStub(object):
     """=====================================================
-    Commerce Service Definition
+    Commerce Service - Product & Harvester Operations
+    =====================================================
+    All methods use ContextUnit as input/output.
+    Domain-specific data is passed via payload field.
     =====================================================
 
+    =========================================
+    Product Operations
+    =========================================
     """
 
     def __init__(self, channel):
@@ -43,105 +49,148 @@ class CommerceServiceStub(object):
         """
         self.GetProduct = channel.unary_unary(
             "/contextcommerce.CommerceService/GetProduct",
-            request_serializer=commerce__pb2.GetProductRequest.SerializeToString,
-            response_deserializer=commerce__pb2.ProductResponse.FromString,
+            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=context__unit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
         self.UpdateProduct = channel.unary_unary(
             "/contextcommerce.CommerceService/UpdateProduct",
-            request_serializer=commerce__pb2.UpdateProductRequest.SerializeToString,
-            response_deserializer=commerce__pb2.ProductResponse.FromString,
+            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=context__unit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.GetProducts = channel.unary_unary(
+        self.GetProducts = channel.unary_stream(
             "/contextcommerce.CommerceService/GetProducts",
-            request_serializer=commerce__pb2.GetProductsRequest.SerializeToString,
-            response_deserializer=commerce__pb2.GetProductsResponse.FromString,
+            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=context__unit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
         self.UpsertDealerProduct = channel.unary_unary(
             "/contextcommerce.CommerceService/UpsertDealerProduct",
-            request_serializer=commerce__pb2.UpsertDealerProductRequest.SerializeToString,
-            response_deserializer=commerce__pb2.UpsertDealerProductResponse.FromString,
+            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=context__unit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
         self.UpdateEnrichment = channel.unary_unary(
             "/contextcommerce.CommerceService/UpdateEnrichment",
-            request_serializer=commerce__pb2.UpdateEnrichmentRequest.SerializeToString,
-            response_deserializer=commerce__pb2.UpdateEnrichmentResponse.FromString,
+            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=context__unit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
         self.TriggerHarvest = channel.unary_unary(
             "/contextcommerce.CommerceService/TriggerHarvest",
-            request_serializer=commerce__pb2.HarvestRequest.SerializeToString,
-            response_deserializer=commerce__pb2.HarvestResponse.FromString,
+            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=context__unit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
         self.GetPendingVerifications = channel.unary_stream(
             "/contextcommerce.CommerceService/GetPendingVerifications",
-            request_serializer=commerce__pb2.PendingRequest.SerializeToString,
-            response_deserializer=commerce__pb2.PendingItem.FromString,
+            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=context__unit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
         self.SubmitVerification = channel.unary_unary(
             "/contextcommerce.CommerceService/SubmitVerification",
-            request_serializer=commerce__pb2.VerificationResult.SerializeToString,
-            response_deserializer=commerce__pb2.VerificationAck.FromString,
+            request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=context__unit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
 
 
 class CommerceServiceServicer(object):
     """=====================================================
-    Commerce Service Definition
+    Commerce Service - Product & Harvester Operations
+    =====================================================
+    All methods use ContextUnit as input/output.
+    Domain-specific data is passed via payload field.
     =====================================================
 
+    =========================================
+    Product Operations
+    =========================================
     """
 
     def GetProduct(self, request, context):
-        """Product CRUD"""
+        """Get single product
+        Request payload: {tenant_id, id?, sku?}
+        Response payload: {id, sku, name, description, price, currency, stock_quantity, attributes}
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
     def UpdateProduct(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """Update product
+        Request payload: {tenant_id, id, patch: {...}}
+        Response payload: {id, success}
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
     def GetProducts(self, request, context):
-        """Dealer Products (Harvester)"""
+        """=========================================
+        Dealer/Harvester Operations
+        =========================================
+
+        Get products for enrichment by IDs
+        Request payload: {tenant_id, product_ids: [...]}
+        Response payload: {id, name, category, description, brand_name, params, enrichment}
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
     def UpsertDealerProduct(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """Upsert dealer product from harvester
+        Request payload: {tenant_id, dealer_code, dealer_name, sku, name, category?, brand_name?,
+        quantity?, price_retail?, currency?, params?, status?, trace_id?}
+        Response payload: {success, product_id, message?}
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
     def UpdateEnrichment(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """Update product enrichment
+        Request payload: {tenant_id, product_id, enrichment: {...}, trace_id?, status?}
+        Response payload: {success}
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
     def TriggerHarvest(self, request, context):
-        """Harvester trigger"""
+        """=========================================
+        Harvester Control
+        =========================================
+
+        Trigger harvest workflow
+        Request payload: {supplier_code, tenant_id, trace_id?}
+        Response payload: {job_id, status}
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
     def GetPendingVerifications(self, request, context):
-        """Gardener: Get items needing classification"""
+        """=========================================
+        Gardener / Human-in-the-Loop
+        =========================================
+
+        Get items needing classification
+        Request payload: {tenant_id, limit?}
+        Response payload: {id, content, context_json}
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
     def SubmitVerification(self, request, context):
-        """Gardener: Write enrichment results"""
+        """Submit verification result
+        Request payload: {id, enrichment_json}
+        Response payload: {success}
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
@@ -151,43 +200,43 @@ def add_CommerceServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
         "GetProduct": grpc.unary_unary_rpc_method_handler(
             servicer.GetProduct,
-            request_deserializer=commerce__pb2.GetProductRequest.FromString,
-            response_serializer=commerce__pb2.ProductResponse.SerializeToString,
+            request_deserializer=context__unit__pb2.ContextUnit.FromString,
+            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
         ),
         "UpdateProduct": grpc.unary_unary_rpc_method_handler(
             servicer.UpdateProduct,
-            request_deserializer=commerce__pb2.UpdateProductRequest.FromString,
-            response_serializer=commerce__pb2.ProductResponse.SerializeToString,
+            request_deserializer=context__unit__pb2.ContextUnit.FromString,
+            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
         ),
-        "GetProducts": grpc.unary_unary_rpc_method_handler(
+        "GetProducts": grpc.unary_stream_rpc_method_handler(
             servicer.GetProducts,
-            request_deserializer=commerce__pb2.GetProductsRequest.FromString,
-            response_serializer=commerce__pb2.GetProductsResponse.SerializeToString,
+            request_deserializer=context__unit__pb2.ContextUnit.FromString,
+            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
         ),
         "UpsertDealerProduct": grpc.unary_unary_rpc_method_handler(
             servicer.UpsertDealerProduct,
-            request_deserializer=commerce__pb2.UpsertDealerProductRequest.FromString,
-            response_serializer=commerce__pb2.UpsertDealerProductResponse.SerializeToString,
+            request_deserializer=context__unit__pb2.ContextUnit.FromString,
+            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
         ),
         "UpdateEnrichment": grpc.unary_unary_rpc_method_handler(
             servicer.UpdateEnrichment,
-            request_deserializer=commerce__pb2.UpdateEnrichmentRequest.FromString,
-            response_serializer=commerce__pb2.UpdateEnrichmentResponse.SerializeToString,
+            request_deserializer=context__unit__pb2.ContextUnit.FromString,
+            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
         ),
         "TriggerHarvest": grpc.unary_unary_rpc_method_handler(
             servicer.TriggerHarvest,
-            request_deserializer=commerce__pb2.HarvestRequest.FromString,
-            response_serializer=commerce__pb2.HarvestResponse.SerializeToString,
+            request_deserializer=context__unit__pb2.ContextUnit.FromString,
+            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
         ),
         "GetPendingVerifications": grpc.unary_stream_rpc_method_handler(
             servicer.GetPendingVerifications,
-            request_deserializer=commerce__pb2.PendingRequest.FromString,
-            response_serializer=commerce__pb2.PendingItem.SerializeToString,
+            request_deserializer=context__unit__pb2.ContextUnit.FromString,
+            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
         ),
         "SubmitVerification": grpc.unary_unary_rpc_method_handler(
             servicer.SubmitVerification,
-            request_deserializer=commerce__pb2.VerificationResult.FromString,
-            response_serializer=commerce__pb2.VerificationAck.SerializeToString,
+            request_deserializer=context__unit__pb2.ContextUnit.FromString,
+            response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -202,9 +251,15 @@ def add_CommerceServiceServicer_to_server(servicer, server):
 # This class is part of an EXPERIMENTAL API.
 class CommerceService(object):
     """=====================================================
-    Commerce Service Definition
+    Commerce Service - Product & Harvester Operations
+    =====================================================
+    All methods use ContextUnit as input/output.
+    Domain-specific data is passed via payload field.
     =====================================================
 
+    =========================================
+    Product Operations
+    =========================================
     """
 
     @staticmethod
@@ -224,8 +279,8 @@ class CommerceService(object):
             request,
             target,
             "/contextcommerce.CommerceService/GetProduct",
-            commerce__pb2.GetProductRequest.SerializeToString,
-            commerce__pb2.ProductResponse.FromString,
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
             options,
             channel_credentials,
             insecure,
@@ -254,8 +309,8 @@ class CommerceService(object):
             request,
             target,
             "/contextcommerce.CommerceService/UpdateProduct",
-            commerce__pb2.UpdateProductRequest.SerializeToString,
-            commerce__pb2.ProductResponse.FromString,
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
             options,
             channel_credentials,
             insecure,
@@ -280,12 +335,12 @@ class CommerceService(object):
         timeout=None,
         metadata=None,
     ):
-        return grpc.experimental.unary_unary(
+        return grpc.experimental.unary_stream(
             request,
             target,
             "/contextcommerce.CommerceService/GetProducts",
-            commerce__pb2.GetProductsRequest.SerializeToString,
-            commerce__pb2.GetProductsResponse.FromString,
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
             options,
             channel_credentials,
             insecure,
@@ -314,8 +369,8 @@ class CommerceService(object):
             request,
             target,
             "/contextcommerce.CommerceService/UpsertDealerProduct",
-            commerce__pb2.UpsertDealerProductRequest.SerializeToString,
-            commerce__pb2.UpsertDealerProductResponse.FromString,
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
             options,
             channel_credentials,
             insecure,
@@ -344,8 +399,8 @@ class CommerceService(object):
             request,
             target,
             "/contextcommerce.CommerceService/UpdateEnrichment",
-            commerce__pb2.UpdateEnrichmentRequest.SerializeToString,
-            commerce__pb2.UpdateEnrichmentResponse.FromString,
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
             options,
             channel_credentials,
             insecure,
@@ -374,8 +429,8 @@ class CommerceService(object):
             request,
             target,
             "/contextcommerce.CommerceService/TriggerHarvest",
-            commerce__pb2.HarvestRequest.SerializeToString,
-            commerce__pb2.HarvestResponse.FromString,
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
             options,
             channel_credentials,
             insecure,
@@ -404,8 +459,8 @@ class CommerceService(object):
             request,
             target,
             "/contextcommerce.CommerceService/GetPendingVerifications",
-            commerce__pb2.PendingRequest.SerializeToString,
-            commerce__pb2.PendingItem.FromString,
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
             options,
             channel_credentials,
             insecure,
@@ -434,8 +489,8 @@ class CommerceService(object):
             request,
             target,
             "/contextcommerce.CommerceService/SubmitVerification",
-            commerce__pb2.VerificationResult.SerializeToString,
-            commerce__pb2.VerificationAck.FromString,
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
             options,
             channel_credentials,
             insecure,
