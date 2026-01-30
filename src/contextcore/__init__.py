@@ -19,6 +19,13 @@ from .sdk import (
 )
 from .tokens import ContextToken, TokenBuilder
 
+# Proto modules (gRPC)
+from . import context_unit_pb2
+from . import brain_pb2, brain_pb2_grpc
+from . import commerce_pb2, commerce_pb2_grpc
+from . import worker_pb2, worker_pb2_grpc
+from . import router_pb2, router_pb2_grpc
+
 __all__ = [
     # Logging
     "setup_logging",
@@ -43,4 +50,14 @@ __all__ = [
     # Tokens
     "ContextToken",
     "TokenBuilder",
+    # Proto modules (gRPC)
+    "context_unit_pb2",
+    "brain_pb2",
+    "brain_pb2_grpc",
+    "commerce_pb2",
+    "commerce_pb2_grpc",
+    "worker_pb2",
+    "worker_pb2_grpc",
+    "router_pb2",
+    "router_pb2_grpc",
 ]

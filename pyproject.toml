@@ -44,6 +44,7 @@ build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
+    "bandit>=1.7.0",
     "grpcio-tools>=1.76.0",
     "ruff>=0.14.14",
     "pytest>=8.0.0",
