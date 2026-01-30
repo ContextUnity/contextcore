@@ -2,175 +2,86 @@ syntax = "proto3";
 
 package contextbrain;
 
-// =====================================================
-// Core Brain Service - Universal Knowledge Operations
-// =====================================================
-
-enum SourceType {
-    SOURCE_TYPE_UNSPECIFIED = 0;
-    SOURCE_TYPE_CHUNK = 1;
-    SOURCE_TYPE_CONCEPT = 2;
-}
+import "context_unit.proto";
 
 // =====================================================
-// Search Messages
+// Brain Service - Universal Knowledge Operations
 // =====================================================
-
-message SearchRequest {
-    string tenant_id = 1;
-    string query_text = 2;
-    repeated float query_vector = 3;
-    int32 limit = 4;
-    float min_score = 5;
-    repeated string source_types = 6;
-}
-
-message SearchResult {
-    string id = 1;
-    string content = 2;
-    float score = 3;
-    string source_type = 4;
-    map<string, string> metadata = 5;
-}
-
-message SearchResponse {
-    repeated SearchResult results = 1;
-}
-
-// =====================================================
-// Knowledge Graph Messages
-// =====================================================
-
-message GraphSearchRequest {
-    string tenant_id = 1;
-    repeated string entrypoint_ids = 2;
-    int32 max_hops = 3;
-    repeated string allowed_relations = 4;
-}
-
-message GraphEdge {
-    string source_id = 1;
-    string target_id = 2;
-    string relation = 3;
-    float weight = 4;
-}
-
-message GraphSearchResponse {
-    repeated SearchResult nodes = 1;
-    repeated GraphEdge edges = 2;
-}
-
-message CreateKGRelationRequest {
-    string tenant_id = 1;
-    string source_type = 2;
-    string source_id = 3;
-    string relation = 4;
-    string target_type = 5;
-    string target_id = 6;
-}
-
-message CreateKGRelationResponse {
-    bool success = 1;
-}
-
-// =====================================================
-// Upsert Messages
-// =====================================================
-
-message UpsertRequest {
-    string tenant_id = 1;
-    string content = 2;
-    string source_type = 3;
-    map<string, string> metadata = 4;
-}
-
-message UpsertResponse {
-    string id = 1;
-    bool success = 2;
-}
-
-// =====================================================
-// NewsEngine Messages (Pink Pony)
-// =====================================================
-
-message NewsItem {
-    string id = 1;
-    string tenant_id = 2;
-    string url = 3;
-    string headline = 4;
-    string summary = 5;
-    string category = 6;
-    string source_api = 7;  // "perplexity" or "serper"
-    map<string, string> metadata = 8;
-    string harvested_at = 9;
-}
-
-message UpsertNewsItemRequest {
-    string tenant_id = 1;
-    NewsItem item = 2;
-    string item_type = 3;  // "raw" or "fact"
-}
-
-message UpsertNewsItemResponse {
-    string id = 1;
-    bool success = 2;
-    string message = 3;
-}
-
-message GetNewsItemsRequest {
-    string tenant_id = 1;
-    string item_type = 2;  // "raw" or "fact"
-    int32 limit = 3;
-    string since = 4;  // ISO datetime
-}
-
-message GetNewsItemsResponse {
-    repeated NewsItem items = 1;
-}
-
-message NewsPost {
-    string id = 1;
-    string tenant_id = 2;
-    string fact_id = 3;
-    string agent = 4;
-    string headline = 5;
-    string content = 6;
-    string emoji = 7;
-    string fact_url = 8;
-    string scheduled_at = 9;
-    string published_at = 10;
-}
-
-message UpsertNewsPostRequest {
-    string tenant_id = 1;
-    NewsPost post = 2;
-}
-
-message UpsertNewsPostResponse {
-    string id = 1;
-    bool success = 2;
-}
-
-// =====================================================
-// Core Brain Service Definition
+// All methods use ContextUnit as input/output.
+// Domain-specific data is passed via payload field.
 // =====================================================
 
 service BrainService {
+    // =========================================
+    // Core Knowledge Operations
+    // =========================================
+    
     // Semantic/Hybrid search
-    rpc Search(SearchRequest) returns (SearchResponse);
-
+    // Request payload: {tenant_id, query_text, limit?, source_types?}
+    // Response payload: {id, content, score, source_type, metadata}
+    rpc Search(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    
     // Graph Traversal
-    rpc GraphSearch(GraphSearchRequest) returns (GraphSearchResponse);
-
+    // Request payload: {tenant_id, entrypoint_ids, max_hops?, allowed_relations?}
+    // Response payload: {nodes: [...], edges: [...]}
+    rpc GraphSearch(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
     // Create Knowledge Graph relation
-    rpc CreateKGRelation(CreateKGRelationRequest) returns (CreateKGRelationResponse);
+    // Request payload: {tenant_id, source_type, source_id, relation, target_type, target_id}
+    // Response payload: {success}
+    rpc CreateKGRelation(contextcore.ContextUnit) returns (contextcore.ContextUnit);
     
-    // Upsert content
-    rpc Upsert(UpsertRequest) returns (UpsertResponse);
+    // Upsert content (generic)
+    // Request payload: {tenant_id, content, source_type, metadata?}
+    // Response payload: {id, success}
+    rpc Upsert(contextcore.ContextUnit) returns (contextcore.ContextUnit);
     
-    // NewsEngine operations
-    rpc UpsertNewsItem(UpsertNewsItemRequest) returns (UpsertNewsItemResponse);
-    rpc GetNewsItems(GetNewsItemsRequest) returns (GetNewsItemsResponse);
-    rpc UpsertNewsPost(UpsertNewsPostRequest) returns (UpsertNewsPostResponse);
+    // Query memory (hybrid search with provenance)
+    // Request payload: {tenant_id, content, filters?}
+    // Response payload: {content, metadata, score}
+    rpc QueryMemory(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    
+    // =========================================
+    // NewsEngine Operations
+    // =========================================
+    
+    // Upsert news item (raw or fact)
+    // Request payload: {tenant_id, item_type, url, headline, summary, category?, source_api?, metadata?}
+    // Response payload: {id, success, message?}
+    rpc UpsertNewsItem(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
+    // Get news items
+    // Request payload: {tenant_id, item_type, limit?, since?}
+    // Response payload: {id, url, headline, summary, category, metadata}
+    rpc GetNewsItems(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    
+    // Upsert generated post
+    // Request payload: {tenant_id, headline, content, agent, emoji?, fact_url?, fact_id?, scheduled_at?}
+    // Response payload: {id, success}
+    rpc UpsertNewsPost(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
+    // =========================================
+    // Episodic & Entity Memory
+    // =========================================
+    
+    // Add conversation episode
+    // Request payload: {user_id, tenant_id, session_id?, content, metadata?}
+    rpc AddEpisode(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
+    // Upsert user fact
+    // Request payload: {user_id, key, value, confidence?, source_id?}
+    rpc UpsertFact(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
+    // =========================================
+    // Taxonomy Operations
+    // =========================================
+    
+    // Upsert taxonomy entry
+    // Request payload: {tenant_id, domain, name, path, keywords?, metadata?}
+    rpc UpsertTaxonomy(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
+    // Get taxonomy entries
+    // Request payload: {tenant_id, domain?}
+    // Response payload: {domain, name, path, keywords, metadata}
+    rpc GetTaxonomy(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
 }
-

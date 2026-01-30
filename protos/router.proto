@@ -2,23 +2,23 @@ syntax = "proto3";
 
 package contextrouter;
 
-message AgentRequest {
-    string tenant_id = 1;
-    string agent_id = 2; // "gardener", "matcher", "chat"
-    string input_text = 3;
-    map<string, string> context = 4;
-}
+import "context_unit.proto";
 
-message AgentResponse {
-    string output_text = 1;
-    map<string, string> tool_calls = 2;
-    map<string, string> metadata = 3;
-}
+// =====================================================
+// Router Service - AI Agent Orchestration
+// =====================================================
+// All methods use ContextUnit as input/output.
+// Agent identification and input is passed via payload.
+// =====================================================
 
 service RouterService {
     // Execute a single turn of an agent
-    rpc ExecuteAgent(AgentRequest) returns (AgentResponse);
+    // Request payload: {tenant_id, agent_id, input_text, context?: {...}}
+    // Response payload: {output_text, tool_calls?: {...}, metadata?: {...}}
+    rpc ExecuteAgent(contextcore.ContextUnit) returns (contextcore.ContextUnit);
     
-    // Stream agent execution (for UI)
-    rpc StreamAgent(AgentRequest) returns (stream AgentResponse);
+    // Stream agent execution (for UI with real-time output)
+    // Request payload: {tenant_id, agent_id, input_text, context?: {...}}
+    // Response payload: {output_text, tool_calls?: {...}, metadata?: {...}}
+    rpc StreamAgent(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
 }

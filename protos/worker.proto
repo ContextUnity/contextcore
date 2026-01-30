@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package contextworker;
+
+import "context_unit.proto";
+
+// =====================================================
+// Worker Service - Background Task Orchestration
+// =====================================================
+// All methods use ContextUnit as input/output.
+// Workflow type and parameters are passed via payload.
+// =====================================================
+
+service WorkerService {
+    // Start a durable workflow process via Temporal
+    // Request payload: {workflow_type, tenant_id, ...workflow-specific params}
+    // Response payload: {workflow_id, run_id, status}
+    rpc StartWorkflow(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
+    // Get status of a running workflow/task
+    // Request payload: {workflow_id}
+    // Response payload: {status, result?, error?}
+    rpc GetTaskStatus(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    
+    // Execute a small segment of agent-generated code (sandboxed)
+    // Request payload: {code, language?, timeout?}
+    // Response payload: {result, stdout?, stderr?}
+    rpc ExecuteCode(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+}
