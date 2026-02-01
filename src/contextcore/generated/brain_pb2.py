@@ -20,7 +20,7 @@ _sym_db = _symbol_database.Default()
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b"\n\x0b\x62rain.proto\x12\x0c\x63ontextbrain\x1a\x12\x63ontext_unit.proto2\xb6\x04\n\x0c\x42rainService\x12\x43\n\x0bQueryMemory\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12>\n\x08Memorize\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x41\n\x0bUpdateGraph\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12O\n\x17GetPendingVerifications\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12@\n\nAddEpisode\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12@\n\nUpsertFact\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0eUpsertTaxonomy\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bGetTaxonomy\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x62\x06proto3"
+    b"\n\x0b\x62rain.proto\x12\x0c\x63ontextbrain\x1a\x12\x63ontext_unit.proto2\x88\x07\n\x0c\x42rainService\x12>\n\x06Search\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x41\n\x0bGraphSearch\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x46\n\x10\x43reateKGRelation\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12<\n\x06Upsert\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bQueryMemory\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x44\n\x0eUpsertNewsItem\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0cGetNewsItems\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x44\n\x0eUpsertNewsPost\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12I\n\x13\x43heckNewsPostExists\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12@\n\nAddEpisode\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12@\n\nUpsertFact\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0eUpsertTaxonomy\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bGetTaxonomy\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x62\x06proto3"
 )
 
 _globals = globals()
@@ -29,5 +29,5 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "brain_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
     DESCRIPTOR._loaded_options = None
     _globals["_BRAINSERVICE"]._serialized_start = 50
-    _globals["_BRAINSERVICE"]._serialized_end = 616
+    _globals["_BRAINSERVICE"]._serialized_end = 954
 # @@protoc_insertion_point(module_scope)

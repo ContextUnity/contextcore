@@ -22,5 +22,5 @@ repos:
     rev: 1.9.2
     hooks:
       - id: bandit
-        args: [-c, .bandit, -r, src/contextrouter]
+        args: [-c, .bandit, -r, src/contextcore]
         additional_dependencies: ["tomli; python_version<'3.11'"]

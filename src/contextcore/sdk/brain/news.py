@@ -156,5 +156,37 @@ class NewsMixin:
             logger.warning("Local mode not implemented")
             return []
 
+    async def check_news_post_exists(
+        self: BrainClientBase,
+        tenant_id: str,
+        fact_url: str,
+    ) -> bool:
+        """Check if a news post with this URL already exists.
+
+        Args:
+            tenant_id: Tenant identifier.
+            fact_url: URL of the news post to check.
+
+        Returns:
+            True if the URL already exists, False otherwise.
+        """
+        unit = ContextUnit(
+            payload={
+                "tenant_id": tenant_id,
+                "fact_url": fact_url,
+            },
+            provenance=["sdk:brain_client:check_news_post_exists"],
+        )
+
+        if self.mode == "grpc":
+            pb2 = get_context_unit_pb2()
+            req = unit.to_protobuf(pb2)
+            response_pb = await self._stub.CheckNewsPostExists(req)
+            result = ContextUnit.from_protobuf(response_pb)
+            return result.payload.get("exists", False)
+        else:
+            logger.warning("Local mode not implemented")
+            return False
+
 
 __all__ = ["NewsMixin"]

@@ -15,71 +15,77 @@ service BrainService {
     // =========================================
     // Core Knowledge Operations
     // =========================================
-    
+
     // Semantic/Hybrid search
     // Request payload: {tenant_id, query_text, limit?, source_types?}
     // Response payload: {id, content, score, source_type, metadata}
     rpc Search(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
-    
+
     // Graph Traversal
     // Request payload: {tenant_id, entrypoint_ids, max_hops?, allowed_relations?}
     // Response payload: {nodes: [...], edges: [...]}
     rpc GraphSearch(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // Create Knowledge Graph relation
     // Request payload: {tenant_id, source_type, source_id, relation, target_type, target_id}
     // Response payload: {success}
     rpc CreateKGRelation(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // Upsert content (generic)
     // Request payload: {tenant_id, content, source_type, metadata?}
     // Response payload: {id, success}
     rpc Upsert(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // Query memory (hybrid search with provenance)
     // Request payload: {tenant_id, content, filters?}
     // Response payload: {content, metadata, score}
     rpc QueryMemory(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
-    
+
     // =========================================
     // NewsEngine Operations
     // =========================================
-    
+
     // Upsert news item (raw or fact)
     // Request payload: {tenant_id, item_type, url, headline, summary, category?, source_api?, metadata?}
     // Response payload: {id, success, message?}
     rpc UpsertNewsItem(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // Get news items
     // Request payload: {tenant_id, item_type, limit?, since?}
     // Response payload: {id, url, headline, summary, category, metadata}
     rpc GetNewsItems(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
-    
+
     // Upsert generated post
     // Request payload: {tenant_id, headline, content, agent, emoji?, fact_url?, fact_id?, scheduled_at?}
     // Response payload: {id, success}
     rpc UpsertNewsPost(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
+    // Check if news post with given URL already exists
+    // Request payload: {tenant_id, fact_url}
+    // Response payload: {exists: bool}
+    rpc CheckNewsPostExists(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+
     // =========================================
     // Episodic & Entity Memory
     // =========================================
-    
+
     // Add conversation episode
     // Request payload: {user_id, tenant_id, session_id?, content, metadata?}
     rpc AddEpisode(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // Upsert user fact
     // Request payload: {user_id, key, value, confidence?, source_id?}
     rpc UpsertFact(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // =========================================
     // Taxonomy Operations
     // =========================================
-    
+
     // Upsert taxonomy entry
     // Request payload: {tenant_id, domain, name, path, keywords?, metadata?}
     rpc UpsertTaxonomy(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // Get taxonomy entries
     // Request payload: {tenant_id, domain?}
     // Response payload: {domain, name, path, keywords, metadata}

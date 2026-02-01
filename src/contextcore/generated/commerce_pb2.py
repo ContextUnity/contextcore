@@ -20,7 +20,7 @@ _sym_db = _symbol_database.Default()
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b"\n\x0e\x63ommerce.proto\x12\x0f\x63ontextcommerce\x1a\x12\x63ontext_unit.proto2\xdb\x01\n\x0f\x43ommerceService\x12\x42\n\x0cProposePatch\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x42\n\x0c\x43onfirmPatch\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12@\n\nGetProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit2\xdf\x01\n\x10HarvesterService\x12\x43\n\rTriggerImport\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x41\n\x0bRunMatching\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\rSyncToChannel\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnitb\x06proto3"
+    b"\n\x0e\x63ommerce.proto\x12\x0f\x63ontextcommerce\x1a\x12\x63ontext_unit.proto2\xd1\x04\n\x0f\x43ommerceService\x12@\n\nGetProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\rUpdateProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bGetProducts\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12I\n\x13UpsertDealerProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x46\n\x10UpdateEnrichment\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0eTriggerHarvest\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12O\n\x17GetPendingVerifications\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12H\n\x12SubmitVerification\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnitb\x06proto3"
 )
 
 _globals = globals()
@@ -29,7 +29,5 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "commerce_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
     DESCRIPTOR._loaded_options = None
     _globals["_COMMERCESERVICE"]._serialized_start = 56
-    _globals["_COMMERCESERVICE"]._serialized_end = 275
-    _globals["_HARVESTERSERVICE"]._serialized_start = 278
-    _globals["_HARVESTERSERVICE"]._serialized_end = 501
+    _globals["_COMMERCESERVICE"]._serialized_end = 649
 # @@protoc_insertion_point(module_scope)
