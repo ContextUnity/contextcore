@@ -62,18 +62,22 @@ def validate_safe_url(url: str, allow_local: bool = False) -> str:
                 "validate_safe_url", f"URL targeting protected/local hostname '{hostname}' is not allowed."
             )
 
-        # Check if the hostname represents an IP address and block private/loopbacks
+        # Resolve hostname to catch integer encoded IPs, domain mappings to local IPs, etc.
         try:
-            ip = ipaddress.ip_address(hostname)
-            if ip.is_loopback or ip.is_private or ip.is_link_local:
-                raise SecurityError(
-                    "validate_safe_url", f"URL targeting private/loopback IP address '{hostname}' is not allowed."
-                )
+            import socket
+
+            results = socket.getaddrinfo(hostname, 80)
+            for result in results:
+                ip_str = result[4][0]
+                ip = ipaddress.ip_address(ip_str)
+                if ip.is_loopback or ip.is_private or ip.is_link_local:
+                    raise SecurityError(
+                        "validate_safe_url",
+                        f"URL targeting private/loopback IP address '{ip_str}' is not allowed.",
+                    )
+        except socket.gaierror:
+            pass  # Name resolution failed, safe (the request will also fail)
         except ValueError:
-            # Not a bare IP address; in a full SSRF guard we should ideally do DNS
-            # resolution here to ensure the domain doesn't resolve to a private IP
-            # (DNS rebinding / local resolution check), but for synchronous generic
-            # checks this static filter is a strong first layer of defense.
-            pass
+            pass  # Not an IP address format even after getaddrinfo, unlikely but safe
 
     return url
