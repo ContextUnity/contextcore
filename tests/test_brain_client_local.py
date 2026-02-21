@@ -49,9 +49,7 @@ class TestKnowledgeMixinLocalMode:
         from contextcore.sdk.brain.knowledge import KnowledgeMixin
 
         # Bind mixin methods to mock client (search method not needed for this test)
-        _local_search = KnowledgeMixin._local_search.__get__(
-            mock_client, type(mock_client)
-        )
+        _local_search = KnowledgeMixin._local_search.__get__(mock_client, type(mock_client))
 
         # Call local search directly
         results = await _local_search(
@@ -69,9 +67,7 @@ class TestKnowledgeMixinLocalMode:
         """Local upsert should call storage.upsert_knowledge."""
         from contextcore.sdk.brain.knowledge import KnowledgeMixin
 
-        _local_upsert = KnowledgeMixin._local_upsert.__get__(
-            mock_client, type(mock_client)
-        )
+        _local_upsert = KnowledgeMixin._local_upsert.__get__(mock_client, type(mock_client))
 
         # This will fail because we don't have full Brain imports
         # but it tests the structure
@@ -102,9 +98,7 @@ class TestCommerceMixinLocalMode:
         """Local get_products should call storage."""
         from contextcore.sdk.brain.commerce import CommerceMixin
 
-        _local_get_products = CommerceMixin._local_get_products.__get__(
-            mock_client, type(mock_client)
-        )
+        _local_get_products = CommerceMixin._local_get_products.__get__(mock_client, type(mock_client))
 
         await _local_get_products(
             tenant_id="test",
@@ -121,9 +115,7 @@ class TestCommerceMixinLocalMode:
         """Local update_enrichment should return boolean."""
         from contextcore.sdk.brain.commerce import CommerceMixin
 
-        _local_update_enrichment = CommerceMixin._local_update_enrichment.__get__(
-            mock_client, type(mock_client)
-        )
+        _local_update_enrichment = CommerceMixin._local_update_enrichment.__get__(mock_client, type(mock_client))
 
         result = await _local_update_enrichment(
             tenant_id="test",
@@ -141,9 +133,7 @@ class TestCommerceMixinLocalMode:
         """Local upsert_dealer_product should return product ID."""
         from contextcore.sdk.brain.commerce import CommerceMixin
 
-        _local_upsert = CommerceMixin._local_upsert_dealer_product.__get__(
-            mock_client, type(mock_client)
-        )
+        _local_upsert = CommerceMixin._local_upsert_dealer_product.__get__(mock_client, type(mock_client))
 
         result = await _local_upsert(
             tenant_id="test",
@@ -151,7 +141,7 @@ class TestCommerceMixinLocalMode:
             dealer_name="Vysota",
             sku="WJ-001",
             name="Winter Jacket",
-            category="Одяг > Куртки",
+            category="Clothing > Jackets",
             brand_name="Nike",
             quantity=10,
             price_retail=1500.00,
@@ -165,32 +155,77 @@ class TestCommerceMixinLocalMode:
 
 
 class TestBrainClientModeSelection:
-    """Tests for mode selection logic."""
+    """Tests for BrainClientBase mode selection logic."""
 
-    def test_mode_from_environment(self):
-        """Mode should be determined from environment."""
-        import os
+    def test_default_mode_is_grpc(self, monkeypatch):
+        """Without env or explicit arg, mode defaults to 'grpc'."""
+        monkeypatch.delenv("CONTEXT_BRAIN_MODE", raising=False)
+        monkeypatch.delenv("CONTEXT_BRAIN_URL", raising=False)
 
-        with patch.dict(os.environ, {"CONTEXT_BRAIN_MODE": "local"}):
-            mode = os.getenv("CONTEXT_BRAIN_MODE", "grpc")
-            assert mode == "local"
+        mock_stub = MagicMock()
+        with (
+            patch("contextcore.sdk.brain.base._ensure_protos"),
+            patch("contextcore.sdk.brain.base.brain_pb2_grpc", mock_stub),
+            patch("grpc.aio.insecure_channel") as mock_channel,
+        ):
+            from contextcore.sdk.brain.base import BrainClientBase
 
-        with patch.dict(os.environ, {"CONTEXT_BRAIN_MODE": "grpc"}):
-            mode = os.getenv("CONTEXT_BRAIN_MODE", "grpc")
-            assert mode == "grpc"
+            client = BrainClientBase()
+            assert client.mode == "grpc"
+            assert client.host == "localhost:50051"
+            mock_channel.assert_called_once_with("localhost:50051")
 
-    def test_default_mode_is_grpc(self):
-        """Default mode should be grpc when env not set."""
-        import os
+    def test_mode_from_environment(self, monkeypatch):
+        """CONTEXT_BRAIN_MODE=local should select local mode."""
+        monkeypatch.setenv("CONTEXT_BRAIN_MODE", "local")
 
-        with patch.dict(os.environ, {}, clear=True):
-            mode = os.getenv("CONTEXT_BRAIN_MODE", "grpc")
-            assert mode == "grpc"
+        mock_service = MagicMock()
+        with patch.dict("sys.modules", {"contextbrain": mock_service}):
+            mock_service.BrainService = MagicMock(return_value=MagicMock())
+            from contextcore.sdk.brain.base import BrainClientBase
 
-    def test_brain_url_configuration(self):
-        """Brain URL should be configurable."""
-        import os
+            client = BrainClientBase()
+            assert client.mode == "local"
+            assert client._stub is None  # No gRPC stub in local mode
 
-        with patch.dict(os.environ, {"CONTEXT_BRAIN_URL": "brain.example.com:50051"}):
-            url = os.getenv("CONTEXT_BRAIN_URL", "localhost:50051")
-            assert url == "brain.example.com:50051"
+    def test_explicit_mode_overrides_env(self, monkeypatch):
+        """Explicit mode='grpc' should override CONTEXT_BRAIN_MODE env."""
+        monkeypatch.setenv("CONTEXT_BRAIN_MODE", "local")
+
+        mock_stub = MagicMock()
+        with (
+            patch("contextcore.sdk.brain.base._ensure_protos"),
+            patch("contextcore.sdk.brain.base.brain_pb2_grpc", mock_stub),
+            patch("grpc.aio.insecure_channel"),
+        ):
+            from contextcore.sdk.brain.base import BrainClientBase
+
+            client = BrainClientBase(mode="grpc")
+            assert client.mode == "grpc"
+
+    def test_host_from_environment(self, monkeypatch):
+        """CONTEXT_BRAIN_URL should be used as host."""
+        monkeypatch.delenv("CONTEXT_BRAIN_MODE", raising=False)
+        monkeypatch.setenv("CONTEXT_BRAIN_URL", "brain.example.com:50051")
+
+        mock_stub = MagicMock()
+        with (
+            patch("contextcore.sdk.brain.base._ensure_protos"),
+            patch("contextcore.sdk.brain.base.brain_pb2_grpc", mock_stub),
+            patch("grpc.aio.insecure_channel") as mock_channel,
+        ):
+            from contextcore.sdk.brain.base import BrainClientBase
+
+            client = BrainClientBase()
+            assert client.host == "brain.example.com:50051"
+            mock_channel.assert_called_once_with("brain.example.com:50051")
+
+    def test_local_mode_fails_without_contextbrain(self, monkeypatch):
+        """Local mode should raise ImportError if contextbrain is not installed."""
+        monkeypatch.setenv("CONTEXT_BRAIN_MODE", "local")
+
+        with patch.dict("sys.modules", {"contextbrain": None}):
+            from contextcore.sdk.brain.base import BrainClientBase
+
+            with pytest.raises((ImportError, ModuleNotFoundError)):
+                BrainClientBase()

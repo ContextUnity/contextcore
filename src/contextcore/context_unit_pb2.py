@@ -4,40 +4,43 @@
 # source: context_unit.proto
 # Protobuf Python Version: 6.31.1
 """Generated protocol buffer code."""
-
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
-
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC, 6, 31, 1, "", "context_unit.proto"
+    _runtime_version.Domain.PUBLIC,
+    6,
+    31,
+    1,
+    '',
+    'context_unit.proto'
 )
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
 
 
+from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
+from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n\x12\x63ontext_unit.proto\x12\x0b\x63ontextcore\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"`\n\x0bUnitMetrics\x12\x12\n\nlatency_ms\x18\x01 \x01(\x03\x12\x10\n\x08\x63ost_usd\x18\x02 \x01(\x01\x12\x13\n\x0btokens_used\x18\x03 \x01(\x05\x12\x16\n\x0e\x63ost_limit_usd\x18\x04 \x01(\x01"-\n\x0eSecurityScopes\x12\x0c\n\x04read\x18\x01 \x03(\t\x12\r\n\x05write\x18\x02 \x03(\t"g\n\x07\x43otStep\x12\r\n\x05\x61gent\x18\x01 \x01(\t\x12\x0e\n\x06\x61\x63tion\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\x12-\n\ttimestamp\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp"\xe9\x02\n\x0b\x43ontextUnit\x12\x0f\n\x07unit_id\x18\x01 \x01(\t\x12\x10\n\x08trace_id\x18\x02 \x01(\t\x12\x16\n\x0eparent_unit_id\x18\x03 \x01(\t\x12\'\n\x08modality\x18\x04 \x01(\x0e\x32\x15.contextcore.Modality\x12(\n\x07payload\x18\x05 \x01(\x0b\x32\x17.google.protobuf.Struct\x12\x12\n\nprovenance\x18\x06 \x03(\t\x12.\n\x10\x63hain_of_thought\x18\x07 \x03(\x0b\x32\x14.contextcore.CotStep\x12)\n\x07metrics\x18\x08 \x01(\x0b\x32\x18.contextcore.UnitMetrics\x12-\n\x08security\x18\t \x01(\x0b\x32\x1b.contextcore.SecurityScopes\x12.\n\ncreated_at\x18\n \x01(\x0b\x32\x1a.google.protobuf.Timestamp*7\n\x08Modality\x12\x08\n\x04TEXT\x10\x00\x12\t\n\x05\x41UDIO\x10\x01\x12\x0b\n\x07SPATIAL\x10\x02\x12\t\n\x05IMAGE\x10\x03\x62\x06proto3'
-)
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12\x63ontext_unit.proto\x12\x0b\x63ontextcore\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"`\n\x0bUnitMetrics\x12\x12\n\nlatency_ms\x18\x01 \x01(\x03\x12\x10\n\x08\x63ost_usd\x18\x02 \x01(\x01\x12\x13\n\x0btokens_used\x18\x03 \x01(\x05\x12\x16\n\x0e\x63ost_limit_usd\x18\x04 \x01(\x01\"-\n\x0eSecurityScopes\x12\x0c\n\x04read\x18\x01 \x03(\t\x12\r\n\x05write\x18\x02 \x03(\t\"g\n\x07\x43otStep\x12\r\n\x05\x61gent\x18\x01 \x01(\t\x12\x0e\n\x06\x61\x63tion\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\x12-\n\ttimestamp\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"\xe9\x02\n\x0b\x43ontextUnit\x12\x0f\n\x07unit_id\x18\x01 \x01(\t\x12\x10\n\x08trace_id\x18\x02 \x01(\t\x12\x16\n\x0eparent_unit_id\x18\x03 \x01(\t\x12\'\n\x08modality\x18\x04 \x01(\x0e\x32\x15.contextcore.Modality\x12(\n\x07payload\x18\x05 \x01(\x0b\x32\x17.google.protobuf.Struct\x12\x12\n\nprovenance\x18\x06 \x03(\t\x12.\n\x10\x63hain_of_thought\x18\x07 \x03(\x0b\x32\x14.contextcore.CotStep\x12)\n\x07metrics\x18\x08 \x01(\x0b\x32\x18.contextcore.UnitMetrics\x12-\n\x08security\x18\t \x01(\x0b\x32\x1b.contextcore.SecurityScopes\x12.\n\ncreated_at\x18\n \x01(\x0b\x32\x1a.google.protobuf.Timestamp*7\n\x08Modality\x12\x08\n\x04TEXT\x10\x00\x12\t\n\x05\x41UDIO\x10\x01\x12\x0b\n\x07SPATIAL\x10\x02\x12\t\n\x05IMAGE\x10\x03\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "context_unit_pb2", _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'context_unit_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-    DESCRIPTOR._loaded_options = None
-    _globals["_MODALITY"]._serialized_start = 712
-    _globals["_MODALITY"]._serialized_end = 767
-    _globals["_UNITMETRICS"]._serialized_start = 98
-    _globals["_UNITMETRICS"]._serialized_end = 194
-    _globals["_SECURITYSCOPES"]._serialized_start = 196
-    _globals["_SECURITYSCOPES"]._serialized_end = 241
-    _globals["_COTSTEP"]._serialized_start = 243
-    _globals["_COTSTEP"]._serialized_end = 346
-    _globals["_CONTEXTUNIT"]._serialized_start = 349
-    _globals["_CONTEXTUNIT"]._serialized_end = 710
+  DESCRIPTOR._loaded_options = None
+  _globals['_MODALITY']._serialized_start=712
+  _globals['_MODALITY']._serialized_end=767
+  _globals['_UNITMETRICS']._serialized_start=98
+  _globals['_UNITMETRICS']._serialized_end=194
+  _globals['_SECURITYSCOPES']._serialized_start=196
+  _globals['_SECURITYSCOPES']._serialized_end=241
+  _globals['_COTSTEP']._serialized_start=243
+  _globals['_COTSTEP']._serialized_end=346
+  _globals['_CONTEXTUNIT']._serialized_start=349
+  _globals['_CONTEXTUNIT']._serialized_end=710
 # @@protoc_insertion_point(module_scope)

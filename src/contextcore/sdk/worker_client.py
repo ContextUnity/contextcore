@@ -9,12 +9,10 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
-import grpc
-
 from .context_unit import ContextUnit
 
 if TYPE_CHECKING:
-    pass
+    from contextcore import ContextToken
 
 logger = logging.getLogger(__name__)
 
@@ -43,23 +41,49 @@ class WorkerClient:
     Supports 'grpc' (network) and 'local' (direct Temporal client) modes.
 
     Example:
-        client = WorkerClient(host="localhost:50052")
+        client = WorkerClient(host="localhost:50052", token=my_token)
         result = await client.start_workflow(ContextUnit(
             payload={"workflow_type": "harvest", "supplier_code": "xyz"}
         ))
     """
 
-    def __init__(self, host: str | None = None, mode: str | None = None):
+    def __init__(
+        self,
+        host: str | None = None,
+        mode: str | None = None,
+        token: "ContextToken | None" = None,
+    ):
+        """Initialize WorkerClient.
+
+        Args:
+            host: Worker gRPC endpoint (e.g., "worker:50052")
+            mode: "grpc" or "local"
+            token: Optional ContextToken for authorization
+        """
+
         self.mode = mode or os.getenv("CONTEXT_WORKER_MODE", "grpc")
         self.host = host or os.getenv("CONTEXT_WORKER_URL", "localhost:50052")
         self.temporal_host = os.getenv("TEMPORAL_HOST", "localhost:7233")
+        self.token: ContextToken | None = token
         self._stub = None
         self.channel = None
 
         if self.mode == "grpc":
             _ensure_protos()
-            self.channel = grpc.insecure_channel(self.host)
+            from contextcore.grpc_utils import create_channel
+
+            self.channel = create_channel(self.host)
             self._stub = worker_pb2_grpc.WorkerServiceStub(self.channel)
+
+    def _get_metadata(self) -> list[tuple[str, str]]:
+        """Get gRPC metadata with token for requests.
+
+        Returns:
+            List of (key, value) tuples for gRPC metadata
+        """
+        from contextcore import create_grpc_metadata_with_token
+
+        return create_grpc_metadata_with_token(self.token)
 
     async def start_workflow(self, unit: ContextUnit) -> ContextUnit:
         """Start a durable workflow via Temporal.
@@ -74,17 +98,17 @@ class WorkerClient:
         Returns:
             ContextUnit with workflow_id and run_id in payload.
         """
-        # Add provenance
-        unit.provenance.append("sdk:worker_client:start_workflow")
+        # Add provenance (create new list to avoid mutating caller's data)
+        unit.provenance = list(unit.provenance) + ["sdk:worker_client:start_workflow"]
 
         if self.mode == "grpc":
             req = unit.to_protobuf(context_unit_pb2)
-            response_pb = self._stub.StartWorkflow(req)
+            metadata = self._get_metadata()  # Include token in metadata
+            response_pb = await self._stub.StartWorkflow(req, metadata=metadata)
             return ContextUnit.from_protobuf(response_pb)
         else:
-            from temporalio.client import Client
-
             from contextworker.workflows import HarvesterImportWorkflow
+            from temporalio.client import Client
 
             client = await Client.connect(self.temporal_host)
             url = unit.payload.get("url")
@@ -113,7 +137,8 @@ class WorkerClient:
 
         if self.mode == "grpc":
             req = unit.to_protobuf(context_unit_pb2)
-            response_pb = self._stub.GetTaskStatus(req)
+            metadata = self._get_metadata()  # Include token in metadata
+            response_pb = await self._stub.GetTaskStatus(req, metadata=metadata)
             return ContextUnit.from_protobuf(response_pb)
         else:
             raise NotImplementedError("Local mode get_task_status not implemented")

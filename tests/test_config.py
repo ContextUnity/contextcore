@@ -6,7 +6,6 @@ import os
 from unittest.mock import patch
 
 import pytest
-
 from contextcore import LogLevel, SharedConfig, load_shared_config_from_env
 
 

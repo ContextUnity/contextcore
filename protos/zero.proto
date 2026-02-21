@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package contextzero;
+
+import "context_unit.proto";
+
+// =====================================================
+// ContextZero Service - Privacy Proxy
+// =====================================================
+// PII anonymization, persona injection, and deanonymization.
+// All endpoints use ContextUnit as the transport envelope.
+// =====================================================
+
+service ZeroService {
+    // Anonymize PII in a prompt before external LLM call
+    // Request payload: {prompt, session_id?, persona_name?, tenant_id}
+    // Response payload: {anonymized_prompt, entities_masked, entity_types, session_id}
+    rpc Anonymize(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Deanonymize (restore PII) in an LLM response
+    // Request payload: {text, session_id}
+    // Response payload: {restored_text}
+    rpc Deanonymize(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Scan text for PII without modifying it
+    // Request payload: {text}
+    // Response payload: {contains_pii, entities_found, entity_types}
+    rpc ScanPII(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Full pipeline: anonymize → (LLM call) → deanonymize in one call
+    // Request payload: {prompt, session_id?, persona_name?, llm_endpoint?}
+    // Response payload: {restored_response, audit: {...}}
+    rpc ProcessPrompt(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Destroy a session and wipe all keys from RAM
+    // Request payload: {session_id}
+    // Response payload: {destroyed: true}
+    rpc DestroySession(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Get service statistics (active sessions, encryption status)
+    // Request payload: {}
+    // Response payload: {active_sessions, total_processed, ...}
+    rpc GetStats(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+}

@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 
 import pytest
-
 from contextcore import ContextToken, ContextUnit, SecurityScopes, TokenBuilder
 
 
@@ -115,6 +114,49 @@ class TestContextToken:
         scopes = SecurityScopes(read=[], write=["write:data"])
         assert not token.can_write(scopes)
 
+    def test_can_access_tenant_admin(self) -> None:
+        """Admin token (empty allowed_tenants) can access any tenant."""
+        token = ContextToken(
+            token_id="admin",
+            permissions=("dispatcher:execute",),
+            allowed_tenants=(),  # admin
+        )
+        assert token.can_access_tenant("traverse") is True
+        assert token.can_access_tenant("nszu") is True
+        assert token.can_access_tenant("any_tenant") is True
+
+    def test_can_access_tenant_scoped(self) -> None:
+        """Scoped token can only access listed tenants."""
+        token = ContextToken(
+            token_id="traverse_token",
+            permissions=("dispatcher:execute",),
+            allowed_tenants=("traverse",),
+        )
+        assert token.can_access_tenant("traverse") is True
+        assert token.can_access_tenant("nszu") is False
+        assert token.can_access_tenant("pinkpony") is False
+
+    def test_can_access_tenant_multi(self) -> None:
+        """Token scoped to multiple tenants."""
+        token = ContextToken(
+            token_id="multi_token",
+            permissions=("dispatcher:execute",),
+            allowed_tenants=("traverse", "pinkpony"),
+        )
+        assert token.can_access_tenant("traverse") is True
+        assert token.can_access_tenant("pinkpony") is True
+        assert token.can_access_tenant("nszu") is False
+
+    def test_can_access_tenant_empty_id_rejected(self) -> None:
+        """Empty tenant_id is always rejected, even for admin tokens."""
+        admin_token = ContextToken(
+            token_id="admin",
+            permissions=("dispatcher:execute",),
+            allowed_tenants=(),
+        )
+        assert admin_token.can_access_tenant("") is False
+        assert admin_token.can_access_tenant(None) is False
+
 
 class TestTokenBuilder:
     """Tests for TokenBuilder."""
@@ -143,6 +185,19 @@ class TestTokenBuilder:
         assert "write:data" in token.permissions
         assert token.exp_unix is not None
         assert token.exp_unix > time.time()
+
+    def test_mint_root_token_with_tenants(self) -> None:
+        """Test minting a root token with tenant restrictions."""
+        builder = TokenBuilder()
+        token = builder.mint_root(
+            user_ctx={},
+            permissions=["dispatcher:execute"],
+            ttl_s=3600,
+            allowed_tenants=["traverse", "pinkpony"],
+        )
+        assert token.allowed_tenants == ("traverse", "pinkpony")
+        assert token.can_access_tenant("traverse") is True
+        assert token.can_access_tenant("nszu") is False
 
     def test_attenuate_token_permissions(self) -> None:
         """Test attenuating token permissions."""
@@ -275,3 +330,123 @@ class TestTokenBuilder:
         # Should not raise
         builder.verify_unit_access(token, unit, operation="read")
         builder.verify_unit_access(token, unit, operation="write")
+
+
+class TestTokenSigning:
+    """Tests for token signing with UnsignedBackend and Ed25519."""
+
+    def test_unsigned_roundtrip(self) -> None:
+        """Unsigned token roundtrip preserves all fields in dev mode."""
+        from contextcore.signing import UnsignedBackend
+        from contextcore.token_utils import parse_token_string, serialize_token
+
+        backend = UnsignedBackend()
+        token = ContextToken(
+            token_id="dev123",
+            permissions=("dispatcher:execute", "brain:read"),
+            allowed_tenants=("traverse", "pinkpony"),
+            exp_unix=9999999999.0,
+        )
+        serialized = serialize_token(token, backend=backend)
+        assert "." in serialized  # kid.payload.signature format
+
+        parsed = parse_token_string(serialized, backend=backend)
+        assert parsed is not None
+        assert parsed.token_id == "dev123"
+        assert parsed.permissions == ("dispatcher:execute", "brain:read")
+        assert parsed.allowed_tenants == ("traverse", "pinkpony")
+        assert parsed.exp_unix == 9999999999.0
+
+    def test_unsigned_wire_format(self) -> None:
+        """Unsigned tokens use kid.payload.signature format (3 parts)."""
+        from contextcore.signing import UnsignedBackend
+        from contextcore.token_utils import serialize_token
+
+        backend = UnsignedBackend()
+        token = ContextToken(
+            token_id="test",
+            permissions=("read:data",),
+        )
+        serialized = serialize_token(token, backend=backend)
+        parts = serialized.split(".")
+        assert len(parts) == 3  # kid.payload.signature
+        assert parts[0] == "unsigned"  # kid = "unsigned"
+        assert parts[2] == ""  # empty signature
+
+    def test_unsigned_admin_token(self) -> None:
+        """Admin token (empty allowed_tenants) serializes correctly."""
+        from contextcore.signing import UnsignedBackend
+        from contextcore.token_utils import parse_token_string, serialize_token
+
+        backend = UnsignedBackend()
+        token = ContextToken(
+            token_id="admin",
+            permissions=("dispatcher:execute",),
+            allowed_tenants=(),  # Admin
+        )
+        serialized = serialize_token(token, backend=backend)
+        parsed = parse_token_string(serialized, backend=backend)
+        assert parsed is not None
+        assert parsed.allowed_tenants == ()
+        assert parsed.can_access_tenant("anything") is True
+
+
+class TestTokenEdgeCases:
+    """Edge-case tests for tokens (moved from test_error_handling.py)."""
+
+    def test_token_expired_at_exact_boundary(self) -> None:
+        """Token expiring at exactly time.time() should be expired."""
+        import time
+
+        token = ContextToken(
+            token_id="boundary",
+            permissions=(),
+            exp_unix=time.time(),
+        )
+        assert token.is_expired()
+
+    def test_mint_root_with_empty_permissions(self) -> None:
+        """Minting with empty permissions should succeed."""
+        builder = TokenBuilder()
+        token = builder.mint_root(user_ctx={}, permissions=[], ttl_s=3600)
+        assert len(token.permissions) == 0
+
+    def test_mint_root_with_negative_ttl(self) -> None:
+        """Negative TTL should produce an immediately-expired token."""
+        builder = TokenBuilder()
+        token = builder.mint_root(user_ctx={}, permissions=["read:data"], ttl_s=-100)
+        assert token.exp_unix is not None
+        assert token.is_expired()
+
+    def test_verify_with_empty_permission_string(self) -> None:
+        """Verifying with empty required_permission should raise."""
+        builder = TokenBuilder()
+        token = builder.mint_root(user_ctx={}, permissions=["read:data"], ttl_s=3600)
+        with pytest.raises(PermissionError):
+            builder.verify(token, required_permission="")
+
+    def test_verify_unit_access_invalid_operation(self) -> None:
+        """Invalid operation should raise ValueError."""
+        builder = TokenBuilder()
+        token = builder.mint_root(user_ctx={}, permissions=["read:data"], ttl_s=3600)
+        from contextcore import ContextUnit, SecurityScopes
+
+        unit = ContextUnit(security=SecurityScopes(read=["read:data"]))
+        with pytest.raises(ValueError, match="Invalid operation"):
+            builder.verify_unit_access(token, unit, operation="invalid")
+
+    def test_can_read_with_no_permissions(self) -> None:
+        """Token with no permissions cannot satisfy non-empty read scopes."""
+        from contextcore import SecurityScopes
+
+        token = ContextToken(token_id="empty", permissions=())
+        scopes = SecurityScopes(read=["read:data"])
+        assert not token.can_read(scopes)
+
+    def test_can_write_with_no_permissions(self) -> None:
+        """Token with no permissions cannot satisfy non-empty write scopes."""
+        from contextcore import SecurityScopes
+
+        token = ContextToken(token_id="empty", permissions=())
+        scopes = SecurityScopes(write=["write:data"])
+        assert not token.can_write(scopes)

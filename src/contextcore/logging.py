@@ -19,7 +19,6 @@ from uuid import UUID
 from .config import LogLevel, SharedConfig
 from .sdk import ContextUnit
 
-
 # Patterns for detecting secrets (common patterns to redact)
 SECRET_PATTERNS = [
     r'(?i)(?:password|passwd|pwd|secret|token|key|api[_-]?key|auth[_-]?token)\s*[:=]\s*["\']?([^"\'\s]+)',
@@ -165,13 +164,9 @@ class ContextUnitFormatter(logging.Formatter):
         # Add trace context if available
         if self.include_trace_id:
             if trace_id:
-                log_data["trace_id"] = (
-                    str(trace_id) if isinstance(trace_id, UUID) else trace_id
-                )
+                log_data["trace_id"] = str(trace_id) if isinstance(trace_id, UUID) else trace_id
             if unit_id:
-                log_data["unit_id"] = (
-                    str(unit_id) if isinstance(unit_id, UUID) else unit_id
-                )
+                log_data["unit_id"] = str(unit_id) if isinstance(unit_id, UUID) else unit_id
 
         # Add exception info if present
         if record.exc_info:
@@ -215,16 +210,15 @@ class ContextUnitFormatter(logging.Formatter):
         if self.json_format:
             return json.dumps(log_data, default=str, ensure_ascii=False)
         else:
-            # Plain text format with trace_id
-            parts = [
-                f"[{log_data['timestamp']}]",
-                f"{log_data['level']}",
-                f"{log_data['logger']}",
-            ]
+            # Plain text format: timestamp [LEVEL] logger: message
+            ts = log_data["timestamp"]
+            lvl = log_data["level"]
+            name = log_data["logger"]
+            msg = log_data["message"]
+            base = f"{ts} [{lvl}] {name}: {msg}"
             if trace_id:
-                parts.append(f"trace_id={log_data.get('trace_id', '')}")
-            parts.append(f": {log_data['message']}")
-            return " ".join(parts)
+                base = f"{ts} [{lvl}] {name} trace_id={log_data.get('trace_id', '')}: {msg}"
+            return base
 
 
 class ContextUnitLoggerAdapter(logging.LoggerAdapter):
@@ -277,7 +271,7 @@ class ContextUnitLoggerAdapter(logging.LoggerAdapter):
 
 def setup_logging(
     config: Optional[SharedConfig] = None,
-    json_format: bool = True,
+    json_format: Optional[bool] = None,
     redact_secrets: bool = True,
     service_name: Optional[str] = None,
 ) -> None:
@@ -291,7 +285,8 @@ def setup_logging(
 
     Args:
         config: SharedConfig instance (if None, loads from environment)
-        json_format: Whether to use JSON format (default: True)
+        json_format: Whether to use JSON format. If None, reads from
+            config.log_json (LOG_JSON env var). Default: plain text.
         redact_secrets: Whether to redact secrets (default: True)
         service_name: Optional service name for logger identification
     """
@@ -299,6 +294,10 @@ def setup_logging(
         from .config import load_shared_config_from_env
 
         config = load_shared_config_from_env()
+
+    # Resolve json_format: explicit arg > config > default (False)
+    if json_format is None:
+        json_format = getattr(config, "log_json", False)
 
     # Convert LogLevel enum to logging level
     level_map = {

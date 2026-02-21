@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package contextshield;
+
+import "context_unit.proto";
+
+// =====================================================
+// ContextShield Service - AI Firewall & Security Authority
+// =====================================================
+// Security scanning, policy evaluation, compliance,
+// audit, delegation chain management, and SECRET MANAGEMENT.
+// All endpoints use ContextUnit as the transport envelope.
+// =====================================================
+
+service ShieldService {
+    // Scan text for prompt injection, jailbreak, PII leaks
+    // Request payload: {text, context?, validators?: ["pii","rag_context"]}
+    // Response payload: {allowed, blocked, threats: [...], risk_score, severity, latency_ms}
+    rpc Scan(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Evaluate policy engine for authorization decision
+    // Request payload: {token_id, permissions, tenant_id, operation, resource, context?: {...}}
+    // Response payload: {allowed, reason, matched_policy, evaluation_ms}
+    rpc EvaluatePolicy(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Run compliance posture check
+    // Request payload: {standards?: ["soc2","gdpr","hipaa","pci_dss"]}
+    // Response payload: {passed, score, findings: [...], summary}
+    rpc CheckCompliance(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Record a security audit event
+    // Request payload: {event_type, description, actor?, tenant?, metadata?: {...}}
+    // Response payload: {recorded: true, event_id}
+    rpc RecordAudit(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Mint a new ContextToken
+    // Request payload: {permissions: [...], tenant_ids?: [...], ttl_s, user_ctx?: {...}}
+    // Response payload: {token_id, permissions, allowed_tenants, exp_unix, revocation_id}
+    rpc MintToken(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Verify a ContextToken has the required permission
+    // Request payload: {token_id, required_permission, tenant_id?}
+    // Response payload: {valid, reason?}
+    rpc VerifyToken(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Revoke a token immediately
+    // Request payload: {revocation_id}
+    // Response payload: {revoked: true}
+    rpc RevokeToken(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Get service health and statistics
+    // Request payload: {}
+    // Response payload: {active_tokens, policies_loaded, audit_events_total, ...}
+    rpc GetStats(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // =====================================================
+    // Secret Management RPCs
+    // =====================================================
+    // All operations require ContextToken with appropriate
+    // "secrets:read" or "secrets:write" permission.
+    // Secret values are encrypted at rest and NEVER logged.
+    // =====================================================
+
+    // GetSecret — Read a secret value by path
+    // Request payload: { path: string, version?: int, tenant_id?: string }
+    // Response payload: { path, value, version, created_at, expires_at, tags, encryption_backend }
+    rpc GetSecret(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // PutSecret — Store or update a secret
+    // Request payload: { path: string, value: string, tags?: {}, ttl_seconds?: int, tenant_id?: string }
+    // Response payload: { path, version, created_at, expires_at }
+    rpc PutSecret(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // ListSecrets — List secret paths and metadata (NO values)
+    // Request payload: { prefix?: string, tenant_id?: string }
+    // Response payload: { secrets: [{ path, version, created_at, expires_at, tags }] }
+    rpc ListSecrets(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // RotateSecret — Create new version, optionally invalidate old
+    // Request payload: { path: string, new_value: string, invalidate_previous?: bool, tenant_id?: string }
+    // Response payload: { path, old_version, new_version, created_at }
+    rpc RotateSecret(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // =====================================================
+    // General-Purpose Encryption RPCs
+    // =====================================================
+    // Allows any service to encrypt/decrypt arbitrary data
+    // using Shield's encryption backends WITHOUT accessing
+    // secret store.
+    // =====================================================
+
+    // Encrypt — Encrypt arbitrary data
+    // Request payload: { plaintext: string, backend?: "fernet"|"aes256"|"age"|"kms_transit" }
+    // Response payload: { ciphertext_b64: string, encryption_kid: string, algorithm: string }
+    rpc Encrypt(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Decrypt — Decrypt data encrypted by Shield
+    // Request payload: { ciphertext_b64: string }
+    // Response payload: { plaintext: string }
+    rpc Decrypt(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+}

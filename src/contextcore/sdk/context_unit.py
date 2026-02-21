@@ -23,6 +23,36 @@ from pydantic import BaseModel, Field
 from .models import CotStep, SecurityScopes, UnitMetrics
 
 
+def _sanitize_for_protobuf(obj: Any) -> Any:
+    """Recursively convert payload values to protobuf Struct-safe types.
+
+    Protobuf Struct.update() only supports: None/null, bool, int, float,
+    str, list, and dict.  Anything else (UUID, datetime, bytes, set, Pydantic
+    models, etc.) is converted to its string representation.
+
+    None values are converted to empty strings to avoid the
+    ``TypeError: descriptor 'SerializeToString' for ... doesn't apply
+    to a 'NoneType' object`` that occurs when gRPC tries to serialize
+    a handler response of None.
+    """
+    if obj is None:
+        return ""
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, (int, float)):
+        return obj
+    if isinstance(obj, str):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): _sanitize_for_protobuf(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_for_protobuf(v) for v in obj]
+    if isinstance(obj, set):
+        return [_sanitize_for_protobuf(v) for v in sorted(obj, key=str)]
+    # Everything else (UUID, datetime, bytes, Pydantic, etc.) → str
+    return str(obj)
+
+
 class ContextUnit(BaseModel):
     """Core data structure for ContextUnity protocol - universal data contract.
 
@@ -59,7 +89,7 @@ class ContextUnit(BaseModel):
         from google.protobuf.timestamp_pb2 import Timestamp
 
         payload_struct = Struct()
-        payload_struct.update(self.payload)
+        payload_struct.update(_sanitize_for_protobuf(self.payload))
 
         created_at_pb = Timestamp()
         created_at_pb.FromDatetime(self.created_at)
@@ -77,23 +107,19 @@ class ContextUnit(BaseModel):
             )
             cot_steps.append(cot_pb)
 
-        # Convert metrics to protobuf
-        metrics_pb = None
-        if self.metrics:
-            metrics_pb = pb_module.UnitMetrics(
-                latency_ms=self.metrics.latency_ms,
-                cost_usd=self.metrics.cost_usd,
-                tokens_used=self.metrics.tokens_used,
-                cost_limit_usd=self.metrics.cost_limit_usd,
-            )
+        # Convert metrics to protobuf — always create (Pydantic provides defaults)
+        metrics_pb = pb_module.UnitMetrics(
+            latency_ms=self.metrics.latency_ms if self.metrics else 0,
+            cost_usd=self.metrics.cost_usd if self.metrics else 0.0,
+            tokens_used=self.metrics.tokens_used if self.metrics else 0,
+            cost_limit_usd=self.metrics.cost_limit_usd if self.metrics else 0.0,
+        )
 
-        # Convert security scopes to protobuf
-        security_pb = None
-        if self.security:
-            security_pb = pb_module.SecurityScopes(
-                read=list(self.security.read),
-                write=list(self.security.write),
-            )
+        # Convert security scopes to protobuf — always create
+        security_pb = pb_module.SecurityScopes(
+            read=list(self.security.read) if self.security else [],
+            write=list(self.security.write) if self.security else [],
+        )
 
         unit_pb = pb_module.ContextUnit(
             unit_id=str(self.unit_id),
@@ -142,20 +168,22 @@ class ContextUnit(BaseModel):
                 write=list(unit_pb.security.write),
             )
 
+        from google.protobuf.json_format import MessageToDict
+
+        # MessageToDict does deep conversion (nested Struct/ListValue → dict/list)
+        # plain dict() only converts top level, leaving nested protobuf objects
+        payload = MessageToDict(unit_pb.payload) if unit_pb.payload else {}
+
         return cls(
             unit_id=UUID(unit_pb.unit_id) if unit_pb.unit_id else uuid4(),
             trace_id=UUID(unit_pb.trace_id) if unit_pb.trace_id else uuid4(),
-            parent_unit_id=UUID(unit_pb.parent_unit_id)
-            if unit_pb.parent_unit_id
-            else None,
-            payload=dict(unit_pb.payload),
+            parent_unit_id=UUID(unit_pb.parent_unit_id) if unit_pb.parent_unit_id else None,
+            payload=payload,
             provenance=list(unit_pb.provenance),
             chain_of_thought=cot_steps,
             metrics=metrics,
             security=security,
-            created_at=unit_pb.created_at.ToDatetime()
-            if unit_pb.created_at.seconds
-            else datetime.now(timezone.utc),
+            created_at=unit_pb.created_at.ToDatetime() if unit_pb.created_at.seconds else datetime.now(timezone.utc),
         )
 
 

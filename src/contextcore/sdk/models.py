@@ -38,6 +38,12 @@ class UnitMetrics(BaseModel):
     tokens_used: int = 0
     cost_limit_usd: float = 0.0
 
+    # Observability — set by Router / client for deeper traceability
+    network_ms: int = 0  # gRPC round-trip latency (measured by caller)
+    wall_ms: int = 0  # Router-side wall-clock execution time
+    langfuse_trace_id: str = ""  # Langfuse/OTel 32-hex trace ID
+    langfuse_trace_url: str = ""  # Direct Langfuse dashboard link
+
 
 class SecurityScopes(BaseModel):
     """Capability-based access control scopes."""

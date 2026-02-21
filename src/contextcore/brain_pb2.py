@@ -4,32 +4,34 @@
 # source: brain.proto
 # Protobuf Python Version: 6.31.1
 """Generated protocol buffer code."""
-
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
-
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC, 6, 31, 1, "", "brain.proto"
+    _runtime_version.Domain.PUBLIC,
+    6,
+    31,
+    1,
+    '',
+    'brain.proto'
 )
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
 
 
+from . import context_unit_pb2 as context__unit__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b"\n\x0b\x62rain.proto\x12\x0c\x63ontextbrain\x1a\x12\x63ontext_unit.proto2\xbd\x06\n\x0c\x42rainService\x12>\n\x06Search\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x41\n\x0bGraphSearch\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x46\n\x10\x43reateKGRelation\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12<\n\x06Upsert\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bQueryMemory\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x44\n\x0eUpsertNewsItem\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0cGetNewsItems\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x44\n\x0eUpsertNewsPost\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12@\n\nAddEpisode\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12@\n\nUpsertFact\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0eUpsertTaxonomy\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bGetTaxonomy\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x62\x06proto3"
-)
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x62rain.proto\x12\x0c\x63ontextbrain\x1a\x12\x63ontext_unit.proto2\x9c\t\n\x0c\x42rainService\x12>\n\x06Search\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x41\n\x0bGraphSearch\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x46\n\x10\x43reateKGRelation\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12<\n\x06Upsert\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bQueryMemory\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x44\n\x0eUpsertNewsItem\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0cGetNewsItems\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x44\n\x0eUpsertNewsPost\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12I\n\x13\x43heckNewsPostExists\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12@\n\nAddEpisode\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12I\n\x11GetRecentEpisodes\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12@\n\nUpsertFact\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0cGetUserFacts\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12>\n\x08LogTrace\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x41\n\tGetTraces\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x44\n\x0eUpsertTaxonomy\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bGetTaxonomy\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "brain_pb2", _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'brain_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-    DESCRIPTOR._loaded_options = None
-    _globals["_BRAINSERVICE"]._serialized_start = 50
-    _globals["_BRAINSERVICE"]._serialized_end = 879
+  DESCRIPTOR._loaded_options = None
+  _globals['_BRAINSERVICE']._serialized_start=50
+  _globals['_BRAINSERVICE']._serialized_end=1230
 # @@protoc_insertion_point(module_scope)

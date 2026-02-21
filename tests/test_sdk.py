@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-
+import pytest
 from contextcore import ContextUnit, CotStep, SecurityScopes, UnitMetrics
 
 
@@ -50,6 +50,17 @@ class TestContextUnit:
         unit = ContextUnit()
         unit.provenance.append("new_source")
         assert "new_source" in unit.provenance
+
+    def test_invalid_uuid_string_rejected(self) -> None:
+        """ContextUnit should reject invalid UUID strings."""
+        with pytest.raises((ValueError, TypeError)):
+            ContextUnit(unit_id="invalid-uuid")  # type: ignore[arg-type]
+
+    def test_provenance_append_none(self) -> None:
+        """Appending None to provenance should not crash."""
+        unit = ContextUnit()
+        unit.provenance.append(None)  # type: ignore[arg-type]
+        assert None in unit.provenance or "None" in unit.provenance
 
     def test_chain_of_thought(self) -> None:
         """Test chain of thought steps."""

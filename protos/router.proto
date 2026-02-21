@@ -16,9 +16,113 @@ service RouterService {
     // Request payload: {tenant_id, agent_id, input_text, context?: {...}}
     // Response payload: {output_text, tool_calls?: {...}, metadata?: {...}}
     rpc ExecuteAgent(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // Stream agent execution (for UI with real-time output)
     // Request payload: {tenant_id, agent_id, input_text, context?: {...}}
     // Response payload: {output_text, tool_calls?: {...}, metadata?: {...}}
     rpc StreamAgent(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+
+    // =========================================
+    // Dispatcher Agent - Always-Active Agent
+    // =========================================
+
+    // Execute dispatcher agent (always-active agent with all tools)
+    // Request payload: {tenant_id, messages: [{role, content}], session_id?, platform?, max_iterations?}
+    // Response payload: {messages: [...], session_id, metadata: {...}}
+    // Security: Uses SecurityScopes from ContextUnit for access control
+    rpc ExecuteDispatcher(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Stream dispatcher agent execution
+    // Request payload: {tenant_id, messages: [{role, content}], session_id?, platform?, max_iterations?}
+    // Response payload: {event_type, data: {...}} (streaming events)
+    // Security: Uses SecurityScopes from ContextUnit for access control
+    rpc StreamDispatcher(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+
+    // =========================================
+    // Project Tool & Graph Registration
+    // =========================================
+
+    // Register project tools and graph in Router.
+    // SQL tools use ToolExecutorStream for remote execution —
+    // DB credentials never leave the project's process.
+    //
+    // Security: Requires "tools:register" write scope in ContextUnit.
+    //
+    // Request payload: {
+    //   project_id: "contextmed",
+    //   tools: [{
+    //     name: "execute_medical_sql",
+    //     type: "sql",
+    //     description: "...",
+    //     config: {
+    //       project_id: "contextmed",              # for stream routing
+    //       schema_description: "...",              # DB schema for LLM
+    //       read_only: true,                       # constraint: SELECT only
+    //       max_rows: 500,
+    //       statement_timeout_ms: 5000,
+    //       schema_description: "..."
+    //     }
+    //   }],
+    //
+    //   # Graph — choose one:
+    //
+    //   # Option A: Use Router's built-in graph template with project config
+    //   graph: {
+    //     name: "contextmed",
+    //     template: "sql_analytics",            # built-in template
+    //     config: {
+    //       planner_prompt: "Ти — медичний аналітик...",
+    //       verifier_prompt: "Перевір SQL...",
+    //       visualizer_prompt: "Сформуй UI...",
+    //       tool_bindings: ["execute_medical_sql"],
+    //       max_retries: 2
+    //     }
+    //   }
+    //
+    //   # Option B: Declarative custom graph
+    //   graph: {
+    //     name: "my_custom_graph",
+    //     nodes: [
+    //       {name: "step1", type: "llm", prompt: "..."},
+    //       {name: "step2", type: "tool", tool: "my_tool"},
+    //       ...
+    //     ],
+    //     edges: [
+    //       {from: "START", to: "step1"},
+    //       {from: "step1", to: "step2", condition: "..."},
+    //       ...
+    //     ]
+    //   }
+    // }
+    //
+    // Response payload: {registered_tools: [...], graph: "contextmed", status: "ok"}
+    rpc RegisterTools(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Deregister project tools and graph (on shutdown).
+    // Request payload: {project_id: "contextmed"}
+    // Response payload: {deregistered: [...], status: "ok"}
+    rpc DeregisterTools(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // =========================================
+    // Tool Executor Stream (Bidi Callback)
+    // =========================================
+
+    // Bidirectional stream for project-side tool execution.
+    // Project connects once and acts as remote executor for its tools.
+    // Uses existing gRPC connection — no new ports needed.
+    //
+    // Flow:
+    // 1. Project → Router: {"action": "ready", "project_id": "nszu",
+    //                        "tools": ["execute_medical_sql"]}
+    // 2. Router → Project: {"action": "execute", "tool": "execute_medical_sql",
+    //                        "request_id": "abc", "args": {"sql": "SELECT ..."}}
+    // 3. Project → Router: {"action": "result", "request_id": "abc",
+    //                        "columns": [...], "rows": [...], "row_count": N}
+    // 4. On error:
+    //    Project → Router: {"action": "error", "request_id": "abc",
+    //                        "error": "timeout"}
+    //
+    // Security: Requires ContextToken with "tools:execute" permission.
+    rpc ToolExecutorStream(stream contextcore.ContextUnit)
+        returns (stream contextcore.ContextUnit);
 }

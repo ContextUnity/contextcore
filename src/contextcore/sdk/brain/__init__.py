@@ -9,10 +9,19 @@ from __future__ import annotations
 from .base import BrainClientBase
 from .commerce import CommerceMixin
 from .knowledge import KnowledgeMixin
+from .memory import MemoryMixin
 from .news import NewsMixin
+from .traces import TraceMixin
 
 
-class BrainClient(KnowledgeMixin, NewsMixin, CommerceMixin, BrainClientBase):
+class BrainClient(
+    KnowledgeMixin,
+    NewsMixin,
+    CommerceMixin,
+    MemoryMixin,
+    TraceMixin,
+    BrainClientBase,
+):
     """Client for interacting with ContextBrain using ContextUnit protocol.
 
     Supports 'local' (library) and 'grpc' (network) modes.

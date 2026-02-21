@@ -7,7 +7,6 @@ import logging
 from uuid import uuid4
 
 import pytest
-
 from contextcore import (
     ContextUnit,
     LogLevel,

@@ -46,16 +46,27 @@ ContextCore is designed for:
 
 ```
 ContextCore/
-├── sdk.py              # ContextUnit, ContextUnitBuilder, BrainClient
-├── tokens.py           # ContextToken, TokenBuilder
-├── config.py           # SharedConfig, LogLevel
-├── logging.py          # setup_logging, safe_log_value
-├── interfaces.py       # IRead, IWrite base interfaces
+├── sdk/                # ContextUnit, BrainClient, WorkerClient
+│   ├── context_unit.py # ContextUnit model and serialization
+│   ├── models.py       # SecurityScopes, UnitMetrics
+│   ├── brain/          # BrainClient (async gRPC SDK)
+│   └── worker_client.py
 │
-├── brain_pb2.py        # Generated: BrainService gRPC
-├── commerce_pb2.py     # Generated: CommerceService gRPC
-├── worker_pb2.py       # Generated: WorkerService gRPC
-└── context_unit_pb2.py # Generated: ContextUnit proto
+├── tokens.py           # ContextToken, TokenBuilder
+├── token_utils.py      # Serialization, gRPC/HTTP extraction
+├── signing.py          # SigningBackend protocol, UnsignedBackend
+├── security.py         # SecurityGuard, SecurityConfig, interceptors
+├── permissions.py      # Permission registry, access tiers, tool policies
+│
+├── config.py           # SharedConfig, SharedSecurityConfig
+├── logging.py          # setup_logging, get_context_unit_logger, safe_log_value
+├── exceptions.py       # Unified exception hierarchy
+├── discovery.py        # Service discovery utilities
+├── grpc_utils.py       # Channel creation, TLS helpers
+├── interfaces.py       # IRead, IWrite abstract interfaces
+│
+├── *_pb2.py            # Generated: gRPC stubs (brain, router, worker,
+└── *_pb2_grpc.py       #   commerce, admin, shield, zero, context_unit)
 ```
 
 ## Quick Start
@@ -77,14 +88,16 @@ unit = ContextUnit(
 )
 ```
 
-### ContextToken — Access Control
+### ContextToken — Access Control (SPOT for Identity)
 
 ```python
 from contextcore import ContextToken, SecurityScopes
 
 token = ContextToken(
     token_id="token_123",
-    permissions=("knowledge:read", "catalog:read")
+    user_id="user@example.com",
+    permissions=("knowledge:read", "catalog:read"),
+    allowed_tenants=("traverse",),  # tenant resolved from token, not payload
 )
 
 # Check authorization
@@ -132,6 +145,7 @@ uv add contextcore
 ```bash
 # Logging
 export LOG_LEVEL=INFO
+export LOG_JSON=false          # plain text (default) or true for JSON
 export SERVICE_NAME=my-service
 
 # Redis (optional)
@@ -174,15 +188,71 @@ uv run pytest tests/ -v
 - [Technical Reference](./contextcore-fulldoc.md) — architecture deep-dive
 - [Proto Definitions](./protos/) — gRPC contract definitions
 
+## Testing & docs
+
+- [Integration tests](../tests/integration/README.md) — cross-service tests (token/trace propagation, etc.)
+- Doc site: [contextcore.dev](https://contextcore.dev)
+
+## Security
+
+ContextCore provides the security primitives used by all ContextUnity services.
+See [Security Architecture](../../docs/security_architecture.md) for the full model.
+
+### ContextToken
+
+Capability-based access tokens with:
+- **`permissions`** — capability strings (`brain:read`, `tools:register:project_id`, `admin:all`)
+- **`allowed_tenants`** — tenant isolation (empty = admin access to all)
+- **`user_id` / `agent_id`** — identity tracking
+- **`exp_unix`** — TTL-based expiration
+
+### Permission Model
+
+Hierarchical permission format: `{domain}:{action}[:{resource}]`
+
+```python
+from contextcore.permissions import Permissions, has_registration_access
+
+# Static constants
+Permissions.BRAIN_READ         # "brain:read"
+Permissions.TOOLS_REGISTER     # "tools:register" (any project)
+
+# Builders
+Permissions.register("acme")   # "tools:register:acme" (project-specific)
+Permissions.tool("sql", "read") # "tool:sql:read"
+
+# Checks
+has_registration_access(("tools:register:acme",), "acme")  # True
+has_registration_access(("tools:register:acme",), "other")  # False
+has_registration_access(("tools:register",), "anything")   # True (generic)
+```
+
+### Service Discovery & Project Registry
+
+Redis-based infrastructure in `discovery.py`:
+
+| Function | Purpose |
+|----------|---------|
+| `register_service()` | Service heartbeat registration |
+| `discover_services()` | Find running service instances |
+| `register_project()` | Store project ownership in Redis |
+| `verify_project_owner()` | Check if tenant owns a project |
+| `get_registered_projects()` | List all registered projects |
+
+All functions degrade gracefully when Redis is unavailable.
+
 ## ContextUnity Ecosystem
 
-ContextCore is part of the [ContextUnity](https://github.com/ContextUnity) platform:
+ContextCore is the kernel of the [ContextUnity](https://contextunity.dev) service mesh:
 
 | Service | Role | Documentation |
-|---------|------|---------------|
-| **ContextBrain** | Knowledge storage and RAG | [contextbrain.dev](https://contextbrain.dev) |
-| **ContextRouter** | AI agent orchestration | [contextrouter.dev](https://contextrouter.dev) |
-| **ContextWorker** | Background task execution | [contextworker.dev](https://contextworker.dev) |
+|---|---|---|
+| **ContextCore** | Shared kernel — types, protocols, contracts | *you are here* |
+| [ContextBrain](https://contextbrain.dev) | Semantic memory — knowledge & vector storage | [contextbrain.dev](https://contextbrain.dev) |
+| [ContextRouter](https://contextrouter.dev) | Agent orchestration — LangGraph + plugins | [contextrouter.dev](https://contextrouter.dev) |
+| [ContextWorker](https://contextworker.dev) | Durable workflows — Temporal infrastructure | [contextworker.dev](https://contextworker.dev) |
+| ContextZero | Privacy proxy — PII anonymization | — |
+| ContextView | Observability dashboard — admin UI, MCP | — |
 
 ## License
 

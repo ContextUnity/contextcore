@@ -26,12 +26,16 @@ class CommerceMixin:
         self: BrainClientBase,
         tenant_id: str,
         product_ids: "List[int]",
+        trace_id: "str | None" = None,
+        parent_provenance: "List[str] | None" = None,
     ) -> "List[dict]":
         """Get products for enrichment by IDs.
 
         Args:
             tenant_id: Tenant identifier.
             product_ids: List of product IDs to fetch.
+            trace_id: Optional trace ID for distributed tracing.
+            parent_provenance: Optional provenance chain from parent.
 
         Returns:
             List of product dictionaries.
@@ -40,18 +44,25 @@ class CommerceMixin:
             if not self._commerce_stub:
                 raise ImportError("Commerce gRPC protos not available")
 
+            from uuid import UUID
+
+            provenance = list(parent_provenance) if parent_provenance else []
+            provenance.append("sdk:brain_client:get_products")
+
             unit = ContextUnit(
                 payload={
                     "tenant_id": tenant_id,
                     "product_ids": list(product_ids),
                 },
-                provenance=["sdk:brain_client:get_products"],
+                trace_id=UUID(trace_id) if trace_id else None,
+                provenance=provenance,
             )
 
             pb2 = get_context_unit_pb2()
             req = unit.to_protobuf(pb2)
+            metadata = self._get_metadata()  # Include token in metadata
             products = []
-            async for response_pb in self._commerce_stub.GetProducts(req):
+            async for response_pb in self._commerce_stub.GetProducts(req, metadata=metadata):
                 result = ContextUnit.from_protobuf(response_pb)
                 products.append(result.payload)
             return products
@@ -73,7 +84,7 @@ class CommerceMixin:
                         product_ids=product_ids,
                     )
         except Exception as e:
-            logger.warning(f"Local get_products failed: {e}")
+            logger.warning("Local get_products failed: %s", e)
         return []
 
     async def update_enrichment(
@@ -83,6 +94,7 @@ class CommerceMixin:
         enrichment: dict[str, Any],
         trace_id: str,
         status: str = "enriched",
+        parent_provenance: "List[str] | None" = None,
     ) -> bool:
         """Update product enrichment data.
 
@@ -92,6 +104,7 @@ class CommerceMixin:
             enrichment: Enrichment data dictionary.
             trace_id: Trace ID for auditing.
             status: Enrichment status.
+            parent_provenance: Optional provenance chain from parent.
 
         Returns:
             True if successful.
@@ -100,27 +113,32 @@ class CommerceMixin:
             if not self._commerce_stub:
                 raise ImportError("Commerce gRPC protos not available")
 
+            from uuid import UUID
+
+            provenance = list(parent_provenance) if parent_provenance else []
+            provenance.append("sdk:brain_client:update_enrichment")
+
             unit = ContextUnit(
                 payload={
                     "tenant_id": tenant_id,
                     "product_id": product_id,
                     "enrichment": enrichment,
-                    "trace_id": trace_id,
+                    "trace_id": trace_id,  # Also in payload for audit
                     "status": status,
                 },
-                provenance=["sdk:brain_client:update_enrichment"],
+                trace_id=UUID(trace_id) if trace_id else None,
+                provenance=provenance,
             )
 
             pb2 = get_context_unit_pb2()
             req = unit.to_protobuf(pb2)
-            response_pb = await self._commerce_stub.UpdateEnrichment(req)
+            metadata = self._get_metadata()  # Include token in metadata
+            response_pb = await self._commerce_stub.UpdateEnrichment(req, metadata=metadata)
             result = ContextUnit.from_protobuf(response_pb)
             return result.payload.get("success", False)
         else:
             # Local mode
-            return await self._local_update_enrichment(
-                tenant_id, product_id, enrichment, trace_id, status
-            )
+            return await self._local_update_enrichment(tenant_id, product_id, enrichment, trace_id, status)
 
     async def _local_update_enrichment(
         self: BrainClientBase,
@@ -143,7 +161,7 @@ class CommerceMixin:
                     )
                     return True
         except Exception as e:
-            logger.warning(f"Local update_enrichment failed: {e}")
+            logger.warning("Local update_enrichment failed: %s", e)
         return False
 
     async def upsert_dealer_product(
@@ -202,18 +220,17 @@ class CommerceMixin:
                     "status": status,
                     "trace_id": trace_id or "",
                 },
-                provenance=["sdk:brain_client:upsert_dealer"],
+                provenance=["sdk:brain_client:upsert_dealer_product"],
             )
 
             pb2 = get_context_unit_pb2()
             req = unit.to_protobuf(pb2)
-            response_pb = await self._commerce_stub.UpsertDealerProduct(req)
+            metadata = self._get_metadata()  # Include token in metadata
+            response_pb = await self._commerce_stub.UpsertDealerProduct(req, metadata=metadata)
             result = ContextUnit.from_protobuf(response_pb)
 
             if not result.payload.get("success"):
-                raise RuntimeError(
-                    f"UpsertDealerProduct failed: {result.payload.get('message')}"
-                )
+                raise RuntimeError(f"UpsertDealerProduct failed: {result.payload.get('message')}")
 
             return result.payload.get("product_id", 0)
         else:
@@ -267,7 +284,7 @@ class CommerceMixin:
                         status=status,
                     )
         except Exception as e:
-            logger.warning(f"Local upsert_dealer_product failed: {e}")
+            logger.warning("Local upsert_dealer_product failed: %s", e)
         # Return hash-based ID as fallback
         return hash(f"{dealer_code}:{sku}") % (2**31)
 

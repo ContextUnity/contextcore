@@ -54,8 +54,9 @@ class KnowledgeMixin:
         if self.mode == "grpc":
             pb2 = get_context_unit_pb2()
             req = unit.to_protobuf(pb2)
+            metadata = self._get_metadata()  # Include token in metadata
             results = []
-            async for response_pb in self._stub.Search(req):
+            async for response_pb in self._stub.Search(req, metadata=metadata):
                 result = ContextUnit.from_protobuf(response_pb)
                 results.append(
                     SearchResult(
@@ -113,7 +114,7 @@ class KnowledgeMixin:
                     for r in raw_results
                 ]
         except Exception as e:
-            logger.warning(f"Local search failed: {e}")
+            logger.warning("Local search failed: %s", e)
         return []
 
     async def upsert(
@@ -122,6 +123,7 @@ class KnowledgeMixin:
         content: str,
         source_type: str,
         metadata: dict[str, Any] | None = None,
+        doc_id: str | None = None,
     ) -> str:
         """Upsert content to Brain.
 
@@ -130,24 +132,34 @@ class KnowledgeMixin:
             content: Content to store.
             source_type: Type of source (e.g., "document", "news_fact").
             metadata: Additional metadata.
+            doc_id: Optional deterministic document ID for true upsert
+                    (overwrites existing node with same ID via ON CONFLICT).
+                    If None, a random UUID is generated.
 
         Returns:
             The ID of the stored item.
         """
-        unit = ContextUnit(
-            payload={
+        from uuid import UUID as _UUID
+
+        unit_kwargs: dict[str, Any] = {
+            "payload": {
                 "tenant_id": tenant_id,
                 "content": content,
                 "source_type": source_type,
                 "metadata": metadata or {},
             },
-            provenance=["sdk:brain_client:upsert"],
-        )
+            "provenance": ["sdk:brain_client:upsert"],
+        }
+        if doc_id:
+            unit_kwargs["unit_id"] = _UUID(doc_id) if isinstance(doc_id, str) else doc_id
+
+        unit = ContextUnit(**unit_kwargs)
 
         if self.mode == "grpc":
             pb2 = get_context_unit_pb2()
             req = unit.to_protobuf(pb2)
-            response_pb = await self._stub.Upsert(req)
+            metadata = self._get_metadata()  # Include token in metadata
+            response_pb = await self._stub.Upsert(req, metadata=metadata)
             result = ContextUnit.from_protobuf(response_pb)
             return result.payload.get("id", "")
         else:
@@ -191,7 +203,7 @@ class KnowledgeMixin:
                 )
                 return result.id if hasattr(result, "id") else str(result)
         except Exception as e:
-            logger.warning(f"Local upsert failed: {e}")
+            logger.warning("Local upsert failed: %s", e)
         return ""
 
     async def create_kg_relation(
@@ -202,6 +214,8 @@ class KnowledgeMixin:
         relation: str,
         target_type: str,
         target_id: str,
+        trace_id: "str | None" = None,
+        parent_provenance: "List[str] | None" = None,
     ) -> bool:
         """Create a Knowledge Graph relation.
 
@@ -212,10 +226,17 @@ class KnowledgeMixin:
             relation: Relation type (e.g., 'MADE_BY', 'BELONGS_TO').
             target_type: Type of target node (e.g., 'brand', 'category').
             target_id: Target node ID.
+            trace_id: Optional trace ID for distributed tracing.
+            parent_provenance: Optional provenance chain from parent.
 
         Returns:
             True if successful.
         """
+        from uuid import UUID
+
+        provenance = list(parent_provenance) if parent_provenance else []
+        provenance.append("sdk:brain_client:create_kg")
+
         unit = ContextUnit(
             payload={
                 "tenant_id": tenant_id,
@@ -225,13 +246,15 @@ class KnowledgeMixin:
                 "target_type": target_type,
                 "target_id": target_id,
             },
-            provenance=["sdk:brain_client:create_kg"],
+            trace_id=UUID(trace_id) if trace_id else None,
+            provenance=provenance,
         )
 
         if self.mode == "grpc":
             pb2 = get_context_unit_pb2()
             req = unit.to_protobuf(pb2)
-            response_pb = await self._stub.CreateKGRelation(req)
+            metadata = self._get_metadata()  # Include token in metadata
+            response_pb = await self._stub.CreateKGRelation(req, metadata=metadata)
             result = ContextUnit.from_protobuf(response_pb)
             return result.payload.get("success", False)
         else:
@@ -273,8 +296,93 @@ class KnowledgeMixin:
                 )
                 return True
         except Exception as e:
-            logger.warning(f"Local create_kg_relation failed: {e}")
+            logger.warning("Local create_kg_relation failed: %s", e)
         return False
+
+    async def graph_search(
+        self: BrainClientBase,
+        tenant_id: str,
+        entrypoint_ids: "List[str]",
+        max_hops: int = 2,
+        allowed_relations: "List[str] | None" = None,
+        max_results: int = 200,
+        trace_id: "str | None" = None,
+        parent_provenance: "List[str] | None" = None,
+    ) -> dict[str, Any]:
+        """Structural graph traversal.
+
+        Walks knowledge graph edges starting from entrypoint_ids up to max_hops.
+        Returns discovered nodes with attributes and traversed edges with weights.
+
+        Args:
+            tenant_id: Tenant identifier.
+            entrypoint_ids: Starting node IDs for traversal.
+            max_hops: Maximum traversal depth (default 2, max 10).
+            allowed_relations: Optional filter — only traverse these edge types.
+            max_results: Maximum edges to return (default 200).
+            trace_id: Optional trace ID for distributed tracing.
+            parent_provenance: Optional provenance chain from parent.
+
+        Returns:
+            Dict with 'nodes' (list of node dicts) and 'edges' (list of edge dicts).
+        """
+        from uuid import UUID
+
+        provenance = list(parent_provenance) if parent_provenance else []
+        provenance.append("sdk:brain_client:graph_search")
+
+        unit = ContextUnit(
+            payload={
+                "tenant_id": tenant_id,
+                "entrypoint_ids": entrypoint_ids,
+                "max_hops": max_hops,
+                "allowed_relations": allowed_relations or [],
+                "max_results": max_results,
+            },
+            trace_id=UUID(trace_id) if trace_id else None,
+            provenance=provenance,
+        )
+
+        if self.mode == "grpc":
+            pb2 = get_context_unit_pb2()
+            req = unit.to_protobuf(pb2)
+            metadata = self._get_metadata()
+            response_pb = await self._stub.GraphSearch(req, metadata=metadata)
+            result = ContextUnit.from_protobuf(response_pb)
+            return {
+                "nodes": result.payload.get("nodes", []),
+                "edges": result.payload.get("edges", []),
+            }
+        else:
+            return await self._local_graph_search(
+                tenant_id=tenant_id,
+                entrypoint_ids=entrypoint_ids,
+                max_hops=max_hops,
+                allowed_relations=allowed_relations,
+                max_results=max_results,
+            )
+
+    async def _local_graph_search(
+        self: BrainClientBase,
+        tenant_id: str,
+        entrypoint_ids: "List[str]",
+        max_hops: int,
+        allowed_relations: "List[str] | None",
+        max_results: int,
+    ) -> dict[str, Any]:
+        """Local mode implementation of graph search."""
+        try:
+            if hasattr(self._service, "storage"):
+                return await self._service.storage.graph_search(
+                    tenant_id=tenant_id,
+                    entrypoint_ids=entrypoint_ids,
+                    max_hops=max_hops,
+                    allowed_relations=allowed_relations,
+                    max_results=max_results,
+                )
+        except Exception as e:
+            logger.warning("Local graph_search failed: %s", e)
+        return {"nodes": [], "edges": []}
 
 
 __all__ = ["KnowledgeMixin"]

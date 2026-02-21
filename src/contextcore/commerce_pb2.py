@@ -4,32 +4,34 @@
 # source: commerce.proto
 # Protobuf Python Version: 6.31.1
 """Generated protocol buffer code."""
-
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
-
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC, 6, 31, 1, "", "commerce.proto"
+    _runtime_version.Domain.PUBLIC,
+    6,
+    31,
+    1,
+    '',
+    'commerce.proto'
 )
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
 
 
+from . import context_unit_pb2 as context__unit__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b"\n\x0e\x63ommerce.proto\x12\x0f\x63ontextcommerce\x1a\x12\x63ontext_unit.proto2\xd1\x04\n\x0f\x43ommerceService\x12@\n\nGetProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\rUpdateProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bGetProducts\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12I\n\x13UpsertDealerProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x46\n\x10UpdateEnrichment\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0eTriggerHarvest\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12O\n\x17GetPendingVerifications\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12H\n\x12SubmitVerification\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnitb\x06proto3"
-)
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0e\x63ommerce.proto\x12\x0f\x63ontextcommerce\x1a\x12\x63ontext_unit.proto2\xd1\x04\n\x0f\x43ommerceService\x12@\n\nGetProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\rUpdateProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bGetProducts\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12I\n\x13UpsertDealerProduct\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x46\n\x10UpdateEnrichment\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x44\n\x0eTriggerHarvest\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12O\n\x17GetPendingVerifications\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12H\n\x12SubmitVerification\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnitb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "commerce_pb2", _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'commerce_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-    DESCRIPTOR._loaded_options = None
-    _globals["_COMMERCESERVICE"]._serialized_start = 56
-    _globals["_COMMERCESERVICE"]._serialized_end = 649
+  DESCRIPTOR._loaded_options = None
+  _globals['_COMMERCESERVICE']._serialized_start=56
+  _globals['_COMMERCESERVICE']._serialized_end=649
 # @@protoc_insertion_point(module_scope)

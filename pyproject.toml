@@ -1,23 +1,22 @@
 [project]
 name = "contextcore"
-version = "0.2.1"
-description = "The Kernel of ContextUnity — shared types, gRPC contracts, and security tokens"
+version = "0.5.1"
+description = "The Kernel of ContextUnity — shared type system, gRPC contracts, ContextUnit protocol, and security tokens for the entire service mesh"
 readme = "README.md"
 requires-python = ">=3.13"
 authors = [
     { name = "Pylypchuk Oleksii", email = "oleksii.pylypchuk@tuta.com" },
 ]
-license = { file = "LICENSE.md" }
+license = "Apache-2.0"
+license-files = ["LICENSE.md"]
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.13",
     "Typing :: Typed",
 ]
 dependencies = [
     "grpcio>=1.62.0",
-    "pre-commit>=4.5.1",
     "protobuf>=4.25.0",
     "pydantic>=2.6.0",
 ]

@@ -57,7 +57,8 @@ class NewsMixin:
         if self.mode == "grpc":
             pb2 = get_context_unit_pb2()
             req = unit.to_protobuf(pb2)
-            response_pb = await self._stub.UpsertNewsItem(req)
+            metadata = self._get_metadata()  # Include token in metadata
+            response_pb = await self._stub.UpsertNewsItem(req, metadata=metadata)
             result = ContextUnit.from_protobuf(response_pb)
             return result.payload.get("id", "")
         else:
@@ -107,7 +108,8 @@ class NewsMixin:
         if self.mode == "grpc":
             pb2 = get_context_unit_pb2()
             req = unit.to_protobuf(pb2)
-            response_pb = await self._stub.UpsertNewsPost(req)
+            metadata = self._get_metadata()  # Include token in metadata
+            response_pb = await self._stub.UpsertNewsPost(req, metadata=metadata)
             result = ContextUnit.from_protobuf(response_pb)
             return result.payload.get("id", "")
         else:
@@ -145,8 +147,9 @@ class NewsMixin:
         if self.mode == "grpc":
             pb2 = get_context_unit_pb2()
             req = unit.to_protobuf(pb2)
+            metadata = self._get_metadata()  # Include token in metadata
             items = []
-            async for response_pb in self._stub.GetNewsItems(req):
+            async for response_pb in self._stub.GetNewsItems(req, metadata=metadata):
                 result = ContextUnit.from_protobuf(response_pb)
                 items.append(result.payload)
                 if len(items) >= limit:
@@ -181,7 +184,8 @@ class NewsMixin:
         if self.mode == "grpc":
             pb2 = get_context_unit_pb2()
             req = unit.to_protobuf(pb2)
-            response_pb = await self._stub.CheckNewsPostExists(req)
+            metadata = self._get_metadata()  # Include token in metadata
+            response_pb = await self._stub.CheckNewsPostExists(req, metadata=metadata)
             result = ContextUnit.from_protobuf(response_pb)
             return result.payload.get("exists", False)
         else:

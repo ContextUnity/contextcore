@@ -1,30 +1,138 @@
+# Proto modules (gRPC)
+# 1. Well-known types MUST load first (protobuf 5+ requires explicit dep loading)
+# 2. context_unit_pb2 next (all other protos depend on it)
+# 3. Service protos last
+from google.protobuf import struct_pb2 as _struct_pb2  # isort:skip  # noqa: F401
+from google.protobuf import timestamp_pb2 as _timestamp_pb2  # isort:skip  # noqa: F401
+from . import context_unit_pb2  # isort:skip  # noqa: F401
+from . import (  # isort:skip
+    admin_pb2,
+    admin_pb2_grpc,
+    brain_pb2,
+    brain_pb2_grpc,
+    commerce_pb2,
+    commerce_pb2_grpc,
+    router_pb2,
+    router_pb2_grpc,
+    shield_pb2,
+    shield_pb2_grpc,
+    worker_pb2,
+    worker_pb2_grpc,
+    zero_pb2,
+    zero_pb2_grpc,
+)
+from .config import (
+    LogLevel,
+    SharedConfig,
+    SharedSecurityConfig,
+    SigningBackendType,
+    load_shared_config_from_env,
+)
+
+# Proto enums re-exported for convenience
+from .context_unit_pb2 import Modality
+from .discovery import (
+    ServiceInfo,
+    deregister_service,
+    discover_endpoints,
+    discover_services,
+    get_registered_projects,
+    register_project,
+    register_service,
+    verify_project_owner,
+)
+from .exceptions import (
+    ConfigurationError,
+    ConnectorError,
+    ContextUnityError,
+    DatabaseConnectionError,
+    ErrorRegistry,
+    GraphBuilderError,
+    IngestionError,
+    IntentDetectionError,
+    ModelError,
+    ProviderError,
+    RetrievalError,
+    SecurityError,
+    StorageError,
+    TransformerError,
+    error_registry,
+    get_grpc_status_code,
+    grpc_error_handler,
+    grpc_stream_error_handler,
+    register_error,
+)
+from .grpc_utils import (
+    create_channel,
+    create_channel_sync,
+    create_server_credentials,
+    tls_enabled,
+)
 from .logging import (
-    setup_logging,
-    get_context_unit_logger,
-    safe_preview,
-    redact_secrets,
-    safe_log_value,
     ContextUnitFormatter,
     ContextUnitLoggerAdapter,
+    get_context_unit_logger,
+    redact_secrets,
+    safe_log_value,
+    safe_preview,
+    setup_logging,
 )
-from .config import load_shared_config_from_env, SharedConfig, LogLevel
+from .permissions import (
+    DEFAULT_TOOL_POLICIES,
+    NAMESPACE_PROFILES,
+    PERMISSION_INHERITANCE,
+    PROJECT_PROFILES,
+    Permissions,
+    ToolPolicy,
+    ToolRisk,
+    ToolScope,
+    UserNamespace,
+    check_tool_scope,
+    expand_permissions,
+    extract_tool_names,
+    has_graph_access,
+    has_registration_access,
+    has_tool_access,
+    has_tool_scope_access,
+)
 from .sdk import (
-    ContextUnit,
     BrainClient,
-    WorkerClient,
-    SecurityScopes,
+    ContextUnit,
     CotStep,
-    UnitMetrics,
     SearchResult,
+    SecurityScopes,
+    UnitMetrics,
+    WorkerClient,
+)
+from .security import (
+    GuardResult,
+    SecurityConfig,
+    SecurityGuard,
+    ServicePermissionInterceptor,
+    TokenValidationInterceptor,
+    check_permission,
+    get_security_guard,
+    get_security_interceptors,
+    reset_security_guard,
+    shield_status,
+)
+from .signing import (
+    SignedPayload,
+    SigningBackend,
+    UnsignedBackend,
+    get_signing_backend,
+)
+from .token_utils import (
+    TokenMetadataInterceptor,
+    create_grpc_metadata_with_token,
+    create_http_headers_with_token,
+    extract_token_from_grpc_metadata,
+    extract_token_from_http_request,
+    parse_token_string,
+    reset_default_backend,
+    serialize_token,
 )
 from .tokens import ContextToken, TokenBuilder
-
-# Proto modules (gRPC)
-from . import context_unit_pb2
-from . import brain_pb2, brain_pb2_grpc
-from . import commerce_pb2, commerce_pb2_grpc
-from . import worker_pb2, worker_pb2_grpc
-from . import router_pb2, router_pb2_grpc
 
 __all__ = [
     # Logging
@@ -38,6 +146,8 @@ __all__ = [
     # Config
     "load_shared_config_from_env",
     "SharedConfig",
+    "SharedSecurityConfig",
+    "SigningBackendType",
     "LogLevel",
     # SDK
     "ContextUnit",
@@ -47,17 +157,101 @@ __all__ = [
     "CotStep",
     "UnitMetrics",
     "SearchResult",
+    # Exceptions
+    "ContextUnityError",
+    "ConfigurationError",
+    "RetrievalError",
+    "IntentDetectionError",
+    "ProviderError",
+    "SecurityError",
+    "ConnectorError",
+    "ModelError",
+    "IngestionError",
+    "GraphBuilderError",
+    "TransformerError",
+    "StorageError",
+    "DatabaseConnectionError",
+    "ErrorRegistry",
+    "error_registry",
+    "register_error",
+    "get_grpc_status_code",
+    "grpc_error_handler",
+    "grpc_stream_error_handler",
     # Tokens
     "ContextToken",
     "TokenBuilder",
-    # Proto modules (gRPC)
+    # Permissions
+    "Permissions",
+    "UserNamespace",
+    "ToolScope",
+    "ToolRisk",
+    "ToolPolicy",
+    "PERMISSION_INHERITANCE",
+    "NAMESPACE_PROFILES",
+    "PROJECT_PROFILES",
+    "DEFAULT_TOOL_POLICIES",
+    "expand_permissions",
+    "has_tool_access",
+    "has_graph_access",
+    "extract_tool_names",
+    "has_tool_scope_access",
+    "has_registration_access",
+    "check_tool_scope",
+    # Token utilities
+    "extract_token_from_grpc_metadata",
+    "create_grpc_metadata_with_token",
+    "extract_token_from_http_request",
+    "create_http_headers_with_token",
+    "TokenMetadataInterceptor",
+    "serialize_token",
+    "parse_token_string",
+    "reset_default_backend",
+    # Signing backends
+    "SigningBackend",
+    "SignedPayload",
+    "UnsignedBackend",
+    "get_signing_backend",
+    # Service discovery
+    "ServiceInfo",
+    "register_service",
+    "deregister_service",
+    "discover_services",
+    "discover_endpoints",
+    "register_project",
+    "verify_project_owner",
+    "get_registered_projects",
+    # Security integration
+    "SecurityConfig",
+    "SecurityGuard",
+    "GuardResult",
+    "check_permission",
+    "get_security_guard",
+    "reset_security_guard",
+    "ServicePermissionInterceptor",
+    "TokenValidationInterceptor",
+    "get_security_interceptors",
+    "shield_status",
+    # Proto modules (gRPC) — all 8 services
     "context_unit_pb2",
+    "admin_pb2",
+    "admin_pb2_grpc",
     "brain_pb2",
     "brain_pb2_grpc",
     "commerce_pb2",
     "commerce_pb2_grpc",
-    "worker_pb2",
-    "worker_pb2_grpc",
     "router_pb2",
     "router_pb2_grpc",
+    "shield_pb2",
+    "shield_pb2_grpc",
+    "worker_pb2",
+    "worker_pb2_grpc",
+    "zero_pb2",
+    "zero_pb2_grpc",
+    # gRPC TLS utilities
+    "tls_enabled",
+    "create_channel",
+    "create_channel_sync",
+    "create_server_credentials",
+    # Proto enums
+    "Modality",
 ]

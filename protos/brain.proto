@@ -74,9 +74,35 @@ service BrainService {
     // Request payload: {user_id, tenant_id, session_id?, content, metadata?}
     rpc AddEpisode(contextcore.ContextUnit) returns (contextcore.ContextUnit);
 
+    // Get recent episodes for a user
+    // Request payload: {tenant_id, user_id, limit?}
+    // Response payload: {id, content, metadata, created_at}
+    rpc GetRecentEpisodes(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+
     // Upsert user fact
-    // Request payload: {user_id, key, value, confidence?, source_id?}
+    // Request payload: {user_id, tenant_id, key, value, confidence?, source_id?}
     rpc UpsertFact(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Get all facts for a user
+    // Request payload: {tenant_id, user_id}
+    // Response payload: {fact_key, fact_value, confidence, updated_at}
+    rpc GetUserFacts(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+
+    // =========================================
+    // Agent Traces
+    // =========================================
+
+    // Log an agent execution trace
+    // Request payload: {tenant_id, agent_id, session_id?, graph_name?,
+    //   tool_calls?, token_usage?, timing_ms?, security_flags?, metadata?}
+    // Response payload: {id, success}
+    rpc LogTrace(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Get traces (admin/observability)
+    // Request payload: {tenant_id, agent_id?, session_id?, limit?, since?}
+    // Response payload: {id, agent_id, graph_name, tool_calls, token_usage,
+    //   timing_ms, security_flags, metadata, created_at}
+    rpc GetTraces(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
 
     // =========================================
     // Taxonomy Operations

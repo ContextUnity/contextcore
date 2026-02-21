@@ -4,32 +4,34 @@
 # source: router.proto
 # Protobuf Python Version: 6.31.1
 """Generated protocol buffer code."""
-
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
-
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC, 6, 31, 1, "", "router.proto"
+    _runtime_version.Domain.PUBLIC,
+    6,
+    31,
+    1,
+    '',
+    'router.proto'
 )
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
 
 
+from . import context_unit_pb2 as context__unit__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b"\n\x0crouter.proto\x12\rcontextrouter\x1a\x12\x63ontext_unit.proto2\x98\x01\n\rRouterService\x12\x42\n\x0c\x45xecuteAgent\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bStreamAgent\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x62\x06proto3"
-)
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0crouter.proto\x12\rcontextrouter\x1a\x12\x63ontext_unit.proto2\x85\x04\n\rRouterService\x12\x42\n\x0c\x45xecuteAgent\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bStreamAgent\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12G\n\x11\x45xecuteDispatcher\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12H\n\x10StreamDispatcher\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x43\n\rRegisterTools\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x45\n\x0f\x44\x65registerTools\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12L\n\x12ToolExecutorStream\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit(\x01\x30\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "router_pb2", _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'router_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-    DESCRIPTOR._loaded_options = None
-    _globals["_ROUTERSERVICE"]._serialized_start = 52
-    _globals["_ROUTERSERVICE"]._serialized_end = 204
+  DESCRIPTOR._loaded_options = None
+  _globals['_ROUTERSERVICE']._serialized_start=52
+  _globals['_ROUTERSERVICE']._serialized_end=569
 # @@protoc_insertion_point(module_scope)
