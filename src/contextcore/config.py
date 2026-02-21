@@ -30,14 +30,16 @@ class LogLevel(str, Enum):
 
 
 class SigningBackendType(str, Enum):
-    """Supported signing backends (provided by contextshield).
+    """Supported signing backends.
 
-    - ED25519: Asymmetric local keys (production)
-    - KMS: Cloud KMS/HSM (enterprise)
+    - ED25519: Asymmetric local keys (ContextShield Pro)
+    - KMS: Cloud KMS/HSM (ContextShield Enterprise)
+    - HMAC: Symmetric shared secret (ContextUnity Basic - OpenSource)
     """
 
     ED25519 = "ed25519"
     KMS = "kms"
+    HMAC = "hmac"
 
 
 class SharedSecurityConfig(BaseModel):
@@ -99,6 +101,10 @@ class SharedSecurityConfig(BaseModel):
     kms_key_resource: str = Field(
         default="",
         description="Cloud KMS key resource name",
+    )
+    shared_secret: str = Field(
+        default="",
+        description="Symmetric shared secret for HMAC backend (open source mode)",
     )
 
     # Token defaults
@@ -251,6 +257,7 @@ def load_shared_config_from_env() -> SharedConfig:
         private_key_path=os.getenv("SIGNING_PRIVATE_KEY_PATH", ""),
         public_key_path=os.getenv("SIGNING_PUBLIC_KEY_PATH", ""),
         kms_key_resource=os.getenv("KMS_KEY_RESOURCE", ""),
+        shared_secret=os.getenv("SIGNING_SHARED_SECRET", ""),
         token_ttl_seconds=int(os.getenv("TOKEN_TTL_SECONDS", "3600")),
         token_issuer=os.getenv("TOKEN_ISSUER", ""),
     )

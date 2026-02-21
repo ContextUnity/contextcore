@@ -390,24 +390,16 @@ def parse_token_string(
             logger.warning("Token signature verification failed with secure backend. Rejecting token.")
             return None
 
+    # If secure backend is configured, we MUST reject all legacy/unsigned tokens.
+    if is_secure:
+        logger.warning("Unsigned or legacy token rejected in secure mode.")
+        return None
+
     # Try bare base64 JSON (legacy unsigned)
     raw_token = token_str.rstrip(".")
     try:
         decoded = base64.b64decode(raw_token)
         data = json.loads(decoded)
-        if is_secure:
-            # Unsigned token with secure backend → accept but strip tenants
-            logger.warning("Unsigned token accepted in secure mode. Token will have no tenant access.")
-            return ContextToken(
-                token_id=data["token_id"],
-                permissions=tuple(data.get("permissions", [])),
-                allowed_tenants=(),  # Stripped for safety
-                exp_unix=data.get("exp_unix"),
-                revocation_id=data.get("revocation_id"),
-                user_id=data.get("user_id"),
-                agent_id=data.get("agent_id"),
-                user_namespace=data.get("user_namespace", "default"),
-            )
         return ContextToken(
             token_id=data["token_id"],
             permissions=tuple(data.get("permissions", [])),

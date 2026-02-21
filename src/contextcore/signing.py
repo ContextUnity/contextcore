@@ -22,6 +22,8 @@ Wire format:
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
@@ -158,6 +160,70 @@ class UnsignedBackend:
 
 
 # =========================================
+# HMAC mode (basic open source security)
+# =========================================
+
+
+class HmacBackend:
+    """Symmetric HMAC-SHA256 signing backend for ContextUnity Basic (OpenSource).
+
+    Requires a shared secret known to all services (Signers and Verifiers).
+    """
+
+    def __init__(self, shared_secret: str, kid: str = "hmac-001"):
+        if not shared_secret:
+            raise ValueError("HmacBackend requires a shared_secret")
+        self._secret = shared_secret.encode()
+        self._kid = kid
+
+    @property
+    def algorithm(self) -> str:
+        return "hmac"
+
+    @property
+    def active_kid(self) -> str:
+        return self._kid
+
+    def sign(self, payload: bytes) -> SignedPayload:
+        payload_b64 = base64.b64encode(payload).decode()
+        sig = hmac.new(self._secret, payload_b64.encode(), hashlib.sha256).digest()
+        sig_b64 = base64.b64encode(sig).decode()
+        return SignedPayload(
+            payload=payload_b64,
+            signature=sig_b64,
+            kid=self._kid,
+            algorithm=self.algorithm,
+        )
+
+    def verify(self, token_str: str) -> bytes | None:
+        if not token_str or not token_str.strip():
+            return None
+
+        parts = token_str.strip().split(".")
+
+        if len(parts) == 3:
+            _kid, payload_b64, sig_b64 = parts
+        elif len(parts) == 2:
+            payload_b64, sig_b64 = parts
+        else:
+            return None
+
+        if not sig_b64:
+            return None
+
+        try:
+            expected_sig = hmac.new(self._secret, payload_b64.encode(), hashlib.sha256).digest()
+            actual_sig = base64.b64decode(sig_b64)
+            if not hmac.compare_digest(expected_sig, actual_sig):
+                logger.warning("HMAC signature verification failed")
+                return None
+            return base64.b64decode(payload_b64)
+        except Exception:
+            logger.warning("HMAC payload base64 decode failed")
+            return None
+
+
+# =========================================
 # Factory
 # =========================================
 
@@ -181,23 +247,36 @@ def get_signing_backend(
     if config is None or not config.enabled:
         return UnsignedBackend()
 
+    # Check for basic/open-source HMAC mode built-into contextcore
+    backend_type = getattr(config.signing_backend, "value", str(config.signing_backend))
+    if backend_type == "hmac":
+        if not config.shared_secret:
+            error_msg = "HMAC backend enabled (SIGNING_BACKEND=hmac) but SIGNING_SHARED_SECRET is not set."
+            logger.critical(error_msg)
+            raise RuntimeError(error_msg)
+        return HmacBackend(shared_secret=config.shared_secret, kid=config.signing_key_id)
+
     # Try contextshield (Pro)
     try:
         from contextshield.signing import create_backend  # type: ignore[import-not-found]
 
         return create_backend(config)
     except ImportError:
-        logger.warning(
-            "Security is enabled but contextshield is not installed. "
-            "Running in UNSIGNED mode — tokens are NOT cryptographically signed. "
-            "Install contextshield for Ed25519/KMS signing."
+        error_msg = (
+            "CRITICAL: Security enforcement is ENABLED (SECURITY_ENABLED=true) but "
+            "the 'contextshield' package is not installed. "
+            "Refusing to silently downgrade to UNSIGNED mode. "
+            "You must install contextshield to use Ed25519/KMS security, or "
+            "set SECURITY_ENABLED=false for dev/demo mode."
         )
-        return UnsignedBackend()
+        logger.critical(error_msg)
+        raise RuntimeError(error_msg)
 
 
 __all__ = [
     "SignedPayload",
     "SigningBackend",
     "UnsignedBackend",
+    "HmacBackend",
     "get_signing_backend",
 ]

@@ -47,6 +47,7 @@ from .interceptors import (
     _should_skip,
     check_permission,
 )
+from .utils import validate_safe_url
 
 # ── Singleton factory ────────────────────────────────────────────
 
@@ -135,4 +136,6 @@ __all__ = [
     "get_security_interceptors",
     # Status
     "shield_status",
+    # Utils
+    "validate_safe_url",
 ]

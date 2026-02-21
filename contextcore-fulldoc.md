@@ -280,6 +280,7 @@ Defines the `SigningBackend` protocol. Actual implementations are in `contextshi
 - `UnsignedBackend` — plaintext fallback (development)
 - `SignedPayload` — wire format dataclass
 - Production backends: Ed25519, Cloud KMS (via contextshield)
+- Open Source backend: HMAC-SHA256 (via contextcore `SIGNING_BACKEND=hmac` + `SIGNING_SHARED_SECRET`)
 
 ---
 
@@ -442,7 +443,7 @@ config = SharedConfig(
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `SECURITY_ENABLED` | bool | false | Enable token validation |
-| `SIGNING_BACKEND` | str | unsigned | `unsigned`, `ed25519`, or `kms` |
+| `SIGNING_BACKEND` | str | unsigned | `unsigned`, `hmac`, `ed25519`, or `kms` |
 | `TOKEN_TTL_SECONDS` | int | 3600 | Token time-to-live |
 | `READ_PERMISSION` | str | brain:read | Default read permission |
 | `WRITE_PERMISSION` | str | brain:write | Default write permission |
