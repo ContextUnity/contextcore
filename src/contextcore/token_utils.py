@@ -153,12 +153,12 @@ def extract_token_from_http_request(request) -> Optional[ContextToken]:
             if auth_header.startswith("Bearer "):
                 token_str = auth_header[7:].strip()
                 if token_str:
-                    return ContextToken(token_id=token_str, permissions=())
+                    return parse_token_string(token_str)
 
             # Check X-Context-Token header
             token_str = request.META.get(f"HTTP_{HTTP_TOKEN_HEADER.upper().replace('-', '_')}", "")
             if token_str:
-                return ContextToken(token_id=token_str, permissions=())
+                return parse_token_string(token_str)
 
         # Try FastAPI-style headers
         if hasattr(request, "headers"):
@@ -166,11 +166,11 @@ def extract_token_from_http_request(request) -> Optional[ContextToken]:
             if auth_header.startswith("Bearer "):
                 token_str = auth_header[7:].strip()
                 if token_str:
-                    return ContextToken(token_id=token_str, permissions=())
+                    return parse_token_string(token_str)
 
             token_str = request.headers.get(HTTP_TOKEN_HEADER.lower(), "")
             if token_str:
-                return ContextToken(token_id=token_str, permissions=())
+                return parse_token_string(token_str)
 
         # Check Django session
         if hasattr(request, "session"):

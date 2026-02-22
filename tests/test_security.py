@@ -425,3 +425,57 @@ class TestServicePermissionInterceptor:
         details = _make_handler_call_details("/test.Service/Search", [])
         result = await interceptor.intercept_service(_continuation, details)
         assert result == "handler"
+
+    @pytest.mark.asyncio
+    async def test_expired_token_denied(self):
+        """Token with exp_unix in the past → UNAUTHENTICATED."""
+        import time
+
+        interceptor = ServicePermissionInterceptor(
+            _TEST_RPC_MAP,
+            service_name="Test",
+            enforcement=EnforcementMode.ENFORCE,
+        )
+
+        # Create a token that expired 10 seconds ago
+        token = ContextToken(
+            token_id="expired",
+            permissions=(Permissions.BRAIN_READ,),
+            exp_unix=time.time() - 10,
+        )
+        metadata = _make_token_metadata(token)
+
+        async def _continuation(details):
+            return "handler"
+
+        details = _make_handler_call_details("/test.Service/Search", metadata)
+        result = await interceptor.intercept_service(_continuation, details)
+        # Should be denied — expired token
+        assert result is not None
+        assert result != "handler"
+
+    @pytest.mark.asyncio
+    async def test_valid_ttl_token_allowed(self):
+        """Token with exp_unix in the future → allowed."""
+        import time
+
+        interceptor = ServicePermissionInterceptor(
+            _TEST_RPC_MAP,
+            service_name="Test",
+            enforcement=EnforcementMode.ENFORCE,
+        )
+
+        # Create a token that expires in 1 hour
+        token = ContextToken(
+            token_id="valid-ttl",
+            permissions=(Permissions.BRAIN_READ,),
+            exp_unix=time.time() + 3600,
+        )
+        metadata = _make_token_metadata(token)
+
+        async def _continuation(details):
+            return "handler"
+
+        details = _make_handler_call_details("/test.Service/Search", metadata)
+        result = await interceptor.intercept_service(_continuation, details)
+        assert result == "handler"

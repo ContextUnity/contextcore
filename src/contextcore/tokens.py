@@ -247,4 +247,64 @@ class TokenBuilder:
             raise ValueError(f"Invalid operation: {operation}")
 
 
-__all__ = ["ContextToken", "TokenBuilder"]
+# ── Service Token Factory ────────────────────────────────────────
+
+import threading  # noqa: E402
+
+_service_token_cache: dict[str, ContextToken] = {}
+_service_token_lock = threading.Lock()
+
+_DEFAULT_SERVICE_TTL = 3600  # 1 hour
+
+
+def mint_service_token(
+    token_id: str,
+    *,
+    permissions: Iterable[str],
+    ttl_s: float = _DEFAULT_SERVICE_TTL,
+    allowed_tenants: Iterable[str] = (),
+) -> ContextToken:
+    """Mint or return a cached service-to-service ContextToken.
+
+    Centralized factory for infrastructure tokens (Worker→Brain,
+    Router→Brain, View→Brain, etc.). Handles caching and automatic
+    TTL refresh — callers just declare WHAT they need.
+
+    Thread-safe. Token is regenerated when it expires.
+
+    Args:
+        token_id: Stable identifier for audit (e.g. ``"worker-brain-service"``).
+        permissions: Required permission strings.
+        ttl_s: Token lifetime in seconds (default: 3600 = 1 hour).
+        allowed_tenants: Tenant restriction (empty = admin/all-tenant).
+
+    Returns:
+        A valid, non-expired ContextToken.
+
+    Usage::
+
+        from contextcore.tokens import mint_service_token
+        from contextcore.permissions import Permissions
+
+        token = mint_service_token(
+            "worker-brain-service",
+            permissions=(Permissions.BRAIN_READ, Permissions.BRAIN_WRITE),
+        )
+        client = BrainClient(host=host, mode="grpc", token=token)
+    """
+    with _service_token_lock:
+        cached = _service_token_cache.get(token_id)
+        if cached is not None and not cached.is_expired():
+            return cached
+
+        token = ContextToken(
+            token_id=token_id,
+            permissions=tuple(permissions),
+            allowed_tenants=tuple(allowed_tenants),
+            exp_unix=time.time() + float(ttl_s),
+        )
+        _service_token_cache[token_id] = token
+        return token
+
+
+__all__ = ["ContextToken", "TokenBuilder", "mint_service_token"]

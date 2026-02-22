@@ -138,8 +138,8 @@ async def register_service(
             try:
                 await r.delete(key)
                 logger.info("Deregistered service: %s", key)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to deregister service %s: %s", key, e)
             raise
         finally:
             await r.aclose()

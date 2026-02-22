@@ -225,6 +225,9 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
         elif token is None:
             deny_reason = "invalid token"
             deny_code = grpc.StatusCode.UNAUTHENTICATED
+        elif token.is_expired():
+            deny_reason = f"token expired (token '{token.token_id}')"
+            deny_code = grpc.StatusCode.UNAUTHENTICATED
         else:
             perm_denial = check_permission(token, required_permission)
             if perm_denial:

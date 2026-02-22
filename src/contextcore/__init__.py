@@ -101,6 +101,8 @@ from .sdk import (
     CotStep,
     SearchResult,
     SecurityScopes,
+    SmartBrainClient,
+    SmartWorkerClient,
     UnitMetrics,
     WorkerClient,
 )
@@ -132,7 +134,7 @@ from .token_utils import (
     reset_default_backend,
     serialize_token,
 )
-from .tokens import ContextToken, TokenBuilder
+from .tokens import ContextToken, TokenBuilder, mint_service_token
 
 __all__ = [
     # Logging
@@ -153,6 +155,8 @@ __all__ = [
     "ContextUnit",
     "BrainClient",
     "WorkerClient",
+    "SmartBrainClient",
+    "SmartWorkerClient",
     "SecurityScopes",
     "CotStep",
     "UnitMetrics",
@@ -180,6 +184,7 @@ __all__ = [
     # Tokens
     "ContextToken",
     "TokenBuilder",
+    "mint_service_token",
     # Permissions
     "Permissions",
     "UserNamespace",
