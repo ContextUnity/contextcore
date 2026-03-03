@@ -26,6 +26,7 @@ from .config import (
     SharedConfig,
     SharedSecurityConfig,
     SigningBackendType,
+    get_core_config,
     load_shared_config_from_env,
 )
 
@@ -39,6 +40,7 @@ from .discovery import (
     get_registered_projects,
     register_project,
     register_service,
+    resolve_service_endpoint,
     verify_project_owner,
 )
 from .exceptions import (
@@ -63,9 +65,12 @@ from .exceptions import (
     register_error,
 )
 from .grpc_utils import (
+    bind_server_port,
     create_channel,
     create_channel_sync,
     create_server_credentials,
+    graceful_shutdown,
+    start_grpc_server,
     tls_enabled,
 )
 from .logging import (
@@ -99,6 +104,7 @@ from .sdk import (
     BrainClient,
     ContextUnit,
     CotStep,
+    RouterClient,
     SearchResult,
     SecurityScopes,
     SmartBrainClient,
@@ -134,7 +140,7 @@ from .token_utils import (
     reset_default_backend,
     serialize_token,
 )
-from .tokens import ContextToken, TokenBuilder, mint_service_token
+from .tokens import ContextToken, TokenBuilder, get_brain_service_token, mint_service_token
 
 __all__ = [
     # Logging
@@ -147,6 +153,7 @@ __all__ = [
     "ContextUnitLoggerAdapter",
     # Config
     "load_shared_config_from_env",
+    "get_core_config",
     "SharedConfig",
     "SharedSecurityConfig",
     "SigningBackendType",
@@ -154,6 +161,7 @@ __all__ = [
     # SDK
     "ContextUnit",
     "BrainClient",
+    "RouterClient",
     "WorkerClient",
     "SmartBrainClient",
     "SmartWorkerClient",
@@ -222,6 +230,7 @@ __all__ = [
     "deregister_service",
     "discover_services",
     "discover_endpoints",
+    "resolve_service_endpoint",
     "register_project",
     "verify_project_owner",
     "get_registered_projects",
@@ -257,6 +266,10 @@ __all__ = [
     "create_channel",
     "create_channel_sync",
     "create_server_credentials",
+    "bind_server_port",
+    "graceful_shutdown",
+    "start_grpc_server",
+    "get_brain_service_token",
     # Proto enums
     "Modality",
 ]

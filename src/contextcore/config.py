@@ -148,6 +148,12 @@ class SharedConfig(BaseModel):
         description="Use JSON log format (default: plain text)",
     )
 
+    # gRPC options
+    grpc_reuse_port: bool = Field(
+        default=False,
+        description="Enable SO_REUSEPORT for gRPC server (default False for dev, True for prod)",
+    )
+
     # Redis (for shared memory, caching, etc.)
     redis_url: Optional[str] = Field(
         default=None,
@@ -178,6 +184,22 @@ class SharedConfig(BaseModel):
     tenant_id: Optional[str] = Field(
         default=None,
         description="Default tenant ID for multi-tenant deployments",
+    )
+
+    # Service discovery (Redis registration)
+    grpc_host: str = Field(
+        default="localhost",
+        description="Advertised gRPC host for service discovery (e.g., 'localhost', '0.0.0.0', 'brain.prod.local')",
+    )
+
+    # Service endpoints (resolved via env → Redis discovery → defaults)
+    router_url: str = Field(
+        default="localhost:50051",
+        description="ContextRouter gRPC endpoint",
+    )
+    brain_url: str = Field(
+        default="localhost:50051",
+        description="ContextBrain gRPC endpoint",
     )
 
     # Security — unified config, replaces per-service SecurityConfig
@@ -239,6 +261,7 @@ def load_shared_config_from_env() -> SharedConfig:
     - KMS_KEY_RESOURCE: Cloud KMS key resource
     - TOKEN_TTL_SECONDS: Default token TTL
     - TOKEN_ISSUER: Token issuer
+    - GRPC_REUSE_PORT: Enable SO_REUSEPORT (true/false)
 
     Returns:
         SharedConfig instance with values from environment or defaults.
@@ -265,14 +288,34 @@ def load_shared_config_from_env() -> SharedConfig:
     return SharedConfig(
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         log_json=os.getenv("LOG_JSON", "false").lower() in ("true", "1", "yes"),
+        grpc_reuse_port=os.getenv("GRPC_REUSE_PORT", "false").lower() in ("true", "1", "yes", "on"),
         redis_url=os.getenv("REDIS_URL"),
         otel_enabled=os.getenv("OTEL_ENABLED", "false").lower() in ("true", "1", "yes", "on"),
         otel_endpoint=os.getenv("OTEL_ENDPOINT"),
         service_name=os.getenv("SERVICE_NAME"),
         service_version=os.getenv("SERVICE_VERSION"),
         tenant_id=os.getenv("TENANT_ID"),
+        grpc_host=os.getenv("GRPC_HOST", "localhost"),
+        router_url=os.getenv("CONTEXT_ROUTER_URL", "localhost:50051"),
+        brain_url=os.getenv("CONTEXT_BRAIN_URL", "localhost:50051"),
         security=security,
     )
+
+
+# Singleton cached config
+_core_config: SharedConfig | None = None
+
+
+def get_core_config() -> SharedConfig:
+    """Get or create the singleton SharedConfig.
+
+    Loads from environment on first call, caches for subsequent calls.
+    SDK clients (RouterClient, BrainClient) use this to resolve endpoints.
+    """
+    global _core_config
+    if _core_config is None:
+        _core_config = load_shared_config_from_env()
+    return _core_config
 
 
 __all__ = [
@@ -281,4 +324,5 @@ __all__ = [
     "SigningBackendType",
     "LogLevel",
     "load_shared_config_from_env",
+    "get_core_config",
 ]

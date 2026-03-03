@@ -170,7 +170,7 @@ if token.can_read(unit.security):
 | `revocation_id` | str? | For instant revocation via RevocationStore |
 
 > **Token is SPOT (Single Point of Truth)**: `user_id` and `tenant_id` are
-> derived exclusively from the token. Request payloads must NOT carry identity
+> derived exclusively from the unified `ContextToken` across all ContextUnity services (`commerce`, `router`, `worker`, `view`, `zero`). Request payloads must NOT carry identity
 > fields — services extract them from `ContextToken.user_id` and
 > `ContextToken.allowed_tenants[0]`.
 
@@ -555,4 +555,3 @@ uv run pytest --cov=contextcore --cov-report=html
 
 
 ---
-

@@ -63,7 +63,7 @@ class BrainClientBase:
 
         self.mode = mode or os.getenv("CONTEXT_BRAIN_MODE", "grpc")
         self.host = host or os.getenv("CONTEXT_BRAIN_URL", "localhost:50051")
-        self.token: ContextToken | None = token
+        self.token = token
         self._stub = None
         self._commerce_stub = None
         self._service = None
@@ -94,7 +94,15 @@ class BrainClientBase:
         """
         from contextcore import create_grpc_metadata_with_token
 
-        return create_grpc_metadata_with_token(self.token)
+        actual_token = self.token() if callable(self.token) else self.token
+        return create_grpc_metadata_with_token(actual_token)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.channel:
+            await self.channel.close()
 
 
 __all__ = ["BrainClientBase", "get_context_unit_pb2", "logger"]

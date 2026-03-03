@@ -155,10 +155,14 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
         self._mode = enforcement if enforcement is not None else EnforcementMode.from_env()
 
         if self._mode != EnforcementMode.OFF:
+            _mode_desc = {
+                EnforcementMode.WARN: "warn (log denials but allow through)",
+                EnforcementMode.ENFORCE: "enforce (block unauthorized requests)",
+            }
             logger.info(
-                "%s interceptor mode: %s",
+                "%s interceptor: enforcement=%s",
                 self._service_name,
-                self._mode.value,
+                _mode_desc.get(self._mode, self._mode.value),
             )
 
     async def intercept_service(

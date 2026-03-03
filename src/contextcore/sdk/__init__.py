@@ -12,6 +12,7 @@ from __future__ import annotations
 from .brain import BrainClient
 from .context_unit import ContextUnit
 from .models import CotStep, SearchResult, SecurityScopes, UnitMetrics
+from .router_client import RouterClient
 from .smart_client import SmartBrainClient, SmartWorkerClient
 from .worker_client import WorkerClient
 
@@ -24,6 +25,7 @@ __all__ = [
     "SecurityScopes",
     # Clients
     "BrainClient",
+    "RouterClient",
     "WorkerClient",
     "SmartBrainClient",
     "SmartWorkerClient",

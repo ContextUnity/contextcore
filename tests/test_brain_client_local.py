@@ -173,7 +173,13 @@ class TestBrainClientModeSelection:
             client = BrainClientBase()
             assert client.mode == "grpc"
             assert client.host == "localhost:50051"
-            mock_channel.assert_called_once_with("localhost:50051")
+            mock_channel.assert_called_once_with(
+                "localhost:50051",
+                options=[
+                    ("grpc.max_send_message_length", 50 * 1024 * 1024),
+                    ("grpc.max_receive_message_length", 50 * 1024 * 1024),
+                ],
+            )
 
     def test_mode_from_environment(self, monkeypatch):
         """CONTEXT_BRAIN_MODE=local should select local mode."""
@@ -218,7 +224,13 @@ class TestBrainClientModeSelection:
 
             client = BrainClientBase()
             assert client.host == "brain.example.com:50051"
-            mock_channel.assert_called_once_with("brain.example.com:50051")
+            mock_channel.assert_called_once_with(
+                "brain.example.com:50051",
+                options=[
+                    ("grpc.max_send_message_length", 50 * 1024 * 1024),
+                    ("grpc.max_receive_message_length", 50 * 1024 * 1024),
+                ],
+            )
 
     def test_local_mode_fails_without_contextbrain(self, monkeypatch):
         """Local mode should raise ImportError if contextbrain is not installed."""

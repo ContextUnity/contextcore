@@ -47,15 +47,15 @@ message ContextUnit {
     string unit_id = 1;           // UUIDv4
     string trace_id = 2;          // UUIDv4 cross-service trace
     string parent_unit_id = 3;    // Optional parent reference
-    
+
     Modality modality = 4;
     google.protobuf.Struct payload = 5; // The actual data (domain-specific)
-    
+
     repeated string provenance = 6;     // Data journey labels
     repeated CotStep chain_of_thought = 7;
-    
+
     UnitMetrics metrics = 8;
     SecurityScopes security = 9;
-    
+
     google.protobuf.Timestamp created_at = 10;
 }

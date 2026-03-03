@@ -64,7 +64,7 @@ class WorkerClient:
         self.mode = mode or os.getenv("CONTEXT_WORKER_MODE", "grpc")
         self.host = host or os.getenv("CONTEXT_WORKER_URL", "localhost:50052")
         self.temporal_host = os.getenv("TEMPORAL_HOST", "localhost:7233")
-        self.token: ContextToken | None = token
+        self.token = token
         self._stub = None
         self.channel = None
 
@@ -83,7 +83,8 @@ class WorkerClient:
         """
         from contextcore import create_grpc_metadata_with_token
 
-        return create_grpc_metadata_with_token(self.token)
+        actual_token = self.token() if callable(self.token) else self.token
+        return create_grpc_metadata_with_token(actual_token)
 
     async def start_workflow(self, unit: ContextUnit) -> ContextUnit:
         """Start a durable workflow via Temporal.

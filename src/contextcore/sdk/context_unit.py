@@ -174,17 +174,22 @@ class ContextUnit(BaseModel):
         # plain dict() only converts top level, leaving nested protobuf objects
         payload = MessageToDict(unit_pb.payload) if unit_pb.payload else {}
 
-        return cls(
-            unit_id=UUID(unit_pb.unit_id) if unit_pb.unit_id else uuid4(),
-            trace_id=UUID(unit_pb.trace_id) if unit_pb.trace_id else uuid4(),
-            parent_unit_id=UUID(unit_pb.parent_unit_id) if unit_pb.parent_unit_id else None,
-            payload=payload,
-            provenance=list(unit_pb.provenance),
-            chain_of_thought=cot_steps,
-            metrics=metrics,
-            security=security,
-            created_at=unit_pb.created_at.ToDatetime() if unit_pb.created_at.seconds else datetime.now(timezone.utc),
-        )
+        kwargs = {
+            "unit_id": UUID(unit_pb.unit_id) if unit_pb.unit_id else uuid4(),
+            "trace_id": UUID(unit_pb.trace_id) if unit_pb.trace_id else uuid4(),
+            "parent_unit_id": UUID(unit_pb.parent_unit_id) if unit_pb.parent_unit_id else None,
+            "payload": payload,
+            "provenance": list(unit_pb.provenance),
+            "chain_of_thought": cot_steps,
+            "created_at": unit_pb.created_at.ToDatetime() if unit_pb.created_at.seconds else datetime.now(timezone.utc),
+        }
+
+        if metrics is not None:
+            kwargs["metrics"] = metrics
+        if security is not None:
+            kwargs["security"] = security
+
+        return cls(**kwargs)
 
 
 __all__ = ["ContextUnit"]

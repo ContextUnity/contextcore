@@ -135,7 +135,7 @@ class SecurityGuard:
             )
             self._shield_middleware = ShieldMiddleware(config=shield_config)
             logger.info(
-                "ContextShield firewall activated (address=in-process(local_memory), port=none, fail_open=%s)",
+                "ContextShield input guard activated (mode=in-process, fail_open=%s)",
                 self._config.fail_open,
             )
         except Exception as e:

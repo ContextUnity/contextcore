@@ -307,4 +307,70 @@ def mint_service_token(
         return token
 
 
-__all__ = ["ContextToken", "TokenBuilder", "mint_service_token"]
+# ── Caller-aware Brain service token ────────────────────────────
+
+from .permissions import Permissions  # noqa: E402
+
+# Minimum permissions per caller → Brain.
+# Each service gets exactly what it needs (principle of least privilege).
+_BRAIN_PERMISSION_MAP: dict[str, tuple[str, ...]] = {
+    "router": (
+        Permissions.BRAIN_READ,
+        Permissions.BRAIN_WRITE,
+        Permissions.MEMORY_READ,
+        Permissions.MEMORY_WRITE,
+        Permissions.TRACE_WRITE,
+        Permissions.WORKER_EXECUTE,
+    ),
+    "worker": (
+        Permissions.BRAIN_READ,
+        Permissions.BRAIN_WRITE,
+        Permissions.MEMORY_READ,
+        Permissions.MEMORY_WRITE,
+        Permissions.TRACE_WRITE,
+        Permissions.WORKER_EXECUTE,
+    ),
+    "view": (
+        Permissions.BRAIN_READ,
+        Permissions.MEMORY_READ,
+        Permissions.TRACE_READ,
+    ),
+    "commerce": (
+        Permissions.BRAIN_READ,
+        Permissions.BRAIN_WRITE,
+        Permissions.MEMORY_READ,
+        Permissions.TRACE_WRITE,
+        Permissions.WORKER_EXECUTE,
+        Permissions.ROUTER_INVOKE,
+    ),
+    "zero": (Permissions.TRACE_WRITE,),
+}
+
+
+def get_brain_service_token(caller: str) -> ContextToken:
+    """Return a cached service→Brain ContextToken with caller-appropriate permissions.
+
+    Replaces per-service ``core/brain_token.py`` files. Each caller gets
+    precisely the minimum permissions it needs.
+
+    Args:
+        caller: Service name (``"router"``, ``"worker"``, ``"view"``,
+                ``"commerce"``, ``"zero"``).
+
+    Example::
+
+        from contextcore.tokens import get_brain_service_token
+
+        token = get_brain_service_token("router")
+        client = BrainClient(host=endpoint, token=token)
+    """
+    permissions = _BRAIN_PERMISSION_MAP.get(caller)
+    if permissions is None:
+        raise ValueError(f"Unknown Brain service caller: {caller!r}. Known callers: {sorted(_BRAIN_PERMISSION_MAP)}")
+    return mint_service_token(
+        f"{caller}-brain-service",
+        permissions=permissions,
+    )
+
+
+__all__ = ["ContextToken", "TokenBuilder", "mint_service_token", "get_brain_service_token"]

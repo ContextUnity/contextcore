@@ -15,55 +15,55 @@ service CommerceService {
     // =========================================
     // Product Operations
     // =========================================
-    
+
     // Get single product
     // Request payload: {tenant_id, id?, sku?}
     // Response payload: {id, sku, name, description, price, currency, stock_quantity, attributes}
     rpc GetProduct(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // Update product
     // Request payload: {tenant_id, id, patch: {...}}
     // Response payload: {id, success}
     rpc UpdateProduct(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // =========================================
     // Dealer/Harvester Operations
     // =========================================
-    
+
     // Get products for enrichment by IDs
     // Request payload: {tenant_id, product_ids: [...]}
     // Response payload: {id, name, category, description, brand_name, params, enrichment}
     rpc GetProducts(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
-    
+
     // Upsert dealer product from harvester
-    // Request payload: {tenant_id, dealer_code, dealer_name, sku, name, category?, brand_name?, 
+    // Request payload: {tenant_id, dealer_code, dealer_name, sku, name, category?, brand_name?,
     //                   quantity?, price_retail?, currency?, params?, status?, trace_id?}
     // Response payload: {success, product_id, message?}
     rpc UpsertDealerProduct(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // Update product enrichment
     // Request payload: {tenant_id, product_id, enrichment: {...}, trace_id?, status?}
     // Response payload: {success}
     rpc UpdateEnrichment(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // =========================================
     // Harvester Control
     // =========================================
-    
+
     // Trigger harvest workflow
     // Request payload: {supplier_code, tenant_id, trace_id?}
     // Response payload: {job_id, status}
     rpc TriggerHarvest(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-    
+
     // =========================================
     // Gardener / Human-in-the-Loop
     // =========================================
-    
+
     // Get items needing classification
     // Request payload: {tenant_id, limit?}
     // Response payload: {id, content, context_json}
     rpc GetPendingVerifications(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
-    
+
     // Submit verification result
     // Request payload: {id, enrichment_json}
     // Response payload: {success}

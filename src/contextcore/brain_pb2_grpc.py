@@ -129,6 +129,11 @@ class BrainServiceStub(object):
                 request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
                 response_deserializer=context__unit__pb2.ContextUnit.FromString,
                 _registered_method=True)
+        self.MatchDuckDB = channel.unary_unary(
+                '/contextbrain.BrainService/MatchDuckDB',
+                request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+                response_deserializer=context__unit__pb2.ContextUnit.FromString,
+                _registered_method=True)
 
 
 class BrainServiceServicer(object):
@@ -312,6 +317,19 @@ class BrainServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def MatchDuckDB(self, request, context):
+        """=========================================
+        DuckDB Operations
+        =========================================
+
+        Execute high-speed DuckDB string/fuzzy matching on Parquet files
+        Request payload: {tenant_id, unmatched_uri, canonical_uri}
+        Response payload: {duckdb_matches: [...], duckdb_leftovers: [...]}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_BrainServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -397,6 +415,11 @@ def add_BrainServiceServicer_to_server(servicer, server):
             ),
             'GetTaxonomy': grpc.unary_stream_rpc_method_handler(
                     servicer.GetTaxonomy,
+                    request_deserializer=context__unit__pb2.ContextUnit.FromString,
+                    response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            ),
+            'MatchDuckDB': grpc.unary_unary_rpc_method_handler(
+                    servicer.MatchDuckDB,
                     request_deserializer=context__unit__pb2.ContextUnit.FromString,
                     response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
             ),
@@ -868,6 +891,33 @@ class BrainService(object):
             request,
             target,
             '/contextbrain.BrainService/GetTaxonomy',
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def MatchDuckDB(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/contextbrain.BrainService/MatchDuckDB',
             context__unit__pb2.ContextUnit.SerializeToString,
             context__unit__pb2.ContextUnit.FromString,
             options,

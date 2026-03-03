@@ -116,4 +116,13 @@ service BrainService {
     // Request payload: {tenant_id, domain?}
     // Response payload: {domain, name, path, keywords, metadata}
     rpc GetTaxonomy(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+
+    // =========================================
+    // DuckDB Operations
+    // =========================================
+
+    // Execute high-speed DuckDB string/fuzzy matching on Parquet files
+    // Request payload: {tenant_id, unmatched_uri, canonical_uri}
+    // Response payload: {duckdb_matches: [...], duckdb_leftovers: [...]}
+    rpc MatchDuckDB(contextcore.ContextUnit) returns (contextcore.ContextUnit);
 }

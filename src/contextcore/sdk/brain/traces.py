@@ -55,9 +55,8 @@ class TraceMixin:
         Returns:
             The ID of the stored trace.
         """
-        # Build provenance: caller-provided chain + SDK label
+        # Provenance: use caller-provided chain as-is (don't add SDK transport labels)
         full_provenance = list(provenance or [])
-        full_provenance.append("sdk:brain_client:log_trace")
 
         unit = ContextUnit(
             payload={

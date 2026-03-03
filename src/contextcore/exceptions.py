@@ -20,6 +20,7 @@ Services may define thin subclasses for service-specific errors:
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import logging
 from typing import Any, Callable, TypeVar, cast
@@ -248,6 +249,9 @@ def grpc_error_handler(method):
     async def wrapper(self, request, context):
         try:
             return await method(self, request, context)
+        except asyncio.CancelledError:
+            logger.info("Request %s cancelled (client disconnected or server shutting down)", method.__name__)
+            return
         except ContextUnityError as e:
             import grpc
 
@@ -299,6 +303,9 @@ def grpc_stream_error_handler(method):
         try:
             async for item in method(self, request, context):
                 yield item
+        except asyncio.CancelledError:
+            logger.info("Stream %s cancelled (client disconnected or server shutting down)", method.__name__)
+            return
         except ContextUnityError as e:
             import grpc
 

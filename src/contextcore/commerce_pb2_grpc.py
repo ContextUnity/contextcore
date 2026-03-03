@@ -132,7 +132,7 @@ class CommerceServiceServicer(object):
 
     def UpsertDealerProduct(self, request, context):
         """Upsert dealer product from harvester
-        Request payload: {tenant_id, dealer_code, dealer_name, sku, name, category?, brand_name?, 
+        Request payload: {tenant_id, dealer_code, dealer_name, sku, name, category?, brand_name?,
         quantity?, price_retail?, currency?, params?, status?, trace_id?}
         Response payload: {success, product_id, message?}
         """

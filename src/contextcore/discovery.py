@@ -101,12 +101,20 @@ async def register_service(
     try:
         import redis.asyncio as aioredis
     except ImportError:
-        logger.debug("redis not installed — service discovery registration skipped")
+        logger.warning(
+            "Service registration DISABLED: 'redis' package not installed in this venv. "
+            "Install it via the [redis] extra: uv pip install 'context%s[redis]'",
+            service,
+        )
         return None
 
     url = _get_redis_url(redis_url)
     if not url:
-        logger.debug("REDIS_URL not set — service discovery registration skipped")
+        logger.warning(
+            "Service registration DISABLED: REDIS_URL is not set. Service '%s/%s' will NOT appear in the service mesh.",
+            service,
+            instance,
+        )
         return None
 
     key = _redis_key(service, instance)
@@ -199,11 +207,12 @@ def discover_services(
     try:
         import redis as redis_sync
     except ImportError:
-        logger.debug("redis not installed — service discovery unavailable")
+        logger.warning("Service discovery DISABLED: 'redis' package not installed in this venv.")
         return []
 
     url = _get_redis_url(redis_url)
     if not url:
+        logger.warning("Service discovery DISABLED: REDIS_URL is not set.")
         return []
 
     prefix = _get_prefix()
@@ -460,7 +469,67 @@ __all__ = [
     "deregister_service",
     "discover_services",
     "discover_endpoints",
+    "resolve_service_endpoint",
     "register_project",
     "verify_project_owner",
     "get_registered_projects",
 ]
+
+
+def resolve_service_endpoint(
+    service_type: str,
+    *,
+    configured_host: str = "",
+    default_host: str = "",
+    tenant_id: str | None = None,
+) -> str:
+    """Resolve a service endpoint using a 3-tier strategy.
+
+    1. **Explicit config** — ``configured_host`` (from env var / config file)
+    2. **Redis auto-discovery** — ``discover_services(service_type)``
+    3. **Default fallback** — ``default_host`` (e.g. ``localhost:50051``)
+
+    Logs the resolution path so that "service not found" is NEVER silent.
+
+    Args:
+        service_type: Service type key (``"brain"``, ``"worker"``, ``"zero"``, ``"shield"``)
+        configured_host: Pre-configured host from env / config.  If non-empty, used directly.
+        default_host: Last-resort fallback.  If empty, means the service is optional.
+        tenant_id: Optional tenant filter for Redis discovery.
+
+    Returns:
+        Resolved endpoint string.  Empty string if service is unavailable
+        and no default is provided.
+    """
+    # 1. Explicit config
+    if configured_host:
+        logger.debug("Service '%s': using configured host %s", service_type, configured_host)
+        return configured_host
+
+    # 2. Redis auto-discovery
+    try:
+        services = discover_services(service_type=service_type, tenant_id=tenant_id)
+        if services:
+            endpoint = services[0].endpoint
+            logger.info(
+                "Service '%s': auto-discovered via Redis → %s (instance=%s)",
+                service_type,
+                endpoint,
+                services[0].instance,
+            )
+            return endpoint
+    except Exception as e:
+        logger.debug("Service '%s': Redis auto-discovery failed: %s", service_type, e)
+
+    # 3. Default fallback
+    if default_host:
+        logger.debug("Service '%s': using default host %s", service_type, default_host)
+        return default_host
+
+    # No endpoint found — log clearly
+    logger.warning(
+        "Service '%s': NOT AVAILABLE — no configured host, Redis discovery found nothing, "
+        "no default provided. Features depending on this service will be DISABLED.",
+        service_type,
+    )
+    return ""

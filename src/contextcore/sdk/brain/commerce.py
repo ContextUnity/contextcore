@@ -288,5 +288,81 @@ class CommerceMixin:
         # Return hash-based ID as fallback
         return hash(f"{dealer_code}:{sku}") % (2**31)
 
+    async def match_duckdb(
+        self: BrainClientBase,
+        tenant_id: str,
+        unmatched_url: str,
+        canonical_url: str,
+        leftovers_put_url: str,
+        trace_id: str | None = None,
+        parent_provenance: "List[str] | None" = None,
+    ) -> dict[str, Any]:
+        """Execute DuckDB fast matching over Parquet catalogs.
+
+        Args:
+            tenant_id: Tenant identifier.
+            unmatched_url: Presigned URI or path to unmatched products parquet.
+            canonical_url: Presigned URI or path to canonical products parquet.
+            leftovers_put_url: Presigned URI for DuckDB to PUT unmatched leftovers to storage.
+            trace_id: Optional trace ID.
+            parent_provenance: Optional provenance chain.
+
+        Returns:
+            Dictionary containing 'duckdb_matches' and 'duckdb_leftovers' lists.
+        """
+        if self.mode == "grpc":
+            if not self._stub:
+                raise ImportError("Brain gRPC protos not available")
+
+            from uuid import UUID
+
+            provenance = list(parent_provenance) if parent_provenance else []
+            provenance.append("sdk:brain_client:match_duckdb")
+
+            kwargs = {}
+            if trace_id:
+                kwargs["trace_id"] = UUID(trace_id)
+
+            unit = ContextUnit(
+                payload={
+                    "tenant_id": tenant_id,
+                    "unmatched_url": unmatched_url,
+                    "canonical_url": canonical_url,
+                    "leftovers_put_url": leftovers_put_url,
+                },
+                provenance=provenance,
+                **kwargs,
+            )
+
+            pb2 = get_context_unit_pb2()
+            req = unit.to_protobuf(pb2)
+            metadata = self._get_metadata()
+            response_pb = await self._stub.MatchDuckDB(req, metadata=metadata)
+            result = ContextUnit.from_protobuf(response_pb)
+            return result.payload
+        else:
+            return await self._local_match_duckdb(tenant_id, unmatched_url, canonical_url, leftovers_put_url)
+
+    async def _local_match_duckdb(
+        self: BrainClientBase,
+        tenant_id: str,
+        unmatched_url: str,
+        canonical_url: str,
+        leftovers_put_url: str,
+    ) -> dict[str, Any]:
+        """Local mode implementation."""
+        try:
+            if hasattr(self._service, "duckdb"):
+                if hasattr(self._service.duckdb, "match_catalogs"):
+                    return await self._service.duckdb.match_catalogs(
+                        tenant_id=tenant_id,
+                        unmatched_url=unmatched_url,
+                        canonical_url=canonical_url,
+                        leftovers_put_url=leftovers_put_url,
+                    )
+        except Exception as e:
+            logger.warning("Local match_duckdb failed: %s", e)
+        return {"duckdb_matches": [], "duckdb_leftovers": []}
+
 
 __all__ = ["CommerceMixin"]

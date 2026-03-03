@@ -1,9 +1,9 @@
 [project]
 name = "contextcore"
-version = "0.5.1"
+version = "0.5.2"
 description = "The Kernel of ContextUnity — shared type system, gRPC contracts, ContextUnit protocol, and security tokens for the entire service mesh"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = "==3.13.*"
 authors = [
     { name = "Pylypchuk Oleksii", email = "oleksii.pylypchuk@tuta.com" },
 ]
