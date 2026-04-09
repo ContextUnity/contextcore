@@ -51,11 +51,8 @@ message ContextUnit {
     Modality modality = 4;
     google.protobuf.Struct payload = 5; // The actual data (domain-specific)
 
-    repeated string provenance = 6;     // Data journey labels
-    repeated CotStep chain_of_thought = 7;
-
-    UnitMetrics metrics = 8;
-    SecurityScopes security = 9;
-
-    google.protobuf.Timestamp created_at = 10;
+    repeated CotStep chain_of_thought = 6;
+    UnitMetrics metrics = 7;
+    SecurityScopes security = 8;
+    google.protobuf.Timestamp created_at = 9;
 }

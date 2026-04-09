@@ -118,7 +118,7 @@ class TestContextToken:
         """Admin token (empty allowed_tenants) can access any tenant."""
         token = ContextToken(
             token_id="admin",
-            permissions=("dispatcher:execute",),
+            permissions=("router:execute",),
             allowed_tenants=(),  # admin
         )
         assert token.can_access_tenant("traverse") is True
@@ -129,7 +129,7 @@ class TestContextToken:
         """Scoped token can only access listed tenants."""
         token = ContextToken(
             token_id="traverse_token",
-            permissions=("dispatcher:execute",),
+            permissions=("router:execute",),
             allowed_tenants=("traverse",),
         )
         assert token.can_access_tenant("traverse") is True
@@ -140,7 +140,7 @@ class TestContextToken:
         """Token scoped to multiple tenants."""
         token = ContextToken(
             token_id="multi_token",
-            permissions=("dispatcher:execute",),
+            permissions=("router:execute",),
             allowed_tenants=("traverse", "pinkpony"),
         )
         assert token.can_access_tenant("traverse") is True
@@ -151,7 +151,7 @@ class TestContextToken:
         """Empty tenant_id is always rejected, even for admin tokens."""
         admin_token = ContextToken(
             token_id="admin",
-            permissions=("dispatcher:execute",),
+            permissions=("router:execute",),
             allowed_tenants=(),
         )
         assert admin_token.can_access_tenant("") is False
@@ -164,12 +164,7 @@ class TestTokenBuilder:
     def test_create_builder(self) -> None:
         """Test creating a TokenBuilder."""
         builder = TokenBuilder()
-        assert builder.enabled is True
-
-    def test_create_builder_disabled(self) -> None:
-        """Test creating a disabled TokenBuilder."""
-        builder = TokenBuilder(enabled=False)
-        assert builder.enabled is False
+        assert isinstance(builder, TokenBuilder)
 
     def test_mint_root_token(self) -> None:
         """Test minting a root token."""
@@ -191,7 +186,7 @@ class TestTokenBuilder:
         builder = TokenBuilder()
         token = builder.mint_root(
             user_ctx={},
-            permissions=["dispatcher:execute"],
+            permissions=["router:execute"],
             ttl_s=3600,
             allowed_tenants=["traverse", "pinkpony"],
         )
@@ -265,14 +260,14 @@ class TestTokenBuilder:
         with pytest.raises(PermissionError, match="Token expired"):
             builder.verify(token, required_permission="read:data")
 
-    def test_verify_token_disabled_builder(self) -> None:
-        """Test verification with disabled builder."""
-        builder = TokenBuilder(enabled=False)
-        # Should not raise even with invalid token
-        builder.verify(
-            ContextToken(token_id="test", permissions=(), exp_unix=time.time() - 1),
-            required_permission="read:data",
-        )
+    def test_verify_always_enforced(self) -> None:
+        """Test that verify always enforces — security has no opt-out."""
+        builder = TokenBuilder()
+        with pytest.raises(PermissionError, match="Token expired"):
+            builder.verify(
+                ContextToken(token_id="test", permissions=(), exp_unix=time.time() - 1),
+                required_permission="read:data",
+            )
 
     def test_verify_unit_access_read(self) -> None:
         """Test verifying unit access for read operation."""
@@ -330,65 +325,6 @@ class TestTokenBuilder:
         # Should not raise
         builder.verify_unit_access(token, unit, operation="read")
         builder.verify_unit_access(token, unit, operation="write")
-
-
-class TestTokenSigning:
-    """Tests for token signing with UnsignedBackend and Ed25519."""
-
-    def test_unsigned_roundtrip(self) -> None:
-        """Unsigned token roundtrip preserves all fields in dev mode."""
-        from contextcore.signing import UnsignedBackend
-        from contextcore.token_utils import parse_token_string, serialize_token
-
-        backend = UnsignedBackend()
-        token = ContextToken(
-            token_id="dev123",
-            permissions=("dispatcher:execute", "brain:read"),
-            allowed_tenants=("traverse", "pinkpony"),
-            exp_unix=9999999999.0,
-        )
-        serialized = serialize_token(token, backend=backend)
-        assert "." in serialized  # kid.payload.signature format
-
-        parsed = parse_token_string(serialized, backend=backend)
-        assert parsed is not None
-        assert parsed.token_id == "dev123"
-        assert parsed.permissions == ("dispatcher:execute", "brain:read")
-        assert parsed.allowed_tenants == ("traverse", "pinkpony")
-        assert parsed.exp_unix == 9999999999.0
-
-    def test_unsigned_wire_format(self) -> None:
-        """Unsigned tokens use kid.payload.signature format (3 parts)."""
-        from contextcore.signing import UnsignedBackend
-        from contextcore.token_utils import serialize_token
-
-        backend = UnsignedBackend()
-        token = ContextToken(
-            token_id="test",
-            permissions=("read:data",),
-        )
-        serialized = serialize_token(token, backend=backend)
-        parts = serialized.split(".")
-        assert len(parts) == 3  # kid.payload.signature
-        assert parts[0] == "unsigned"  # kid = "unsigned"
-        assert parts[2] == ""  # empty signature
-
-    def test_unsigned_admin_token(self) -> None:
-        """Admin token (empty allowed_tenants) serializes correctly."""
-        from contextcore.signing import UnsignedBackend
-        from contextcore.token_utils import parse_token_string, serialize_token
-
-        backend = UnsignedBackend()
-        token = ContextToken(
-            token_id="admin",
-            permissions=("dispatcher:execute",),
-            allowed_tenants=(),  # Admin
-        )
-        serialized = serialize_token(token, backend=backend)
-        parsed = parse_token_string(serialized, backend=backend)
-        assert parsed is not None
-        assert parsed.allowed_tenants == ()
-        assert parsed.can_access_tenant("anything") is True
 
 
 class TestTokenEdgeCases:
@@ -450,3 +386,33 @@ class TestTokenEdgeCases:
         token = ContextToken(token_id="empty", permissions=())
         scopes = SecurityScopes(write=["write:data"])
         assert not token.can_write(scopes)
+
+    def test_mint_root_populates_provenance(self) -> None:
+        """Test minting a root token correctly sets initial agent provenance."""
+        builder = TokenBuilder()
+        token = builder.mint_root(user_ctx={}, permissions=["router:execute"], ttl_s=3600, agent_id="test_agent")
+        assert token.provenance == ("*test_agent",)
+
+        token_default = builder.mint_root(
+            user_ctx={},
+            permissions=[],
+            ttl_s=3600,
+        )
+        assert token_default.provenance == ("*system",)
+
+    def test_attenuate_appends_provenance(self) -> None:
+        """Test attenuation correctly appends the delegation chain to provenance."""
+        builder = TokenBuilder()
+        root_token = builder.mint_root(
+            user_ctx={}, permissions=["router:execute", "brain:write"], ttl_s=3600, agent_id="router_agent"
+        )
+        assert root_token.provenance == ("*router_agent",)
+
+        # Attenuating without changing agent_id does NOT append to provenance
+        same_agent = builder.attenuate(root_token, permissions=["brain:write"])
+        assert same_agent.provenance == ("*router_agent",)
+
+        # Changing agent_id DOES append to provenance
+        delegated_token = builder.attenuate(root_token, permissions=["brain:write"], agent_id="tool_agent")
+        assert delegated_token.provenance == ("*router_agent", ">tool_agent")
+        assert delegated_token.agent_id == "tool_agent"

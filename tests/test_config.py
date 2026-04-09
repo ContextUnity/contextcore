@@ -21,7 +21,6 @@ class TestSharedConfig:
         assert config.otel_endpoint is None
         assert config.service_name is None
         assert config.service_version is None
-        assert config.tenant_id is None
 
     def test_create_custom_config(self) -> None:
         """Test creating a SharedConfig with custom values."""
@@ -32,7 +31,6 @@ class TestSharedConfig:
             otel_endpoint="http://localhost:4318",
             service_name="test-service",
             service_version="1.0.0",
-            tenant_id="tenant-123",
         )
         assert config.log_level == LogLevel.DEBUG
         assert config.redis_url == "redis://localhost:6379/0"
@@ -40,7 +38,6 @@ class TestSharedConfig:
         assert config.otel_endpoint == "http://localhost:4318"
         assert config.service_name == "test-service"
         assert config.service_version == "1.0.0"
-        assert config.tenant_id == "tenant-123"
 
     def test_log_level_from_string(self) -> None:
         """Test creating config with log level as string."""
@@ -105,7 +102,6 @@ class TestLoadSharedConfigFromEnv:
             "OTEL_ENDPOINT": "http://localhost:4318",
             "SERVICE_NAME": "test-service",
             "SERVICE_VERSION": "1.0.0",
-            "TENANT_ID": "tenant-123",
         },
         clear=True,
     )
@@ -118,7 +114,7 @@ class TestLoadSharedConfigFromEnv:
         assert config.otel_endpoint == "http://localhost:4318"
         assert config.service_name == "test-service"
         assert config.service_version == "1.0.0"
-        assert config.tenant_id == "tenant-123"
+        assert config.service_version == "1.0.0"
 
     @patch.dict(os.environ, {"OTEL_ENABLED": "1"}, clear=True)
     def test_otel_enabled_variants(self) -> None:

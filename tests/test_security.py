@@ -2,180 +2,25 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import os
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
+
+os.environ["CU_PROJECT_SECRET"] = "test_secret"
 from contextcore.permissions import Permissions
 from contextcore.security import (
-    EnforcementMode,
-    GuardResult,
-    SecurityConfig,
-    SecurityGuard,
     ServicePermissionInterceptor,
     check_permission,
-    get_security_guard,
-    get_security_interceptors,
-    reset_security_guard,
-    shield_status,
 )
-from contextcore.token_utils import serialize_token
+from contextcore.token_utils import (
+    build_verifier_backend_from_token_string,
+    extract_and_verify_token_from_http_request,
+    serialize_token,
+    verify_token_string,
+)
 from contextcore.tokens import ContextToken
-
-
-class TestSecurityConfig:
-    """SecurityConfig tests."""
-
-    def test_defaults(self):
-        config = SecurityConfig()
-        assert config.security_enabled is False
-        assert config.shield_enabled is True
-        assert config.fail_open is False
-        assert config.log_allowed is False
-        assert "grpc.health.v1.Health" in config.skip_methods
-
-
-class TestGuardResult:
-    """GuardResult tests."""
-
-    def test_allowed_by_default(self):
-        result = GuardResult()
-        assert result.allowed is True
-        assert result.blocked is False
-        assert result.reason == ""
-
-    def test_blocked(self):
-        result = GuardResult(allowed=False, reason="injection detected")
-        assert result.blocked is True
-        assert result.reason == "injection detected"
-
-
-class TestSecurityGuard:
-    """SecurityGuard tests."""
-
-    def test_security_disabled_skips_validation(self):
-        """When security_enabled=False, validate_token returns None."""
-        guard = SecurityGuard(SecurityConfig(security_enabled=False))
-        mock_context = MagicMock()
-        token = guard.validate_token(mock_context)
-        assert token is None
-        mock_context.abort.assert_not_called()
-
-    def test_validate_token_missing_required(self):
-        """When token missing and require=True, abort is called."""
-        guard = SecurityGuard(SecurityConfig(security_enabled=True))
-        mock_context = MagicMock()
-        # extract_token_from_grpc_metadata returns None
-        with patch(
-            "contextcore.security.guard.extract_token_from_grpc_metadata",
-            return_value=None,
-        ):
-            guard.validate_token(mock_context, require=True)
-        mock_context.abort.assert_called_once()
-
-    def test_validate_token_missing_optional(self):
-        """When token missing and require=False, returns None without abort."""
-        guard = SecurityGuard(SecurityConfig(security_enabled=True))
-        mock_context = MagicMock()
-        with patch(
-            "contextcore.security.guard.extract_token_from_grpc_metadata",
-            return_value=None,
-        ):
-            result = guard.validate_token(mock_context, require=False)
-        assert result is None
-        mock_context.abort.assert_not_called()
-
-    def test_validate_expired_token(self):
-        """Expired token triggers abort."""
-        guard = SecurityGuard(SecurityConfig(security_enabled=True))
-        mock_context = MagicMock()
-        expired_token = MagicMock(spec=ContextToken)
-        expired_token.is_expired.return_value = True
-        with patch(
-            "contextcore.security.guard.extract_token_from_grpc_metadata",
-            return_value=expired_token,
-        ):
-            guard.validate_token(mock_context)
-        mock_context.abort.assert_called_once()
-
-    def test_validate_valid_token(self):
-        """Valid token is returned without abort."""
-        guard = SecurityGuard(SecurityConfig(security_enabled=True))
-        mock_context = MagicMock()
-        valid_token = MagicMock(spec=ContextToken)
-        valid_token.is_expired.return_value = False
-        with patch(
-            "contextcore.security.guard.extract_token_from_grpc_metadata",
-            return_value=valid_token,
-        ):
-            result = guard.validate_token(mock_context)
-        assert result is valid_token
-        mock_context.abort.assert_not_called()
-
-    def test_shield_not_active_without_package(self):
-        """Shield is not active when contextshield is not installed."""
-        with patch("contextcore.security.guard._SHIELD_AVAILABLE", False):
-            guard = SecurityGuard(SecurityConfig(shield_enabled=True))
-            assert guard.shield_active is False
-
-    @pytest.mark.asyncio
-    async def test_check_input_no_shield(self):
-        """check_input returns allowed when no Shield."""
-        with patch("contextcore.security.guard._SHIELD_AVAILABLE", False):
-            guard = SecurityGuard(SecurityConfig(shield_enabled=True))
-            result = await guard.check_input("test input")
-            assert result.allowed is True
-            assert result.shield_active is False
-
-
-class TestSingleton:
-    """Singleton factory tests."""
-
-    def setup_method(self):
-        reset_security_guard()
-
-    def teardown_method(self):
-        reset_security_guard()
-
-    def test_singleton_created(self):
-        guard = get_security_guard()
-        guard2 = get_security_guard()
-        assert guard is guard2
-
-    def test_reset(self):
-        g1 = get_security_guard()
-        reset_security_guard()
-        g2 = get_security_guard()
-        assert g1 is not g2
-
-
-class TestInterceptors:
-    """Interceptor factory tests."""
-
-    def test_no_interceptors_when_disabled(self):
-        interceptors = get_security_interceptors(SecurityConfig(security_enabled=False))
-        assert interceptors == []
-
-    def test_interceptors_when_enabled(self):
-        interceptors = get_security_interceptors(SecurityConfig(security_enabled=True))
-        assert len(interceptors) == 1
-
-
-class TestShieldStatus:
-    """shield_status() tests."""
-
-    def setup_method(self):
-        reset_security_guard()
-
-    def teardown_method(self):
-        reset_security_guard()
-
-    def test_status_dict(self):
-        status = shield_status()
-        assert "shield_installed" in status
-        assert "shield_active" in status
-        assert "security_enabled" in status
-        assert "fail_open" in status
-
 
 # ── check_permission ────────────────────────────────────────────
 
@@ -227,6 +72,56 @@ class TestCheckPermission:
         assert "tenant access denied" in result
 
 
+class TestHttpTokenVerification:
+    """Tests for verified HTTP token extraction helpers."""
+
+    def test_build_verifier_backend_from_token_string_uses_project_secret(self, monkeypatch):
+        from contextcore.signing import HmacBackend
+
+        backend = HmacBackend("test_proj", "test_secret")
+        token = ContextToken(
+            token_id="http-token",
+            permissions=(Permissions.BRAIN_READ,),
+            allowed_tenants=("tenant-a",),
+        )
+        token_str = serialize_token(token, backend=backend)
+
+        monkeypatch.setattr(
+            "contextcore.discovery.get_project_key",
+            lambda project_id, **kwargs: {"project_secret": "test_secret"},
+        )
+
+        verifier = build_verifier_backend_from_token_string(token_str)
+        assert verifier is not None
+        verified = verify_token_string(token_str, verifier)
+        assert verified is not None
+        assert verified.token_id == token.token_id
+
+    def test_extract_and_verify_token_from_http_request(self, monkeypatch):
+        from contextcore.signing import HmacBackend
+
+        backend = HmacBackend("test_proj", "test_secret")
+        token = ContextToken(
+            token_id="http-token",
+            permissions=(Permissions.BRAIN_READ,),
+            allowed_tenants=("tenant-a",),
+        )
+        token_str = serialize_token(token, backend=backend)
+        request = SimpleNamespace(
+            META={"HTTP_AUTHORIZATION": f"Bearer {token_str}"},
+            headers={},
+        )
+
+        monkeypatch.setattr(
+            "contextcore.token_utils.http.build_verifier_backend_from_token_string",
+            lambda *args, **kwargs: backend,
+        )
+
+        verified = extract_and_verify_token_from_http_request(request)
+        assert verified is not None
+        assert verified.token_id == token.token_id
+
+
 # ── ServicePermissionInterceptor ────────────────────────────────
 
 # Test RPC map
@@ -246,28 +141,22 @@ def _make_handler_call_details(method: str, metadata: list | None = None):
 
 def _make_token_metadata(token: ContextToken) -> list[tuple[str, str]]:
     """Serialize a token and return it as gRPC metadata."""
-    token_str = serialize_token(token)
+    from contextcore.signing import HmacBackend
+
+    backend = HmacBackend("test_proj", "test_secret")
+    token_str = serialize_token(token, backend=backend)
     return [("authorization", f"Bearer {token_str}")]
 
 
 class TestServicePermissionInterceptor:
     """Tests for the unified ServicePermissionInterceptor."""
 
-    @pytest.mark.asyncio
-    async def test_disabled_passes_through(self):
-        """Security off → all RPCs pass through."""
-        interceptor = ServicePermissionInterceptor(
-            _TEST_RPC_MAP,
-            service_name="Test",
-            enforcement=EnforcementMode.OFF,
-        )
+    @pytest.fixture(autouse=True)
+    def mock_get_project_key(self, monkeypatch):
+        def _mock_get_project_key(project_id, **kwargs):
+            return {"project_secret": "test_secret"}
 
-        async def _continuation(details):
-            return "handler"
-
-        details = _make_handler_call_details("/test.Service/Search")
-        result = await interceptor.intercept_service(_continuation, details)
-        assert result == "handler"
+        monkeypatch.setattr("contextcore.discovery.get_project_key", _mock_get_project_key)
 
     @pytest.mark.asyncio
     async def test_health_check_skipped(self):
@@ -275,7 +164,6 @@ class TestServicePermissionInterceptor:
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
             service_name="Test",
-            enforcement=EnforcementMode.ENFORCE,
         )
 
         async def _continuation(details):
@@ -291,7 +179,6 @@ class TestServicePermissionInterceptor:
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
             service_name="Test",
-            enforcement=EnforcementMode.ENFORCE,
         )
 
         async def _continuation(details):
@@ -307,7 +194,6 @@ class TestServicePermissionInterceptor:
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
             service_name="Test",
-            enforcement=EnforcementMode.ENFORCE,
         )
 
         token = ContextToken(token_id="t1", permissions=(Permissions.BRAIN_READ,))
@@ -328,7 +214,6 @@ class TestServicePermissionInterceptor:
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
             service_name="Test",
-            enforcement=EnforcementMode.ENFORCE,
         )
 
         async def _continuation(details):
@@ -346,7 +231,6 @@ class TestServicePermissionInterceptor:
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
             service_name="Test",
-            enforcement=EnforcementMode.ENFORCE,
         )
 
         token = ContextToken(token_id="valid", permissions=(Permissions.BRAIN_READ,))
@@ -365,7 +249,6 @@ class TestServicePermissionInterceptor:
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
             service_name="Test",
-            enforcement=EnforcementMode.ENFORCE,
         )
 
         # Token has only trace:write, but Search requires brain:read
@@ -388,7 +271,6 @@ class TestServicePermissionInterceptor:
         interceptor = ServicePermissionInterceptor(
             zero_rpc_map,
             service_name="Test",
-            enforcement=EnforcementMode.ENFORCE,
         )
 
         # Token has zero:anonymize which implies zero:deanonymize
@@ -403,28 +285,10 @@ class TestServicePermissionInterceptor:
         assert result == "handler"
 
     def test_constructor_defaults(self):
-        """Default constructor values — mode is WARN (fail-safe, not silent OFF)."""
+        """Default constructor values."""
         interceptor = ServicePermissionInterceptor({})
-        assert interceptor._mode == EnforcementMode.WARN
         assert interceptor._service_name == "Service"
         assert interceptor._rpc_map == {}
-
-    @pytest.mark.asyncio
-    async def test_warn_mode_logs_but_allows(self):
-        """Warn mode → denied RPC still passes through."""
-        interceptor = ServicePermissionInterceptor(
-            _TEST_RPC_MAP,
-            service_name="Test",
-            enforcement=EnforcementMode.WARN,
-        )
-
-        async def _continuation(details):
-            return "handler"
-
-        # No token → would be denied in enforce, but warn lets it through
-        details = _make_handler_call_details("/test.Service/Search", [])
-        result = await interceptor.intercept_service(_continuation, details)
-        assert result == "handler"
 
     @pytest.mark.asyncio
     async def test_expired_token_denied(self):
@@ -434,7 +298,6 @@ class TestServicePermissionInterceptor:
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
             service_name="Test",
-            enforcement=EnforcementMode.ENFORCE,
         )
 
         # Create a token that expired 10 seconds ago
@@ -462,7 +325,6 @@ class TestServicePermissionInterceptor:
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
             service_name="Test",
-            enforcement=EnforcementMode.ENFORCE,
         )
 
         # Create a token that expires in 1 hour

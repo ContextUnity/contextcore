@@ -26,6 +26,7 @@ PERMISSION_INHERITANCE: dict[str, tuple[str, ...]] = {
         Permissions.TRACE_READ,
         Permissions.TRACE_WRITE,
     ),
+    Permissions.ROUTER_EXECUTE: (Permissions.SHIELD_CHECK, Permissions.SHIELD_SECRETS_READ),
     Permissions.GRAPH_DISPATCHER: (
         Permissions.GRAPH_RAG,
         Permissions.GRAPH_COMMERCE,

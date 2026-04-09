@@ -26,4 +26,9 @@ service WorkerService {
     // Request payload: {code, language?, timeout?}
     // Response payload: {result, stdout?, stderr?}
     rpc ExecuteCode(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // Register project schedules into Temporal
+    // Request payload: {project_id, tenant_id, schedules: [...]}
+    // Response payload: {status, registered_count}
+    rpc RegisterSchedules(contextcore.ContextUnit) returns (contextcore.ContextUnit);
 }

@@ -9,12 +9,13 @@ This module re-exports all public API from submodules for backward compatibility
 from __future__ import annotations
 
 # Re-export all public API
-from .brain import BrainClient
+from .bootstrap import bootstrap_django, bootstrap_standalone, register_and_start
+from .clients import RouterClient, WorkerClient
+from .clients.brain import BrainClient
 from .context_unit import ContextUnit
 from .models import CotStep, SearchResult, SecurityScopes, UnitMetrics
-from .router_client import RouterClient
-from .smart_client import SmartBrainClient, SmartWorkerClient
-from .worker_client import WorkerClient
+from .streaming import FederatedToolCallContext
+from .tools import ToolRegistry, federated_tool
 
 __all__ = [
     # Core data structures
@@ -23,10 +24,16 @@ __all__ = [
     "SearchResult",
     "UnitMetrics",
     "SecurityScopes",
+    "FederatedToolCallContext",
     # Clients
     "BrainClient",
     "RouterClient",
     "WorkerClient",
-    "SmartBrainClient",
-    "SmartWorkerClient",
+    # Bootstrap
+    "register_and_start",
+    "bootstrap_django",
+    "bootstrap_standalone",
+    # Tool decorator
+    "federated_tool",
+    "ToolRegistry",
 ]

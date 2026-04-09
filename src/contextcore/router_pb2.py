@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from . import context_unit_pb2 as context__unit__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0crouter.proto\x12\rcontextrouter\x1a\x12\x63ontext_unit.proto2\x85\x04\n\rRouterService\x12\x42\n\x0c\x45xecuteAgent\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bStreamAgent\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12G\n\x11\x45xecuteDispatcher\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12H\n\x10StreamDispatcher\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x43\n\rRegisterTools\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x45\n\x0f\x44\x65registerTools\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12L\n\x12ToolExecutorStream\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit(\x01\x30\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0crouter.proto\x12\rcontextrouter\x1a\x12\x63ontext_unit.proto2\xc1\x03\n\rRouterService\x12\x42\n\x0c\x45xecuteAgent\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12\x43\n\x0bStreamAgent\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12G\n\x11\x45xecuteDispatcher\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12H\n\x10StreamDispatcher\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit0\x01\x12\x46\n\x10RegisterManifest\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit\x12L\n\x12ToolExecutorStream\x12\x18.contextcore.ContextUnit\x1a\x18.contextcore.ContextUnit(\x01\x30\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,5 +33,5 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'router_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_ROUTERSERVICE']._serialized_start=52
-  _globals['_ROUTERSERVICE']._serialized_end=569
+  _globals['_ROUTERSERVICE']._serialized_end=501
 # @@protoc_insertion_point(module_scope)

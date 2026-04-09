@@ -62,7 +62,6 @@ class ContextUnit(BaseModel):
     Example:
         unit = ContextUnit(
             payload={"tenant_id": "abc", "query_text": "climate solutions"},
-            provenance=["router:rag_agent"],
         )
         response_pb = await stub.Search(unit.to_protobuf(context_unit_pb2))
         result = ContextUnit.from_protobuf(response_pb)
@@ -75,7 +74,6 @@ class ContextUnit(BaseModel):
     modality: str = "text"
     payload: dict[str, Any] = Field(default_factory=dict)
 
-    provenance: list[str] = Field(default_factory=list)
     chain_of_thought: list[CotStep] = Field(default_factory=list)
 
     metrics: UnitMetrics = Field(default_factory=UnitMetrics)
@@ -127,7 +125,6 @@ class ContextUnit(BaseModel):
             parent_unit_id=str(self.parent_unit_id) if self.parent_unit_id else "",
             modality=0,  # Need mapping for enum
             payload=payload_struct,
-            provenance=self.provenance,
             chain_of_thought=cot_steps,
             metrics=metrics_pb,
             security=security_pb,
@@ -179,7 +176,6 @@ class ContextUnit(BaseModel):
             "trace_id": UUID(unit_pb.trace_id) if unit_pb.trace_id else uuid4(),
             "parent_unit_id": UUID(unit_pb.parent_unit_id) if unit_pb.parent_unit_id else None,
             "payload": payload,
-            "provenance": list(unit_pb.provenance),
             "chain_of_thought": cot_steps,
             "created_at": unit_pb.created_at.ToDatetime() if unit_pb.created_at.seconds else datetime.now(timezone.utc),
         }
@@ -190,6 +186,21 @@ class ContextUnit(BaseModel):
             kwargs["security"] = security
 
         return cls(**kwargs)
+
+    @classmethod
+    def from_protobuf_bytes(cls, data: bytes, pb_module) -> "ContextUnit":
+        """Deserialize raw protobuf bytes to Pydantic ContextUnit.
+
+        This is the conformant way to deserialize bytes without creating
+        a bare pb2 constructor in production code.
+
+        Args:
+            data: Serialized protobuf bytes
+            pb_module: The context_unit_pb2 module
+        """
+        pb = pb_module.ContextUnit()
+        pb.ParseFromString(data)
+        return cls.from_protobuf(pb)
 
 
 __all__ = ["ContextUnit"]

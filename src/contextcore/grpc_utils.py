@@ -15,12 +15,13 @@ Environment variables (read only when ``GRPC_TLS_ENABLED=true``):
 
 from __future__ import annotations
 
-import logging
-import os
+import json
 from pathlib import Path
 
 import grpc
 import grpc.aio
+
+from .logging import get_context_unit_logger
 
 __all__ = [
     "create_channel",
@@ -31,7 +32,7 @@ __all__ = [
     "tls_enabled",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_context_unit_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +42,9 @@ logger = logging.getLogger(__name__)
 
 def tls_enabled() -> bool:
     """Check if TLS is configured via environment."""
-    return os.getenv("GRPC_TLS_ENABLED", "false").lower() in ("true", "1", "yes")
+    from .config import get_core_config
+
+    return get_core_config().tls_enabled
 
 
 def _read_file(path: str) -> bytes:
@@ -52,11 +55,13 @@ def _read_file(path: str) -> bytes:
     return p.read_bytes()
 
 
-def _get_env(var: str) -> str:
-    """Get a required environment variable or raise."""
-    value = os.getenv(var)
+def _require_tls_path(field: str, env_name: str) -> str:
+    """Get a required TLS path variable or raise."""
+    from .config import get_core_config
+
+    value = getattr(get_core_config(), field)
     if not value:
-        raise EnvironmentError(f"TLS is enabled (GRPC_TLS_ENABLED=true) but {var} is not set")
+        raise EnvironmentError(f"TLS is enabled but {env_name} is not set")
     return value
 
 
@@ -64,9 +69,35 @@ def _get_env(var: str) -> str:
 # Client-side: channel creation
 # ---------------------------------------------------------------------------
 
+
+_SERVICE_CONFIG = json.dumps(
+    {
+        "methodConfig": [
+            {
+                "name": [{}],
+                "retryPolicy": {
+                    "maxAttempts": 4,
+                    "initialBackoff": "0.1s",
+                    "maxBackoff": "1s",
+                    "backoffMultiplier": 2,
+                    "retryableStatusCodes": ["UNAVAILABLE", "INTERNAL"],
+                },
+            }
+        ]
+    }
+)
+
 _GRPC_OPTIONS = [
     ("grpc.max_send_message_length", 50 * 1024 * 1024),
     ("grpc.max_receive_message_length", 50 * 1024 * 1024),
+    ("grpc.enable_retries", 1),
+    ("grpc.service_config", _SERVICE_CONFIG),
+    ("grpc.keepalive_time_ms", 60000),  # Less aggressive, 60s
+    ("grpc.keepalive_timeout_ms", 10000),
+    (
+        "grpc.keepalive_permit_without_calls",
+        0,
+    ),  # STRICT: Do not ping idle channels (prevents ENHANCE_YOUR_CALM server drop)
 ]
 
 
@@ -85,11 +116,14 @@ def create_channel(target: str) -> grpc.aio.Channel:
     if not tls_enabled():
         return grpc.aio.insecure_channel(target, options=_GRPC_OPTIONS)
 
-    ca_cert = _read_file(_get_env("GRPC_TLS_CA_CERT"))
+    ca_cert = _read_file(_require_tls_path("tls_ca_cert", "GRPC_TLS_CA_CERT"))
 
     # mTLS: provide client cert/key for mutual authentication
-    client_cert_path = os.getenv("GRPC_TLS_CLIENT_CERT")
-    client_key_path = os.getenv("GRPC_TLS_CLIENT_KEY")
+    from .config import get_core_config
+
+    config = get_core_config()
+    client_cert_path = config.tls_client_cert
+    client_key_path = config.tls_client_key
 
     if client_cert_path and client_key_path:
         client_cert = _read_file(client_cert_path)
@@ -117,10 +151,13 @@ def create_channel_sync(target: str) -> grpc.Channel:
     if not tls_enabled():
         return grpc.insecure_channel(target, options=_GRPC_OPTIONS)
 
-    ca_cert = _read_file(_get_env("GRPC_TLS_CA_CERT"))
+    ca_cert = _read_file(_require_tls_path("tls_ca_cert", "GRPC_TLS_CA_CERT"))
 
-    client_cert_path = os.getenv("GRPC_TLS_CLIENT_CERT")
-    client_key_path = os.getenv("GRPC_TLS_CLIENT_KEY")
+    from .config import get_core_config
+
+    config = get_core_config()
+    client_cert_path = config.tls_client_cert
+    client_key_path = config.tls_client_key
 
     if client_cert_path and client_key_path:
         client_cert = _read_file(client_cert_path)
@@ -158,11 +195,13 @@ def create_server_credentials() -> grpc.ServerCredentials | None:
     if not tls_enabled():
         return None
 
-    ca_cert = _read_file(_get_env("GRPC_TLS_CA_CERT"))
-    server_cert = _read_file(_get_env("GRPC_TLS_SERVER_CERT"))
-    server_key = _read_file(_get_env("GRPC_TLS_SERVER_KEY"))
+    ca_cert = _read_file(_require_tls_path("tls_ca_cert", "GRPC_TLS_CA_CERT"))
+    server_cert = _read_file(_require_tls_path("tls_server_cert", "GRPC_TLS_SERVER_CERT"))
+    server_key = _read_file(_require_tls_path("tls_server_key", "GRPC_TLS_SERVER_KEY"))
 
-    require_client_auth = os.getenv("GRPC_TLS_REQUIRE_CLIENT_AUTH", "true").lower() not in ("false", "0", "no")
+    from .config import get_core_config
+
+    require_client_auth = get_core_config().tls_require_client_auth
 
     logger.info(
         "TLS server credentials loaded (mTLS=%s)",
@@ -193,16 +232,8 @@ def bind_server_port(
         service_name: Human label for log messages.
         instance_name: Optional instance identifier for log messages.
     """
-    from .security import shield_status
-
-    # Log security posture
-    sec = shield_status()
-    sec_log = logger.info if sec["security_enabled"] else logger.warning
-    sec_log(
-        "Security: enabled=%s, shield=%s",
-        sec["security_enabled"],
-        "active" if sec["shield_active"] else "not installed",
-    )
+    # Log security posture (security is always enabled fundamentally)
+    logger.info("Security: always-on")
 
     # Bind TLS or insecure
     tls_creds = create_server_credentials()

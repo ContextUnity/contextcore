@@ -7,12 +7,12 @@ the security guard node.
 
 from __future__ import annotations
 
-import logging
+from contextcore.logging import get_context_unit_logger
 
 from .constants import Permissions
 from .policy import ToolPolicy, ToolRisk, ToolScope
 
-logger = logging.getLogger(__name__)
+logger = get_context_unit_logger(__name__)
 
 
 def has_tool_access(permissions: tuple[str, ...] | list[str], tool_name: str) -> bool:

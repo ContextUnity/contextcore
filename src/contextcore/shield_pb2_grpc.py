@@ -112,6 +112,26 @@ class ShieldServiceStub(object):
                 request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
                 response_deserializer=context__unit__pb2.ContextUnit.FromString,
                 _registered_method=True)
+        self.SyncProjectPolicy = channel.unary_unary(
+                '/contextshield.ShieldService/SyncProjectPolicy',
+                request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+                response_deserializer=context__unit__pb2.ContextUnit.FromString,
+                _registered_method=True)
+        self.IssueSessionToken = channel.unary_unary(
+                '/contextshield.ShieldService/IssueSessionToken',
+                request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+                response_deserializer=context__unit__pb2.ContextUnit.FromString,
+                _registered_method=True)
+        self.GetProjectPublicKey = channel.unary_unary(
+                '/contextshield.ShieldService/GetProjectPublicKey',
+                request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+                response_deserializer=context__unit__pb2.ContextUnit.FromString,
+                _registered_method=True)
+        self.RotateProjectKey = channel.unary_unary(
+                '/contextshield.ShieldService/RotateProjectKey',
+                request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+                response_deserializer=context__unit__pb2.ContextUnit.FromString,
+                _registered_method=True)
 
 
 class ShieldServiceServicer(object):
@@ -267,6 +287,50 @@ class ShieldServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SyncProjectPolicy(self, request, context):
+        """=====================================================
+        Per-Project PKI RPCs
+        =====================================================
+        Key management for per-project Ed25519 signing.
+        Projects authenticate with CU_PROJECT_SECRET (HMAC)
+        and receive Shield-signed session tokens.
+        =====================================================
+
+        Sync project policy given a manifest
+        Request payload: { project_id, manifest_yaml }
+        Response payload: { updated: true, allowed_permissions: [...] }
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def IssueSessionToken(self, request, context):
+        """IssueSessionToken — Project authenticates and gets a session token
+        Request payload: { project_id: string, hmac_proof: string }
+        Response payload: { session_token: string, kid: string, expires_at: float, permissions: [...] }
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetProjectPublicKey(self, request, context):
+        """GetProjectPublicKey — Router fetches a project's Ed25519 public key
+        Request payload: { project_id: string }
+        Response payload: { public_key_b64: string, algorithm: string, kid: string }
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RotateProjectKey(self, request, context):
+        """RotateProjectKey — Rotate Ed25519 keypair for a project
+        Request payload: { project_id: string }
+        Response payload: { new_public_key_b64: string, kid: string, rotation_count: int }
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ShieldServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -337,6 +401,26 @@ def add_ShieldServiceServicer_to_server(servicer, server):
             ),
             'Decrypt': grpc.unary_unary_rpc_method_handler(
                     servicer.Decrypt,
+                    request_deserializer=context__unit__pb2.ContextUnit.FromString,
+                    response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            ),
+            'SyncProjectPolicy': grpc.unary_unary_rpc_method_handler(
+                    servicer.SyncProjectPolicy,
+                    request_deserializer=context__unit__pb2.ContextUnit.FromString,
+                    response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            ),
+            'IssueSessionToken': grpc.unary_unary_rpc_method_handler(
+                    servicer.IssueSessionToken,
+                    request_deserializer=context__unit__pb2.ContextUnit.FromString,
+                    response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            ),
+            'GetProjectPublicKey': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetProjectPublicKey,
+                    request_deserializer=context__unit__pb2.ContextUnit.FromString,
+                    response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            ),
+            'RotateProjectKey': grpc.unary_unary_rpc_method_handler(
+                    servicer.RotateProjectKey,
                     request_deserializer=context__unit__pb2.ContextUnit.FromString,
                     response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
             ),
@@ -725,6 +809,114 @@ class ShieldService(object):
             request,
             target,
             '/contextshield.ShieldService/Decrypt',
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SyncProjectPolicy(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/contextshield.ShieldService/SyncProjectPolicy',
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def IssueSessionToken(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/contextshield.ShieldService/IssueSessionToken',
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetProjectPublicKey(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/contextshield.ShieldService/GetProjectPublicKey',
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RotateProjectKey(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/contextshield.ShieldService/RotateProjectKey',
             context__unit__pb2.ContextUnit.SerializeToString,
             context__unit__pb2.ContextUnit.FromString,
             options,

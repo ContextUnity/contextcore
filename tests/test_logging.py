@@ -145,7 +145,7 @@ class TestSetupLogging:
         config = SharedConfig(log_level=LogLevel.INFO)
         setup_logging(config=config, json_format=True)
 
-        logger = logging.getLogger("test")
+        logger = get_context_unit_logger("test")
         logger.info("Test message")
 
         # Capture stderr output (where StreamHandler writes)
@@ -164,7 +164,7 @@ class TestSetupLogging:
         config = SharedConfig(log_level=LogLevel.INFO)
         setup_logging(config=config, json_format=False)
 
-        logger = logging.getLogger("test")
+        logger = get_context_unit_logger("test")
         logger.info("Test message")
 
         # Capture stderr output (where StreamHandler writes)

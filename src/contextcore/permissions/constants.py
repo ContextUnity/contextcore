@@ -27,11 +27,16 @@ class Permissions:
     """
 
     # ── Service Access ──────────────────────────────────
-    DISPATCHER_EXECUTE = "dispatcher:execute"
-    ROUTER_INVOKE = "router:invoke"
+    ROUTER_EXECUTE = "router:execute"
     BRAIN_READ = "brain:read"
     BRAIN_WRITE = "brain:write"
     SHIELD_CHECK = "shield:check"
+    SHIELD_SESSION_TOKEN_ISSUE = "shield:session_token:issue"
+    SHIELD_PROJECT_KEY_READ = "shield:project_key:read"
+    SHIELD_PROJECT_KEY_ROTATE = "shield:project_key:rotate"
+    SHIELD_POLICY_WRITE = "shield:policy:write"
+    SHIELD_SECRETS_READ = "shield:secrets:read"
+    SHIELD_SECRETS_WRITE = "shield:secrets:write"
     ZERO_ALL = "zero:*"  # Wildcard — access to all Zero operations
     ZERO_ANONYMIZE = "zero:anonymize"
     ZERO_DEANONYMIZE = "zero:deanonymize"

@@ -45,6 +45,24 @@ class ContextToken:
     agent_id: str | None = None  # Executing agent identity (None = unspecified)
     user_namespace: str = "default"  # Access tier: free, pro, admin, system
 
+    # Traceability — cryptographically tied data lineage
+    provenance: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Pre-compute expanded permissions for inheritance-aware access checks.
+
+        Uses ``object.__setattr__`` because this is a frozen dataclass.
+        ``_effective_permissions`` is consumed by ``has_permission()``,
+        ``can_read()``, ``can_write()``, and ``TokenBuilder.verify()``.
+        """
+        from .permissions.inheritance import expand_permissions
+
+        object.__setattr__(
+            self,
+            "_effective_permissions",
+            frozenset(expand_permissions(self.permissions)),
+        )
+
     def is_expired(self, *, now: float | None = None) -> bool:
         """Check if token has expired."""
         if self.exp_unix is None:
@@ -53,8 +71,12 @@ class ContextToken:
         return t >= self.exp_unix
 
     def has_permission(self, permission: str) -> bool:
-        """Check if token has a specific permission."""
-        return permission in self.permissions
+        """Check if token has a specific permission (including inherited).
+
+        Uses expanded permissions: ``admin:all`` implies ``brain:read``, etc.
+        See :data:`~contextcore.permissions.inheritance.PERMISSION_INHERITANCE`.
+        """
+        return permission in self._effective_permissions
 
     def can_access_tenant(self, tenant_id: str) -> bool:
         """Check if token is authorized to access a given tenant.
@@ -77,23 +99,23 @@ class ContextToken:
         """Check if token can read from the given security scopes.
 
         Returns True if:
-        - Any token permission matches any read scope, OR
+        - Any effective (expanded) permission matches any read scope, OR
         - Read scopes are empty (no restrictions)
         """
         if not scopes.read:
             return True  # No restrictions
-        return any(perm in scopes.read for perm in self.permissions)
+        return bool(self._effective_permissions & set(scopes.read))
 
     def can_write(self, scopes: SecurityScopes) -> bool:
         """Check if token can write to the given security scopes.
 
         Returns True if:
-        - Any token permission matches any write scope, OR
+        - Any effective (expanded) permission matches any write scope, OR
         - Write scopes are empty (no restrictions)
         """
         if not scopes.write:
             return True  # No restrictions
-        return any(perm in scopes.write for perm in self.permissions)
+        return bool(self._effective_permissions & set(scopes.write))
 
 
 class TokenBuilder:
@@ -102,17 +124,9 @@ class TokenBuilder:
     Part of the ContextUnit protocol. Creates and validates ContextToken instances
     that integrate with ContextUnit.security for capability-based access control.
 
-    Note: This is a minimal implementation. Services may extend this with
-    service-specific configuration (e.g., Config, private keys).
+    Security is always enforced — there is no opt-out.
+    Signing is handled by contextcore.signing backends (auto-detected).
     """
-
-    def __init__(self, *, enabled: bool = True, private_key_path: str | None = None) -> None:
-        self._enabled = enabled
-        self._private_key_path = private_key_path
-
-    @property
-    def enabled(self) -> bool:
-        return self._enabled
 
     def mint_root(
         self,
@@ -146,6 +160,9 @@ class TokenBuilder:
         token_id = secrets.token_urlsafe(16)
         revocation_id = f"rev-{secrets.token_urlsafe(12)}"
         exp_unix = time.time() + float(ttl_s)
+
+        identity = user_id or agent_id or "system"
+
         return ContextToken(
             token_id=token_id,
             permissions=tuple(permissions),
@@ -155,6 +172,7 @@ class TokenBuilder:
             user_id=user_id,
             agent_id=agent_id,
             user_namespace=user_namespace,
+            provenance=(f"*{identity}",),
         )
 
     def attenuate(
@@ -184,7 +202,22 @@ class TokenBuilder:
         exp_unix = token.exp_unix
         if ttl_s is not None:
             exp_unix = min(exp_unix or (time.time() + ttl_s), time.time() + ttl_s)
-        perms = token.permissions if permissions is None else tuple(permissions)
+
+        if permissions is not None:
+            from .permissions.validation import validate_attenuation_permissions
+
+            perms = validate_attenuation_permissions(token.permissions, tuple(permissions))
+        else:
+            perms = token.permissions
+
+        # ── Update Provenance ──
+        new_provenance = list(token.provenance)
+
+        # Provenance tracks the delegation chain (who → who).
+        # Scopes are NOT recorded here — they are in token.permissions.
+        if agent_id is not None and agent_id != token.agent_id:
+            new_provenance.append(f">{agent_id}")
+
         return ContextToken(
             token_id=token.token_id,
             permissions=perms,
@@ -194,21 +227,22 @@ class TokenBuilder:
             user_id=token.user_id,
             agent_id=agent_id if agent_id is not None else token.agent_id,
             user_namespace=token.user_namespace,
+            provenance=tuple(new_provenance),
         )
 
     def verify(self, token: ContextToken, *, required_permission: str) -> None:
-        """Verify token has required permission.
+        """Verify token has required permission (inheritance-aware).
+
+        Uses ``has_permission()`` which checks expanded permissions.
 
         Raises:
             PermissionError: If token is missing, expired, or lacks permission
         """
-        if not self._enabled:
-            return
         if not isinstance(token, ContextToken):
             raise PermissionError("Missing token")
         if token.is_expired():
             raise PermissionError("Token expired")
-        if required_permission not in token.permissions:
+        if not token.has_permission(required_permission):
             raise PermissionError(f"Missing permission: {required_permission}")
 
     def verify_unit_access(
@@ -228,8 +262,7 @@ class TokenBuilder:
         Raises:
             PermissionError: If token cannot access the unit
         """
-        if not self._enabled:
-            return
+        # Security is always enforced — no opt-out.
 
         if not isinstance(token, ContextToken):
             raise PermissionError("Missing token")
@@ -302,6 +335,7 @@ def mint_service_token(
             permissions=tuple(permissions),
             allowed_tenants=tuple(allowed_tenants),
             exp_unix=time.time() + float(ttl_s),
+            provenance=(f"service:{token_id}",),
         )
         _service_token_cache[token_id] = token
         return token
@@ -341,7 +375,7 @@ _BRAIN_PERMISSION_MAP: dict[str, tuple[str, ...]] = {
         Permissions.MEMORY_READ,
         Permissions.TRACE_WRITE,
         Permissions.WORKER_EXECUTE,
-        Permissions.ROUTER_INVOKE,
+        Permissions.ROUTER_EXECUTE,
     ),
     "zero": (Permissions.TRACE_WRITE,),
 }

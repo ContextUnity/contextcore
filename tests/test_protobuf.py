@@ -49,16 +49,6 @@ class TestProtobufConversion:
         assert str(unit.trace_id) == tid
         assert unit.payload.get("test") == "data"
 
-    def test_to_protobuf_with_provenance(self) -> None:
-        """Test ContextUnit with provenance to protobuf."""
-        unit = ContextUnit(provenance=["source1", "source2", "source3"])
-
-        unit_pb = unit.to_protobuf(context_unit_pb2)
-        assert len(unit_pb.provenance) == 3
-        assert "source1" in unit_pb.provenance
-        assert "source2" in unit_pb.provenance
-        assert "source3" in unit_pb.provenance
-
     def test_to_protobuf_with_chain_of_thought(self) -> None:
         """Test ContextUnit with chain of thought to protobuf."""
         unit = ContextUnit()
@@ -109,7 +99,6 @@ class TestProtobufConversion:
             unit_id=uuid4(),
             trace_id=uuid4(),
             payload={"test": "data", "number": 42},
-            provenance=["source1", "source2"],
             modality="text",
         )
         original.chain_of_thought.append(CotStep(agent="agent1", action="action1", status="completed"))
@@ -124,7 +113,6 @@ class TestProtobufConversion:
         assert restored.trace_id == original.trace_id
         assert restored.modality == original.modality
         assert restored.payload.get("test") == "data"
-        assert len(restored.provenance) == 2
         assert len(restored.chain_of_thought) == 1
         assert restored.chain_of_thought[0].agent == "agent1"
 
@@ -246,7 +234,6 @@ class TestProtobufConversion:
                         },
                     ],
                 },
-                "provenance": ["agent:dispatcher", "tool:search"],
             }
         )
         # Must serialize without errors

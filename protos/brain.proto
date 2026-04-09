@@ -45,26 +45,6 @@ service BrainService {
     // NewsEngine Operations
     // =========================================
 
-    // Upsert news item (raw or fact)
-    // Request payload: {tenant_id, item_type, url, headline, summary, category?, source_api?, metadata?}
-    // Response payload: {id, success, message?}
-    rpc UpsertNewsItem(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-
-    // Get news items
-    // Request payload: {tenant_id, item_type, limit?, since?}
-    // Response payload: {id, url, headline, summary, category, metadata}
-    rpc GetNewsItems(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
-
-    // Upsert generated post
-    // Request payload: {tenant_id, headline, content, agent, emoji?, fact_url?, fact_id?, scheduled_at?}
-    // Response payload: {id, success}
-    rpc UpsertNewsPost(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-
-    // Check if news post with given URL already exists
-    // Request payload: {tenant_id, fact_url}
-    // Response payload: {exists: bool}
-    rpc CheckNewsPostExists(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-
 
     // =========================================
     // Episodic & Entity Memory

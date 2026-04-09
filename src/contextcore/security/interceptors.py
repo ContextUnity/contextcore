@@ -1,58 +1,25 @@
 """gRPC interceptors for ContextUnity service-level authentication.
 
 Provides:
-- ``EnforcementMode`` — three-state toggle: off / warn / enforce.
 - ``check_permission`` — standalone permission + tenant check.
 - ``ServicePermissionInterceptor`` — unified, parameterised server interceptor.
-- ``TokenValidationInterceptor`` — legacy interceptor (backward compatibility).
 - ``_extract_rpc_name``, ``_should_skip`` — helper utilities.
 """
 
 from __future__ import annotations
 
-import logging
-from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Awaitable, Callable
+
+if TYPE_CHECKING:
+    from contextcore.signing import AuthBackend
 
 import grpc
 
+from contextcore.logging import get_context_unit_logger
+
 from ..tokens import ContextToken
-from .guard import SecurityConfig
 
-logger = logging.getLogger(__name__)
-
-
-# ── Enforcement Mode ────────────────────────────────────────────
-
-
-class EnforcementMode(str, Enum):
-    """Three-state security enforcement toggle.
-
-    - ``off``     — no security checks, only caller-identity logging.
-    - ``warn``    — check permissions, log denials as WARNING, but allow through.
-    - ``enforce`` — check permissions, deny on failure (production).
-
-    Set via env ``SECURITY_ENFORCEMENT=off|warn|enforce``.
-    """
-
-    OFF = "off"
-    WARN = "warn"
-    ENFORCE = "enforce"
-
-    @classmethod
-    def from_env(cls) -> EnforcementMode:
-        """Read from ``SECURITY_ENFORCEMENT`` env var (default: warn)."""
-        import os  # Localized: only place in contextcore where os.environ is read directly
-
-        raw = os.environ.get("SECURITY_ENFORCEMENT", "warn").strip().lower()
-        try:
-            return cls(raw)
-        except ValueError:
-            logger.warning(
-                "Unknown SECURITY_ENFORCEMENT=%r, defaulting to 'warn'",
-                raw,
-            )
-            return cls.WARN
+logger = get_context_unit_logger(__name__)
 
 
 # Method prefixes that bypass permission checks
@@ -89,7 +56,8 @@ def check_permission(
 ) -> str | None:
     """Check if token has the required permission and tenant access.
 
-    Supports wildcard expansion via ``contextcore.permissions.expand_permissions``.
+    Uses ``token.has_permission()`` which is inheritance-aware
+    (``admin:all`` implies ``brain:read``, etc.).
 
     Args:
         token: The caller's ContextToken.
@@ -99,12 +67,8 @@ def check_permission(
     Returns:
         None if allowed, or a human-readable denial reason.
     """
-    from ..permissions import expand_permissions
-
-    if required not in token.permissions:
-        expanded = expand_permissions(token.permissions)
-        if required not in expanded:
-            return f"missing permission: {required}"
+    if not token.has_permission(required):
+        return f"missing permission: {required}"
 
     if tenant_id and hasattr(token, "can_access_tenant"):
         if not token.can_access_tenant(tenant_id):
@@ -120,27 +84,13 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
     """Unified gRPC server interceptor for domain-specific permission enforcement.
 
     Sits before all handlers and:
-    1. Logs caller identity (always, even when security is disabled)
-    2. Extracts ContextToken from gRPC metadata
-    3. Maps the RPC method to its required permission via ``rpc_permission_map``
-    4. Validates the token carries that permission (+ tenant isolation)
-    5. Aborts with ``UNAUTHENTICATED`` / ``PERMISSION_DENIED`` if not
-
-    Unmapped RPCs are **denied** (fail-closed security).
-
-    Args:
-        rpc_permission_map: Mapping of RPC name → required permission string.
-        service_name: Human-readable service name for log messages (e.g. ``"Brain"``).
-        enforcement: Three-state mode (off / warn / enforce).
-            Defaults to ``SECURITY_ENFORCEMENT`` env var (``warn`` if unset).
-
-    Usage::
-
-        interceptor = ServicePermissionInterceptor(
-            rpc_permission_map=RPC_MAP,
-            service_name="Brain",
-            enforcement=EnforcementMode.WARN,   # safe rollout
-        )
+    1. Logs caller identity
+    2. Extracts ContextToken string from gRPC metadata
+    3. Infers project_id from composite kid
+    4. Dynamically builds the verification backend (from Redis/Shield)
+    5. Validates the token cryptographically
+    6. Checks permissions
+    7. Aborts with ``UNAUTHENTICATED`` / ``PERMISSION_DENIED`` if any check fails
     """
 
     def __init__(
@@ -148,29 +98,137 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
         rpc_permission_map: dict[str, str],
         *,
         service_name: str = "Service",
-        enforcement: EnforcementMode | None = None,
+        shield_url: str | None = None,
     ) -> None:
         self._rpc_map = rpc_permission_map
         self._service_name = service_name
-        self._mode = enforcement if enforcement is not None else EnforcementMode.from_env()
+        self._shield_url = shield_url
+        logger.info("%s interceptor initialized (enforce mode, shield_url=%s)", self._service_name, self._shield_url)
 
-        if self._mode != EnforcementMode.OFF:
-            _mode_desc = {
-                EnforcementMode.WARN: "warn (log denials but allow through)",
-                EnforcementMode.ENFORCE: "enforce (block unauthorized requests)",
-            }
-            logger.info(
-                "%s interceptor: enforcement=%s",
-                self._service_name,
-                _mode_desc.get(self._mode, self._mode.value),
-            )
+    async def _build_verifier_backend(self, token_str: str) -> "AuthBackend | None":
+        """Parse the kid and build the appropriate verifier backend.
+
+        Loads project_secret or public key from Redis via discovery.py.
+        If kid points to a Shield session token and we don't have it,
+        fetches it from Shield.
+        """
+        parts = token_str.split(".")
+        if len(parts) != 3:
+            return None
+
+        kid = parts[0]
+        if ":" not in kid:
+            logger.warning("Rejecting token with legacy non-composite kid: %s", kid)
+            return None
+
+        project_id, key_version = kid.split(":", 1)
+
+        # We need to fetch the key material from Redis
+        try:
+            import asyncio
+
+            from ..discovery import get_project_key
+
+            if asyncio.iscoroutinefunction(get_project_key):
+                key_data = await get_project_key(project_id)
+            else:
+                key_data = get_project_key(project_id)
+        except (ImportError, AttributeError):
+            key_data = None
+
+        if not key_data:
+            if "session" in key_version and self._shield_url:
+                try:
+                    from ..discovery import update_project_public_key
+                    from ..token_utils import fetch_project_public_key_async
+
+                    pub_key_b64, returned_kid = await fetch_project_public_key_async(
+                        project_id,
+                        kid,
+                        self._shield_url,
+                        provenance=f"{self._service_name.lower()}:fetch_public_key",
+                    )
+                    update_project_public_key(project_id, pub_key_b64, returned_kid)
+                    try:
+                        from contextcore.ed25519 import Ed25519Backend
+
+                        return Ed25519Backend(public_key_b64=pub_key_b64, kid=returned_kid)
+                    except ImportError:
+                        logger.error("contextshield not installed, cannot verify Ed25519 tokens")
+                        return None
+                except Exception as e:
+                    logger.warning(
+                        "Failed bootstrap public-key fetch from Shield for %s: %s",
+                        kid,
+                        e,
+                    )
+                    return None
+            # Fallback: CU_PROJECT_SECRET env var (dev/testing, or single-project setup)
+
+            from contextcore.config import get_core_config
+
+            secret = get_core_config().security.project_secret
+            if secret:
+                from ..signing import HmacBackend
+
+                return HmacBackend(project_id, project_secret=secret)
+            logger.warning("No key material found in Redis for project %s", project_id)
+            return None
+
+        # Determine Algorithm
+        if "session" in key_version:
+            # Ed25519 Session Token
+            pub_key_b64 = key_data.get("public_key_b64")
+            if not pub_key_b64 and self._shield_url:
+                try:
+                    from ..discovery import update_project_public_key
+                    from ..token_utils import fetch_project_public_key_async
+
+                    pub_key_b64, returned_kid = await fetch_project_public_key_async(
+                        project_id,
+                        kid,
+                        self._shield_url,
+                        provenance=f"{self._service_name.lower()}:fetch_public_key",
+                    )
+                    update_project_public_key(project_id, pub_key_b64, returned_kid)
+                except Exception as e:
+                    logger.warning("Failed to fetch public key from Shield for %s: %s", kid, e)
+                    return None
+
+            if pub_key_b64:
+                try:
+                    from contextcore.ed25519 import Ed25519Backend
+
+                    return Ed25519Backend(public_key_b64=pub_key_b64, kid=kid)
+                except ImportError:
+                    logger.error("contextshield not installed, cannot verify Ed25519 tokens")
+        else:
+            # HMAC Token
+            secret = key_data.get("project_secret")
+            if not secret:
+                logger.warning(
+                    "No HMAC secret found for project %s (kid=%s, key_version=%s)", project_id, kid, key_version
+                )
+                return None
+
+            from ..signing import HmacBackend
+
+            return HmacBackend(project_id, project_secret=secret)
 
     async def intercept_service(
         self,
-        continuation: Any,
+        continuation: Callable[[grpc.HandlerCallDetails], Awaitable[grpc.RpcMethodHandler]],
         handler_call_details: grpc.HandlerCallDetails,
     ) -> grpc.RpcMethodHandler:
-        """Intercept incoming gRPC calls for permission validation."""
+        """Intercept incoming gRPC calls for permission validation.
+
+        Dual-header flow (Enterprise mode with SessionTokenBackend):
+          - ``authorization``: Ed25519 SessionToken → project-level authn + permission check
+          - ``x-context-token``: HMAC ContextToken → per-request user identity
+
+        Single-header flow (HMAC mode):
+          - ``authorization``: HMAC ContextToken → both authn and user identity
+        """
         method = handler_call_details.method or ""
 
         # Skip health checks / reflection
@@ -180,40 +238,53 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
         rpc_name = _extract_rpc_name(method)
         metadata = dict(handler_call_details.invocation_metadata or [])
 
-        # ── LOGGING (always active) ───────────────────────────────
+        # ── Extract token strings ─────────────────────────────────
+        # Primary: authorization header (project auth / single-header)
+        auth_token_str = ""
+        auth = metadata.get("authorization", "")
+        if auth.startswith("Bearer "):
+            auth_token_str = auth[7:].strip()
+
+        # Secondary: x-context-token (user identity in dual-header mode)
+        user_token_str = metadata.get("x-context-token", "").strip()
+
+        # Pick the primary token string for auth/permission verification
+        token_str = auth_token_str or user_token_str
+
+        # Build Verifier Backend & Verify Token
+        token: ContextToken | None = None
         caller_id = "anonymous"
         tenant_info = ""
 
-        token_str = metadata.get("x-context-token", "").strip()
-        if not token_str:
-            auth = metadata.get("authorization", "")
-            if auth.startswith("Bearer "):
-                token_str = auth[7:].strip()
-
-        token: ContextToken | None = None
         if token_str:
-            try:
-                from ..token_utils import parse_token_string
+            from ..token_utils import parse_token_string, verify_token_string
 
-                token = parse_token_string(token_str)
-                if token:
-                    caller_id = token.agent_id or token.token_id or "unknown"
-                    if token.allowed_tenants:
-                        tenant_info = f" tenants={list(token.allowed_tenants)}"
-            except Exception:
-                pass  # Don't break RPC flow for logging
+            # For logging only: parse without verification
+            unsafe_token = parse_token_string(token_str)
+            if unsafe_token:
+                caller_id = unsafe_token.agent_id or unsafe_token.token_id or "unknown"
+                if unsafe_token.allowed_tenants:
+                    tenant_info = f" tenants={list(unsafe_token.allowed_tenants)}"
 
-        logger.info(
-            "%s RPC %s | caller=%s%s",
-            self._service_name,
-            rpc_name,
-            caller_id,
-            tenant_info,
-        )
+            logger.info(
+                "%s RPC %s | caller=%s%s",
+                self._service_name,
+                rpc_name,
+                caller_id,
+                tenant_info,
+            )
+
+            backend = await self._build_verifier_backend(token_str)
+            if backend:
+                token = verify_token_string(token_str, backend)
+        else:
+            logger.info(
+                "%s RPC %s | caller=anonymous",
+                self._service_name,
+                rpc_name,
+            )
 
         # ── SECURITY ──────────────────────────────────────────────
-        if self._mode == EnforcementMode.OFF:
-            return await continuation(handler_call_details)
 
         # Map RPC to required permission
         required_permission = self._rpc_map.get(rpc_name)
@@ -227,7 +298,7 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
             deny_reason = f"no token (requires {required_permission})"
             deny_code = grpc.StatusCode.UNAUTHENTICATED
         elif token is None:
-            deny_reason = "invalid token"
+            deny_reason = "invalid token (cryptographic verification failed)"
             deny_code = grpc.StatusCode.UNAUTHENTICATED
         elif token.is_expired():
             deny_reason = f"token expired (token '{token.token_id}')"
@@ -239,16 +310,6 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
                 deny_code = grpc.StatusCode.PERMISSION_DENIED
 
         if deny_reason:
-            # ── WARN mode: log but allow ──────────────────────────
-            if self._mode == EnforcementMode.WARN:
-                logger.warning(
-                    "%s WARN_DENIED '%s' — %s (would block in enforce mode)",
-                    self._service_name,
-                    rpc_name,
-                    deny_reason,
-                )
-                return await continuation(handler_call_details)
-
             # ── ENFORCE mode: actually block ──────────────────────
             logger.warning(
                 "%s DENIED '%s' — %s",
@@ -260,10 +321,35 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
             _deny_msg = f"{self._service_name}: {rpc_name} denied — {deny_reason}"
             _deny_status = deny_code
 
-            async def _denied(request, context):
+            async def _denied_unary_unary(request, context):
                 await context.abort(_deny_status, _deny_msg)
 
-            return grpc.unary_unary_rpc_method_handler(_denied)
+            async def _denied_unary_stream(request, context):
+                await context.abort(_deny_status, _deny_msg)
+                yield
+
+            async def _denied_stream_unary(request_iterator, context):
+                await context.abort(_deny_status, _deny_msg)
+
+            async def _denied_stream_stream(request_iterator, context):
+                await context.abort(_deny_status, _deny_msg)
+                yield
+
+            handler = await continuation(handler_call_details)
+            if not handler:
+                return grpc.unary_unary_rpc_method_handler(_denied_unary_unary)
+
+            req_stream = getattr(handler, "request_streaming", False)
+            res_stream = getattr(handler, "response_streaming", False)
+
+            if req_stream and res_stream:
+                return grpc.stream_stream_rpc_method_handler(_denied_stream_stream)
+            elif req_stream:
+                return grpc.stream_unary_rpc_method_handler(_denied_stream_unary)
+            elif res_stream:
+                return grpc.unary_stream_rpc_method_handler(_denied_unary_stream)
+            else:
+                return grpc.unary_unary_rpc_method_handler(_denied_unary_unary)
 
         logger.debug(
             "%s ALLOWED '%s' for token '%s'",
@@ -272,39 +358,87 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
             token.token_id if token else "anonymous",
         )
 
-        return await continuation(handler_call_details)
+        # ── User identity enrichment from x-context-token ─────────
+        # In dual-header mode (Enterprise), the primary token (SessionToken)
+        # has no user_id. If x-context-token is present and different from
+        # the auth token, verify it and extract user identity.
+        user_identity_token: ContextToken | None = None
+        if token is not None and user_token_str and auth_token_str and user_token_str != auth_token_str:
+            user_id_from_auth = getattr(token, "user_id", None)
+            if not user_id_from_auth or user_id_from_auth == "system":
+                # Detect Enterprise mode: primary token was Ed25519 session token.
+                # In this mode, Router doesn't have the project's HMAC secret,
+                # so we can't verify x-context-token cryptographically.
+                # Instead, trust it transitively — project identity was already
+                # proven by the Ed25519 session token, so the HMAC user token
+                # it attached is trusted.
+                primary_kid = auth_token_str.split(".")[0] if "." in auth_token_str else ""
+                is_enterprise = "session" in primary_kid
 
+                if is_enterprise:
+                    from ..token_utils import parse_token_string
 
-# ── Legacy Interceptor ───────────────────────────────────────────
+                    user_identity_token = parse_token_string(user_token_str)
+                    if user_identity_token and user_identity_token.user_id:
+                        logger.debug(
+                            "%s: extracted user identity from x-context-token (Enterprise, transitive trust): user_id=%s",
+                            self._service_name,
+                            user_identity_token.user_id,
+                        )
+                else:
+                    from ..token_utils import verify_token_string
 
+                    user_backend = await self._build_verifier_backend(user_token_str)
+                    if user_backend:
+                        try:
+                            user_identity_token = verify_token_string(user_token_str, user_backend)
+                            if user_identity_token and user_identity_token.user_id:
+                                logger.debug(
+                                    "%s: enriched user identity from x-context-token: user_id=%s",
+                                    self._service_name,
+                                    user_identity_token.user_id,
+                                )
+                        except Exception as e:
+                            logger.warning(
+                                "%s: failed to verify x-context-token for user identity: %s",
+                                self._service_name,
+                                e,
+                            )
 
-class TokenValidationInterceptor(grpc.aio.ServerInterceptor):
-    """Legacy interceptor — kept for backward compatibility.
+        # ── Set verified auth context for downstream handlers ─────
+        if token is not None and token_str:
+            from ..authz.context import VerifiedAuthContext, set_auth_context
 
-    Prefer ``ServicePermissionInterceptor`` for new services.
-    This interceptor only validates token presence, not RPC-level permissions.
-    """
+            # Extract project_id from kid
+            project_id = None
+            parts = token_str.split(".")
+            if len(parts) == 3 and ":" in parts[0]:
+                project_id = parts[0].split(":", 1)[0]
 
-    def __init__(self, config: SecurityConfig | None = None) -> None:
-        self._config = config or SecurityConfig()
+            # If we have a verified user identity token, build the auth context
+            # with user_id from that token (cryptographically proven, not metadata)
+            effective_token = token
+            if user_identity_token and user_identity_token.user_id:
+                import dataclasses
 
-    async def intercept_service(self, continuation, handler_call_details) -> grpc.RpcMethodHandler:
-        """Intercept incoming gRPC calls for token validation."""
-        if not self._config.security_enabled:
-            return await continuation(handler_call_details)
+                effective_token = dataclasses.replace(
+                    token,
+                    user_id=user_identity_token.user_id,
+                    user_namespace=user_identity_token.user_namespace,
+                )
 
-        method = handler_call_details.method or ""
-        for skip in self._config.skip_methods:
-            if skip in method:
-                return await continuation(handler_call_details)
+            auth_ctx = VerifiedAuthContext.from_token(
+                effective_token,
+                token_str,
+                project_id=project_id,
+            )
+            set_auth_context(auth_ctx)
 
         return await continuation(handler_call_details)
 
 
 __all__ = [
-    "EnforcementMode",
     "ServicePermissionInterceptor",
-    "TokenValidationInterceptor",
     "_extract_rpc_name",
     "_should_skip",
     "check_permission",

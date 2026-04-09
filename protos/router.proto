@@ -42,66 +42,26 @@ service RouterService {
     // Project Tool & Graph Registration
     // =========================================
 
-    // Register project tools and graph in Router.
-    // SQL tools use ToolExecutorStream for remote execution —
-    // DB credentials never leave the project's process.
+    // Deregister project tools and graph (on shutdown).
+    // Request payload: {project_id: "contextmed"}
+    // Response payload: {deregistered: [...], status: "ok"}
+
+    // =========================================
+    // Dynamic Project Manifest Registration
+    // =========================================
+
+    // Register an entire ContextUnity project manifest at once via dynamic gRPC push.
+    // Replaces RegisterTools by acting on the Canonical Project Manifest directly.
     //
     // Security: Requires "tools:register" write scope in ContextUnit.
     //
     // Request payload: {
-    //   project_id: "contextmed",
-    //   tools: [{
-    //     name: "execute_medical_sql",
-    //     type: "sql",
-    //     description: "...",
-    //     config: {
-    //       project_id: "contextmed",              # for stream routing
-    //       schema_description: "...",              # DB schema for LLM
-    //       read_only: true,                       # constraint: SELECT only
-    //       max_rows: 500,
-    //       statement_timeout_ms: 5000,
-    //       schema_description: "..."
-    //     }
-    //   }],
-    //
-    //   # Graph — choose one:
-    //
-    //   # Option A: Use Router's built-in graph template with project config
-    //   graph: {
-    //     name: "contextmed",
-    //     template: "sql_analytics",            # built-in template
-    //     config: {
-    //       planner_prompt: "Ти — медичний аналітик...",
-    //       verifier_prompt: "Перевір SQL...",
-    //       visualizer_prompt: "Сформуй UI...",
-    //       tool_bindings: ["execute_medical_sql"],
-    //       max_retries: 2
-    //     }
-    //   }
-    //
-    //   # Option B: Declarative custom graph
-    //   graph: {
-    //     name: "my_custom_graph",
-    //     nodes: [
-    //       {name: "step1", type: "llm", prompt: "..."},
-    //       {name: "step2", type: "tool", tool: "my_tool"},
-    //       ...
-    //     ],
-    //     edges: [
-    //       {from: "START", to: "step1"},
-    //       {from: "step1", to: "step2", condition: "..."},
-    //       ...
-    //     ]
-    //   }
+    //   bundle: {... compiled dictionary from ArtifactGenerator ...},
+    //   hash: "a1b2c3d4..." // Optional: Used for idempotent validation against Redis cache
     // }
     //
-    // Response payload: {registered_tools: [...], graph: "contextmed", status: "ok"}
-    rpc RegisterTools(contextcore.ContextUnit) returns (contextcore.ContextUnit);
-
-    // Deregister project tools and graph (on shutdown).
-    // Request payload: {project_id: "contextmed"}
-    // Response payload: {deregistered: [...], status: "ok"}
-    rpc DeregisterTools(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    // Response payload: {registered_tools: [...], graph: "contextmed", status: "ok", hash_matched: true/false}
+    rpc RegisterManifest(contextcore.ContextUnit) returns (contextcore.ContextUnit);
 
     // =========================================
     // Tool Executor Stream (Bidi Callback)

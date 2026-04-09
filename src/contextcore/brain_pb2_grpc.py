@@ -69,26 +69,6 @@ class BrainServiceStub(object):
                 request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
                 response_deserializer=context__unit__pb2.ContextUnit.FromString,
                 _registered_method=True)
-        self.UpsertNewsItem = channel.unary_unary(
-                '/contextbrain.BrainService/UpsertNewsItem',
-                request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-                response_deserializer=context__unit__pb2.ContextUnit.FromString,
-                _registered_method=True)
-        self.GetNewsItems = channel.unary_stream(
-                '/contextbrain.BrainService/GetNewsItems',
-                request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-                response_deserializer=context__unit__pb2.ContextUnit.FromString,
-                _registered_method=True)
-        self.UpsertNewsPost = channel.unary_unary(
-                '/contextbrain.BrainService/UpsertNewsPost',
-                request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-                response_deserializer=context__unit__pb2.ContextUnit.FromString,
-                _registered_method=True)
-        self.CheckNewsPostExists = channel.unary_unary(
-                '/contextbrain.BrainService/CheckNewsPostExists',
-                request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-                response_deserializer=context__unit__pb2.ContextUnit.FromString,
-                _registered_method=True)
         self.AddEpisode = channel.unary_unary(
                 '/contextbrain.BrainService/AddEpisode',
                 request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
@@ -194,48 +174,12 @@ class BrainServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def UpsertNewsItem(self, request, context):
+    def AddEpisode(self, request, context):
         """=========================================
         NewsEngine Operations
         =========================================
 
-        Upsert news item (raw or fact)
-        Request payload: {tenant_id, item_type, url, headline, summary, category?, source_api?, metadata?}
-        Response payload: {id, success, message?}
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def GetNewsItems(self, request, context):
-        """Get news items
-        Request payload: {tenant_id, item_type, limit?, since?}
-        Response payload: {id, url, headline, summary, category, metadata}
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def UpsertNewsPost(self, request, context):
-        """Upsert generated post
-        Request payload: {tenant_id, headline, content, agent, emoji?, fact_url?, fact_id?, scheduled_at?}
-        Response payload: {id, success}
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def CheckNewsPostExists(self, request, context):
-        """Check if news post with given URL already exists
-        Request payload: {tenant_id, fact_url}
-        Response payload: {exists: bool}
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def AddEpisode(self, request, context):
-        """=========================================
+        =========================================
         Episodic & Entity Memory
         =========================================
 
@@ -355,26 +299,6 @@ def add_BrainServiceServicer_to_server(servicer, server):
             ),
             'QueryMemory': grpc.unary_stream_rpc_method_handler(
                     servicer.QueryMemory,
-                    request_deserializer=context__unit__pb2.ContextUnit.FromString,
-                    response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            ),
-            'UpsertNewsItem': grpc.unary_unary_rpc_method_handler(
-                    servicer.UpsertNewsItem,
-                    request_deserializer=context__unit__pb2.ContextUnit.FromString,
-                    response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            ),
-            'GetNewsItems': grpc.unary_stream_rpc_method_handler(
-                    servicer.GetNewsItems,
-                    request_deserializer=context__unit__pb2.ContextUnit.FromString,
-                    response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            ),
-            'UpsertNewsPost': grpc.unary_unary_rpc_method_handler(
-                    servicer.UpsertNewsPost,
-                    request_deserializer=context__unit__pb2.ContextUnit.FromString,
-                    response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            ),
-            'CheckNewsPostExists': grpc.unary_unary_rpc_method_handler(
-                    servicer.CheckNewsPostExists,
                     request_deserializer=context__unit__pb2.ContextUnit.FromString,
                     response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
             ),
@@ -567,114 +491,6 @@ class BrainService(object):
             request,
             target,
             '/contextbrain.BrainService/QueryMemory',
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def UpsertNewsItem(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/contextbrain.BrainService/UpsertNewsItem',
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def GetNewsItems(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_stream(
-            request,
-            target,
-            '/contextbrain.BrainService/GetNewsItems',
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def UpsertNewsPost(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/contextbrain.BrainService/UpsertNewsPost',
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def CheckNewsPostExists(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/contextbrain.BrainService/CheckNewsPostExists',
             context__unit__pb2.ContextUnit.SerializeToString,
             context__unit__pb2.ContextUnit.FromString,
             options,

@@ -30,6 +30,7 @@ from .policy import (
     ToolRisk,
     ToolScope,
 )
+from .validation import validate_attenuation_permissions
 
 __all__ = [
     "DEFAULT_TOOL_POLICIES",
@@ -48,4 +49,5 @@ __all__ = [
     "has_registration_access",
     "has_tool_access",
     "has_tool_scope_access",
+    "validate_attenuation_permissions",
 ]

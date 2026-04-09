@@ -56,6 +56,11 @@ class WorkerServiceStub(object):
                 request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
                 response_deserializer=context__unit__pb2.ContextUnit.FromString,
                 _registered_method=True)
+        self.RegisterSchedules = channel.unary_unary(
+                '/contextworker.WorkerService/RegisterSchedules',
+                request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+                response_deserializer=context__unit__pb2.ContextUnit.FromString,
+                _registered_method=True)
 
 
 class WorkerServiceServicer(object):
@@ -95,6 +100,15 @@ class WorkerServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RegisterSchedules(self, request, context):
+        """Register project schedules into Temporal
+        Request payload: {project_id, tenant_id, schedules: [...]}
+        Response payload: {status, registered_count}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_WorkerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -110,6 +124,11 @@ def add_WorkerServiceServicer_to_server(servicer, server):
             ),
             'ExecuteCode': grpc.unary_unary_rpc_method_handler(
                     servicer.ExecuteCode,
+                    request_deserializer=context__unit__pb2.ContextUnit.FromString,
+                    response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
+            ),
+            'RegisterSchedules': grpc.unary_unary_rpc_method_handler(
+                    servicer.RegisterSchedules,
                     request_deserializer=context__unit__pb2.ContextUnit.FromString,
                     response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
             ),
@@ -200,6 +219,33 @@ class WorkerService(object):
             request,
             target,
             '/contextworker.WorkerService/ExecuteCode',
+            context__unit__pb2.ContextUnit.SerializeToString,
+            context__unit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RegisterSchedules(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/contextworker.WorkerService/RegisterSchedules',
             context__unit__pb2.ContextUnit.SerializeToString,
             context__unit__pb2.ContextUnit.FromString,
             options,

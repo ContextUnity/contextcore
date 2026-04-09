@@ -29,19 +29,6 @@ class LogLevel(str, Enum):
     CRITICAL = "CRITICAL"
 
 
-class SigningBackendType(str, Enum):
-    """Supported signing backends.
-
-    - ED25519: Asymmetric local keys (ContextShield Pro)
-    - KMS: Cloud KMS/HSM (ContextShield Enterprise)
-    - HMAC: Symmetric shared secret (ContextUnity Basic - OpenSource)
-    """
-
-    ED25519 = "ed25519"
-    KMS = "kms"
-    HMAC = "hmac"
-
-
 class SharedSecurityConfig(BaseModel):
     """Unified security configuration for ALL ContextUnity services.
 
@@ -49,73 +36,14 @@ class SharedSecurityConfig(BaseModel):
     Services extend with service-specific security fields if needed.
 
     Security flow:
-        Router (Mind)  → SIGNS tokens  (needs private key)
-        Brain (Memory) → VERIFIES only (needs public key)
-        Worker (Hands) → VERIFIES only (needs public key)
+        Open Source   → HmacBackend (CU_PROJECT_SECRET, stdlib only)
+        Enterprise    → SessionTokenBackend (Shield-signed, Ed25519)
 
-    Requires contextshield for Ed25519/KMS backends.
-    Without contextshield, tokens are unsigned (dev mode).
-
-    Environment variables:
-        SECURITY_ENABLED             — enable/disable security enforcement
-        SIGNING_BACKEND              — ed25519 | kms
-        SIGNING_KEY_ID               — active kid for token signing
-        SIGNING_ALLOWED_KIDS         — comma-separated allowlist for rotation
-        SIGNING_PRIVATE_KEY_PATH     — Ed25519 private key (signer only)
-        SIGNING_PUBLIC_KEY_PATH      — Ed25519 public key (verifier)
-        KMS_KEY_RESOURCE             — Cloud KMS key resource name
-        TOKEN_TTL_SECONDS            — default token TTL
-        TOKEN_ISSUER                 — issuer identifier
+    Token signing is ALWAYS active. HmacBackend is the default.
+    Ed25519/KMS backends require contextshield.
     """
 
     model_config = {"extra": "ignore"}
-
-    enabled: bool = Field(
-        default=False,
-        description="Enable security enforcement. Disabled = all access allowed.",
-    )
-
-    # Signing backend selection
-    signing_backend: SigningBackendType = Field(
-        default=SigningBackendType.ED25519,
-        description="Signing backend type: ed25519 (production), kms (enterprise)",
-    )
-    signing_key_id: str = Field(
-        default="ed25519-001",
-        description="Active key identifier (kid) for token signing",
-    )
-    signing_allowed_kids: list[str] = Field(
-        default_factory=list,
-        description=("Allowed kid values for verification (rotation support). Empty = accept any kid."),
-    )
-
-    # Key material references (NOT raw key values!)
-    private_key_path: str = Field(
-        default="",
-        description="Ed25519 private key file path (signer only)",
-    )
-    public_key_path: str = Field(
-        default="",
-        description="Ed25519 public key file path (Phase 1, verifier)",
-    )
-    kms_key_resource: str = Field(
-        default="",
-        description="Cloud KMS key resource name",
-    )
-    shared_secret: str = Field(
-        default="",
-        description="Symmetric shared secret for HMAC backend (open source mode)",
-    )
-
-    # Token defaults
-    token_ttl_seconds: int = Field(
-        default=3600,
-        description="Default token TTL in seconds (1 hour)",
-    )
-    token_issuer: str = Field(
-        default="",
-        description="Token issuer identifier (e.g. 'contextrouter')",
-    )
 
     # Access policies (defaults, services can override)
     read_permission: str = Field(
@@ -125,6 +53,18 @@ class SharedSecurityConfig(BaseModel):
     write_permission: str = Field(
         default="data:write",
         description="Default write permission string",
+    )
+    redis_secret_key: str = Field(
+        default="",
+        description="Key used to encrypt project keys in Redis encrypt-then-MAC",
+    )
+    project_secret: str = Field(
+        default="",
+        description="Project HMAC secret for open-source token signing",
+    )
+    shield_master_key: str = Field(
+        default="",
+        description="Shield master key for admin CLI operations (encrypt/decrypt shield.db, mint admin tokens)",
     )
 
 
@@ -170,7 +110,6 @@ class SharedConfig(BaseModel):
         description="OpenTelemetry collector endpoint",
     )
 
-    # Service identification
     service_name: Optional[str] = Field(
         default=None,
         description="Service name for observability (e.g., 'contextbrain', 'contextrouter')",
@@ -179,11 +118,45 @@ class SharedConfig(BaseModel):
         default=None,
         description="Service version for observability",
     )
-
-    # Tenant isolation
-    tenant_id: Optional[str] = Field(
+    cu_platform: Optional[str] = Field(
         default=None,
-        description="Default tenant ID for multi-tenant deployments",
+        description="ContextUnity platform identifier",
+    )
+    langfuse_enabled: bool = Field(
+        default=False,
+        description="Enable Langfuse OpenTelemetry tracing",
+    )
+    langfuse_project_id: Optional[str] = Field(
+        default=None,
+        description="Langfuse project ID",
+    )
+    langfuse_host: Optional[str] = Field(
+        default="https://cloud.langfuse.com",
+        description="Langfuse host URL",
+    )
+
+    # TLS configurations
+    tls_enabled: bool = Field(
+        default=False,
+        description="Enable TLS for gRPC channels",
+    )
+    tls_ca_cert: Optional[str] = Field(
+        default=None,
+    )
+    tls_client_cert: Optional[str] = Field(
+        default=None,
+    )
+    tls_client_key: Optional[str] = Field(
+        default=None,
+    )
+    tls_server_cert: Optional[str] = Field(
+        default=None,
+    )
+    tls_server_key: Optional[str] = Field(
+        default=None,
+    )
+    tls_require_client_auth: bool = Field(
+        default=True,
     )
 
     # Service discovery (Redis registration)
@@ -200,6 +173,32 @@ class SharedConfig(BaseModel):
     brain_url: str = Field(
         default="localhost:50051",
         description="ContextBrain gRPC endpoint",
+    )
+    shield_url: str = Field(
+        default="localhost:50054",
+        description="ContextShield gRPC endpoint",
+    )
+    worker_url: str = Field(
+        default="localhost:50052",
+        description="ContextWorker gRPC endpoint",
+    )
+    brain_mode: str = Field(
+        default="grpc",
+        description="ContextBrain execution mode",
+    )
+    worker_mode: str = Field(
+        default="grpc",
+        description="ContextWorker execution mode",
+    )
+    temporal_host: str = Field(
+        default="localhost:7233",
+        description="Temporal server endpoint",
+    )
+
+    # Bootstrap / Environment state
+    manifest_path: str = Field(
+        default="",
+        description="Path to contextunity.project.yaml",
     )
 
     # Security — unified config, replaces per-service SecurityConfig
@@ -251,16 +250,6 @@ def load_shared_config_from_env() -> SharedConfig:
     - OTEL_ENDPOINT: OpenTelemetry collector endpoint
     - SERVICE_NAME: Service name for observability
     - SERVICE_VERSION: Service version
-    - TENANT_ID: Default tenant ID
-    - SECURITY_ENABLED: Enable security enforcement
-    - SIGNING_BACKEND: ed25519 | kms
-    - SIGNING_KEY_ID: Active key identifier
-    - SIGNING_ALLOWED_KIDS: Comma-separated kid allowlist
-    - SIGNING_PRIVATE_KEY_PATH: Ed25519 private key path (signer only)
-    - SIGNING_PUBLIC_KEY_PATH: Ed25519 public key path
-    - KMS_KEY_RESOURCE: Cloud KMS key resource
-    - TOKEN_TTL_SECONDS: Default token TTL
-    - TOKEN_ISSUER: Token issuer
     - GRPC_REUSE_PORT: Enable SO_REUSEPORT (true/false)
 
     Returns:
@@ -268,21 +257,11 @@ def load_shared_config_from_env() -> SharedConfig:
     """
     import os
 
-    # Parse allowed kids list
-    allowed_kids_raw = os.getenv("SIGNING_ALLOWED_KIDS", "")
-    allowed_kids = [k.strip() for k in allowed_kids_raw.split(",") if k.strip()]
-
+    # Security defaults
     security = SharedSecurityConfig(
-        enabled=os.getenv("SECURITY_ENABLED", "false").lower() in ("true", "1", "yes"),
-        signing_backend=os.getenv("SIGNING_BACKEND", "ed25519"),
-        signing_key_id=os.getenv("SIGNING_KEY_ID", "ed25519-001"),
-        signing_allowed_kids=allowed_kids,
-        private_key_path=os.getenv("SIGNING_PRIVATE_KEY_PATH", ""),
-        public_key_path=os.getenv("SIGNING_PUBLIC_KEY_PATH", ""),
-        kms_key_resource=os.getenv("KMS_KEY_RESOURCE", ""),
-        shared_secret=os.getenv("SIGNING_SHARED_SECRET", ""),
-        token_ttl_seconds=int(os.getenv("TOKEN_TTL_SECONDS", "3600")),
-        token_issuer=os.getenv("TOKEN_ISSUER", ""),
+        redis_secret_key=os.getenv("REDIS_SECRET_KEY", ""),
+        project_secret=os.getenv("CU_PROJECT_SECRET", ""),
+        shield_master_key=os.getenv("SHIELD_MASTER_KEY", ""),
     )
 
     return SharedConfig(
@@ -294,10 +273,26 @@ def load_shared_config_from_env() -> SharedConfig:
         otel_endpoint=os.getenv("OTEL_ENDPOINT"),
         service_name=os.getenv("SERVICE_NAME"),
         service_version=os.getenv("SERVICE_VERSION"),
-        tenant_id=os.getenv("TENANT_ID"),
+        cu_platform=os.getenv("CU_PLATFORM"),
+        langfuse_enabled=os.getenv("LANGFUSE_ENABLED", "false").lower() in ("true", "1", "yes", "on"),
+        langfuse_project_id=os.getenv("LANGFUSE_PROJECT_ID"),
+        langfuse_host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+        tls_enabled=os.getenv("GRPC_TLS_ENABLED", "false").lower() in ("true", "1", "yes", "on"),
+        tls_ca_cert=os.getenv("GRPC_TLS_CA_CERT"),
+        tls_client_cert=os.getenv("GRPC_TLS_CLIENT_CERT"),
+        tls_client_key=os.getenv("GRPC_TLS_CLIENT_KEY"),
+        tls_server_cert=os.getenv("GRPC_TLS_SERVER_CERT"),
+        tls_server_key=os.getenv("GRPC_TLS_SERVER_KEY"),
+        tls_require_client_auth=os.getenv("GRPC_TLS_REQUIRE_CLIENT_AUTH", "true").lower() not in ("false", "0", "no"),
         grpc_host=os.getenv("GRPC_HOST", "localhost"),
-        router_url=os.getenv("CONTEXT_ROUTER_URL", "localhost:50051"),
-        brain_url=os.getenv("CONTEXT_BRAIN_URL", "localhost:50051"),
+        router_url=os.getenv("CONTEXTROUTER_GRPC_URL", "localhost:50051"),
+        brain_url=os.getenv("CONTEXTBRAIN_GRPC_URL", "localhost:50051"),
+        shield_url=os.getenv("CONTEXTSHIELD_GRPC_URL", "localhost:50054"),
+        worker_url=os.getenv("CONTEXTWORKER_GRPC_URL", "localhost:50052"),
+        brain_mode=os.getenv("CONTEXTBRAIN_MODE", "grpc"),
+        worker_mode=os.getenv("CONTEXT_WORKER_MODE", "grpc"),
+        temporal_host=os.getenv("TEMPORAL_HOST", "localhost:7233"),
+        manifest_path=os.getenv("CONTEXTUNITY_MANIFEST_PATH", ""),
         security=security,
     )
 
@@ -321,7 +316,6 @@ def get_core_config() -> SharedConfig:
 __all__ = [
     "SharedConfig",
     "SharedSecurityConfig",
-    "SigningBackendType",
     "LogLevel",
     "load_shared_config_from_env",
     "get_core_config",

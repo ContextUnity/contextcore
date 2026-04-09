@@ -269,10 +269,10 @@ class TestTokenIdentitySerialization:
 
     def test_roundtrip_with_identity(self) -> None:
         """Token with identity fields survives serialization roundtrip."""
-        from contextcore.signing import UnsignedBackend
+        from contextcore.signing import HmacBackend
         from contextcore.token_utils import parse_token_string, serialize_token
 
-        backend = UnsignedBackend()
+        backend = HmacBackend("test_proj", "test_secret")
         token = ContextToken(
             token_id="test_roundtrip",
             permissions=(Permissions.BRAIN_READ, Permissions.MEMORY_WRITE),
@@ -283,7 +283,7 @@ class TestTokenIdentitySerialization:
             user_namespace="pro",
         )
         serialized = serialize_token(token, backend=backend)
-        parsed = parse_token_string(serialized, backend=backend)
+        parsed = parse_token_string(serialized)
 
         assert parsed is not None
         assert parsed.token_id == "test_roundtrip"
@@ -293,10 +293,10 @@ class TestTokenIdentitySerialization:
 
     def test_roundtrip_default_namespace(self) -> None:
         """Token with default namespace omits it in serialization (compact)."""
-        from contextcore.signing import UnsignedBackend
+        from contextcore.signing import HmacBackend
         from contextcore.token_utils import parse_token_string, serialize_token
 
-        backend = UnsignedBackend()
+        backend = HmacBackend("test_proj", "test_secret")
         token = ContextToken(
             token_id="minimal",
             permissions=(Permissions.BRAIN_READ,),
@@ -306,7 +306,7 @@ class TestTokenIdentitySerialization:
         # "default" namespace should NOT appear in serialized data
         assert "user_namespace" not in serialized
 
-        parsed = parse_token_string(serialized, backend=backend)
+        parsed = parse_token_string(serialized)
         assert parsed is not None
         assert parsed.user_namespace == "default"
         assert parsed.user_id is None
@@ -314,10 +314,10 @@ class TestTokenIdentitySerialization:
 
     def test_backward_compat_old_token(self) -> None:
         """Old tokens without identity fields parse with defaults."""
-        from contextcore.signing import UnsignedBackend
+        from contextcore.signing import HmacBackend
         from contextcore.token_utils import parse_token_string, serialize_token
 
-        backend = UnsignedBackend()
+        backend = HmacBackend("test_proj", "test_secret")
         # Simulate old token (no identity fields)
         token = ContextToken(
             token_id="legacy",
@@ -325,7 +325,7 @@ class TestTokenIdentitySerialization:
             exp_unix=9999999999.0,
         )
         serialized = serialize_token(token, backend=backend)
-        parsed = parse_token_string(serialized, backend=backend)
+        parsed = parse_token_string(serialized)
 
         assert parsed is not None
         assert parsed.user_id is None
@@ -366,7 +366,7 @@ class TestPermissionBuilders:
     def test_service_builder_matches_constant(self) -> None:
         """Builder output matches predefined constants."""
         assert Permissions.service("brain", "read") == Permissions.BRAIN_READ
-        assert Permissions.service("dispatcher", "execute") == Permissions.DISPATCHER_EXECUTE
+        assert Permissions.service("router", "execute") == Permissions.ROUTER_EXECUTE
 
     def test_builder_in_mint_root(self) -> None:
         """Builders work with TokenBuilder.mint_root()."""

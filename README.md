@@ -54,8 +54,8 @@ ContextCore/
 │
 ├── tokens.py           # ContextToken, TokenBuilder
 ├── token_utils.py      # Serialization, gRPC/HTTP extraction
-├── signing.py          # SigningBackend protocol, UnsignedBackend
-├── security.py         # SecurityGuard, SecurityConfig, interceptors
+├── signing.py          # SigningBackend protocol, HmacBackend, SessionTokenBackend
+├── security.py         # interceptors, check_permission
 ├── permissions.py      # Permission registry, access tiers, tool policies
 │
 ├── config.py           # SharedConfig, SharedSecurityConfig

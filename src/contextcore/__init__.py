@@ -25,7 +25,6 @@ from .config import (
     LogLevel,
     SharedConfig,
     SharedSecurityConfig,
-    SigningBackendType,
     get_core_config,
     load_shared_config_from_env,
 )
@@ -57,6 +56,7 @@ from .exceptions import (
     RetrievalError,
     SecurityError,
     StorageError,
+    TamperDetectedError,
     TransformerError,
     error_registry,
     get_grpc_status_code,
@@ -104,40 +104,38 @@ from .sdk import (
     BrainClient,
     ContextUnit,
     CotStep,
+    FederatedToolCallContext,
     RouterClient,
     SearchResult,
     SecurityScopes,
-    SmartBrainClient,
-    SmartWorkerClient,
     UnitMetrics,
     WorkerClient,
 )
+from .sdk.prompt_integrity import (
+    compute_prompt_version,
+    sign_prompt,
+    verify_prompt,
+)
 from .security import (
-    GuardResult,
-    SecurityConfig,
-    SecurityGuard,
     ServicePermissionInterceptor,
-    TokenValidationInterceptor,
     check_permission,
-    get_security_guard,
-    get_security_interceptors,
-    reset_security_guard,
-    shield_status,
 )
 from .signing import (
+    AuthBackend,
+    HmacBackend,
+    SessionTokenBackend,
     SignedPayload,
-    SigningBackend,
-    UnsignedBackend,
     get_signing_backend,
 )
 from .token_utils import (
     TokenMetadataInterceptor,
     create_grpc_metadata_with_token,
     create_http_headers_with_token,
+    extract_and_verify_token_from_http_request,
     extract_token_from_grpc_metadata,
     extract_token_from_http_request,
+    extract_token_string_from_http_request,
     parse_token_string,
-    reset_default_backend,
     serialize_token,
 )
 from .tokens import ContextToken, TokenBuilder, get_brain_service_token, mint_service_token
@@ -156,19 +154,17 @@ __all__ = [
     "get_core_config",
     "SharedConfig",
     "SharedSecurityConfig",
-    "SigningBackendType",
     "LogLevel",
     # SDK
     "ContextUnit",
     "BrainClient",
     "RouterClient",
     "WorkerClient",
-    "SmartBrainClient",
-    "SmartWorkerClient",
     "SecurityScopes",
     "CotStep",
     "UnitMetrics",
     "SearchResult",
+    "FederatedToolCallContext",
     # Exceptions
     "ContextUnityError",
     "ConfigurationError",
@@ -176,6 +172,7 @@ __all__ = [
     "IntentDetectionError",
     "ProviderError",
     "SecurityError",
+    "TamperDetectedError",
     "ConnectorError",
     "ModelError",
     "IngestionError",
@@ -213,16 +210,18 @@ __all__ = [
     # Token utilities
     "extract_token_from_grpc_metadata",
     "create_grpc_metadata_with_token",
+    "extract_token_string_from_http_request",
     "extract_token_from_http_request",
+    "extract_and_verify_token_from_http_request",
     "create_http_headers_with_token",
     "TokenMetadataInterceptor",
     "serialize_token",
     "parse_token_string",
-    "reset_default_backend",
     # Signing backends
-    "SigningBackend",
+    "AuthBackend",
+    "SessionTokenBackend",
+    "HmacBackend",
     "SignedPayload",
-    "UnsignedBackend",
     "get_signing_backend",
     # Service discovery
     "ServiceInfo",
@@ -235,16 +234,8 @@ __all__ = [
     "verify_project_owner",
     "get_registered_projects",
     # Security integration
-    "SecurityConfig",
-    "SecurityGuard",
-    "GuardResult",
     "check_permission",
-    "get_security_guard",
-    "reset_security_guard",
     "ServicePermissionInterceptor",
-    "TokenValidationInterceptor",
-    "get_security_interceptors",
-    "shield_status",
     # Proto modules (gRPC) — all 8 services
     "context_unit_pb2",
     "admin_pb2",
@@ -272,4 +263,8 @@ __all__ = [
     "get_brain_service_token",
     # Proto enums
     "Modality",
+    # Prompt integrity
+    "compute_prompt_version",
+    "sign_prompt",
+    "verify_prompt",
 ]

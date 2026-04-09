@@ -29,10 +29,20 @@ ContextCore is the "source of truth" for the entire ecosystem. Every service dep
 
 ```
 src/contextcore/
-├── sdk/                     ← Modular SDK (400-Line Code Scale)
+├── manifest/                ← Declarative Layer (project manifest)
+│   ├── models.py            ← ContextUnityProject Pydantic schema
+│   ├── generators.py        ← ArtifactGenerator (manifest → service bundles)
+│   └── examples/            ← Canonical manifest example + docs
+│
+├── sdk/                     ← Runtime Layer (clients + bootstrap)
 │   ├── __init__.py          ← Public re-exports
+│   ├── config.py            ← ProjectBootstrapConfig (validated env config)
+│   ├── bootstrap.py         ← bootstrap_standalone(), bootstrap_django()
+│   ├── stream.py            ← BiDi ToolExecutorStream transport
 │   ├── context_unit.py      ← ContextUnit (Pydantic model)
 │   ├── models.py            ← SecurityScopes, UnitMetrics, CotStep, SearchResult
+│   ├── router_client.py     ← RouterClient (gRPC)
+│   ├── smart_client.py      ← Auto-discovery clients (Brain, Worker)
 │   ├── worker_client.py     ← WorkerClient (gRPC)
 │   └── brain/               ← BrainClient subpackage
 │       ├── base.py          ← BrainClientBase (connection, channel)
@@ -48,11 +58,18 @@ src/contextcore/
 ├── logging.py               ← setup_logging, get_context_unit_logger, safe_preview
 ├── interfaces.py            ← BaseTransformer, Transformer (ABC)
 │
-├── security.py              ← SecurityGuard, TokenValidationInterceptor
-├── signing.py               ← SigningBackend protocol, SignedPayload, UnsignedBackend
-├── token_utils.py           ← Token extraction (gRPC/HTTP), serialization, forwarding
-├── discovery.py             ← ServiceInfo, register/deregister/discover via Redis
-├── exceptions.py            ← ContextUnityError hierarchy, ErrorRegistry, gRPC handlers
+├── authz/                   ← Unified Authorization Engine
+│   ├── engine.py            ← authorize(), AuthzDecision, VerifiedAuthContext
+│   └── __init__.py          ← get_auth_context(), set_auth_context()
+│
+├── security/                ← Security Infrastructure
+│   ├── interceptors.py      ← ServicePermissionInterceptor (base for all services)
+│   └── __init__.py          ← check_permission
+│
+├── permissions/             ← Permission Registry
+│   ├── constants.py         ← Permissions class, NAMESPACE_PROFILES
+│   ├── inheritance.py       ← PERMISSION_INHERITANCE, expand_permissions
+│   └── access.py            ← has_tool_access, has_graph_access, etc.
 │
 ├── brain_pb2.py             ← Generated: BrainService (17 RPCs)
 ├── commerce_pb2.py          ← Generated: CommerceService (8 RPCs)
@@ -74,6 +91,16 @@ protos/
 └── context_unit.proto       ← Base ContextUnit definition
 ```
 
+### Package Boundaries
+
+| Package | Role | Runtime deps | Env access |
+|---------|------|-------------|------------|
+| `manifest/` | Declarative — schema + projection | Only Pydantic | ❌ None |
+| `sdk/config` | Config validation | Pydantic | ✅ `os.environ` (single entry point) |
+| `sdk/bootstrap` | Entry point | manifest, config, gRPC | ❌ Via config only |
+| `sdk/stream` | BiDi transport | gRPC | ❌ None |
+| `sdk/clients` | Service clients | gRPC | ❌ Via SharedConfig |
+
 ---
 
 ## ContextUnit Protocol
@@ -92,7 +119,7 @@ unit = ContextUnit(
     parent_unit_id=None,            # Parent reference (for DAG)
     modality="text",                # text | audio | spatial
     payload={"query": "..."},       # Actual content
-    provenance=["source:web"],      # Data journey trail
+    provenance=["source:web"],      # Data journey / delegation chain
     security=SecurityScopes(        # Access control
         read=["knowledge:read"],
         write=["catalog:write"]
@@ -162,7 +189,7 @@ if token.can_read(unit.security):
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `token_id` | str | Unique identifier for audit trails |
+| `token_id` | str | Unique identifier for audit provenance |
 | `user_id` | str? | User identity — SPOT for all services |
 | `permissions` | tuple[str] | Capability strings (e.g., `"brain:read"`) |
 | `allowed_tenants` | tuple[str] | Tenant IDs — SPOT for tenant resolution (empty = admin) |
@@ -223,28 +250,62 @@ check_tool_scope(perms, "sql", "write")             # "safe" | "confirm" | "deny
 
 ## Security Infrastructure
 
-### SecurityGuard (`security.py`)
+### Unified Authorization Engine (`authz/engine.py`)
 
-Unified security integration point that all gRPC services use:
+All authorization decisions go through a single `authorize()` function:
 
 ```python
-from contextcore import SecurityGuard, SecurityConfig
+from contextcore.authz import authorize, get_auth_context, VerifiedAuthContext
 
-guard = get_security_guard()
-
-# Validate token from gRPC metadata
-token = guard.validate_token(context)
-
-# Check input through AI firewall (auto-activates when contextshield is installed)
-result = await guard.check_input(text, token)
-if result.blocked:
-    # Request rejected by firewall
-    ...
+# In gRPC handler — get verified context from interceptor
+auth_ctx = get_auth_context()
+decision = authorize(
+    auth_ctx,
+    permission="brain:write",
+    tenant_id="traverse",
+    tool_name="sql",
+    service="brain",
+    rpc_name="Upsert",
+)
+if decision.denied:
+    context.abort(grpc.StatusCode.PERMISSION_DENIED, decision.reason)
 ```
 
-- **Token validation** — always available via contextcore
-- **Shield firewall** — auto-activates when `contextshield` is installed
-- **TokenValidationInterceptor** — gRPC server interceptor for automatic token validation
+Checks performed in order:
+1. **Token expiry** — fail-closed if expired
+2. **Tenant binding** — verify token's `allowed_tenants` covers target tenant
+3. **Explicit permission** — check via inheritance-expanded permissions
+4. **Tool access** — wildcards (`tool:*`, `admin:all`) resolved
+5. **Graph access** — `graph:*` or `graph:{id}` check
+6. **Registration access** — `tools:register` or `tools:register:{project_id}`
+
+### ServicePermissionInterceptor (`security/interceptors.py`)
+
+Base interceptor class used by every gRPC service. Maps RPC methods
+to required permissions and creates `VerifiedAuthContext`:
+
+```python
+from contextcore.security import ServicePermissionInterceptor
+
+class BrainPermissionInterceptor(ServicePermissionInterceptor):
+    def __init__(self, *, shield_url: str = ""):
+        super().__init__(
+            RPC_PERMISSION_MAP,  # {"Search": "brain:read", ...}
+            service_name="Brain",
+            shield_url=shield_url,
+        )
+```
+
+Every service has its own interceptor:
+- `BrainPermissionInterceptor` — 17 RPCs
+- `RouterPermissionInterceptor` — 8 RPCs
+- `WorkerPermissionInterceptor` — 3 RPCs
+- `ShieldPermissionInterceptor` — 17 RPCs
+- `ZeroPermissionInterceptor` — 6 RPCs
+- `ViewPermissionInterceptor` — 18 RPCs
+
+All enforced by proto-driven parity tests that auto-fail when a new
+RPC is added to `.proto` but missing from `RPC_PERMISSION_MAP`.
 
 ### Token Utilities (`token_utils.py`)
 
@@ -275,12 +336,76 @@ interceptor = TokenMetadataInterceptor(token)
 
 ### Signing (`signing.py`)
 
-Defines the `SigningBackend` protocol. Actual implementations are in `contextshield`:
+Defines the `AuthBackend` protocol. Security is always on — auto-detected during bootstrap:
 
-- `UnsignedBackend` — plaintext fallback (development)
-- `SignedPayload` — wire format dataclass
-- Production backends: Ed25519, Cloud KMS (via contextshield)
-- Open Source backend: HMAC-SHA256 (via contextcore `SIGNING_BACKEND=hmac` + `SIGNING_SHARED_SECRET`)
+- `SessionTokenBackend` (Enterprise, Shield-signed): Used if `services.shield.enabled` is `true` in manifest and `CONTEXTSHIELD_GRPC_URL` is set.
+- `HmacBackend` (Open Source, stdlib only): Used if Shield is disabled but `CU_PROJECT_SECRET` is set.
+- `set_signing_backend()` at bootstrap → `get_signing_backend()` everywhere (singleton)
+- No `UnsignedBackend`. No `SIGNING_BACKEND` env var. No `SECURITY_ENFORCEMENT`.
+- Redis encryption: project secrets stored encrypted via `REDIS_SECRET_KEY`
+
+### Prompt Integrity (`sdk/prompt_integrity.py`)
+
+Content-addressable versioning and HMAC tamper-proofing for LLM prompts.
+
+**Flow:**
+1. SDK bootstrap helpers resolve `prompt_ref` → text via `_resolve_prompt_refs()`
+2. `_sign_prompt_integrity()` signs each resolved prompt with `HmacBackend(project_id, CU_PROJECT_SECRET)`
+3. `prompt_version` (SHA-256[:8]) and `prompt_signature` (serialized `SignedPayload`) are injected into `RouterNode` model fields
+4. `ArtifactGenerator` passes them through to the bundle config → Router receives them
+5. `SecureNode` verifies the signature at runtime before LLM invocation
+6. On mismatch → `TamperDetectedError` (→ `grpc.StatusCode.ABORTED`)
+7. `prompt_version` is injected into provenance as `prompt:{llm_name}:{hash}` for ContextView observability
+
+```python
+from contextcore.sdk.prompt_integrity import (
+    compute_prompt_version,  # SHA-256[:8] → "a1b2c3d4"
+    sign_prompt,             # HMAC sign → "kid.payload.signature"
+    verify_prompt,           # Constant-time HMAC verify → bool
+)
+```
+
+Signing is automatic when `CU_PROJECT_SECRET` is set. No configuration needed.
+
+### Security Utilities (`cli/mint.py`)
+
+ContextCore provides a built-in CLI for generating Master Keys and project secrets. Because `contextcore` is a Python package installed in every service and client project, this CLI is available **anywhere** the SDK is present (in any deployed container or virtual environment):
+
+```bash
+# Generate a new CU_PROJECT_SECRET
+python -m contextcore.cli.mint hmac
+
+# Generate a new SHIELD_MASTER_KEY
+python -m contextcore.cli.mint shield
+
+# Generate a new REDIS_SECRET_KEY
+python -m contextcore.cli.mint redis
+
+# Mint a developer token for a specific tenant
+CU_PROJECT_SECRET="your-secret-here" \
+python -m contextcore.cli.mint token \
+  --project-id "contextmed" \
+  --tenant "contextmed" \
+  --permissions "tools:register,tools:execute" \
+  --ttl 31536000
+```
+
+Produces a `CONTEXTUNITY_ROUTER_TOKEN` that can be loaded into client environments.
+
+### Administrative Commands (`cli/admin.py`)
+
+`contextcore` includes administrative tools for out-of-band operations that require high-privilege infrastructure secrets. The primary use case is securely registering project graphs and capabilities without sending raw secrets over SSH or exposing the Shield SQLite database directly.
+
+#### Project Policy Sync
+Allows infrastructure managers to push `contextunity.project.yaml` over a secure gRPC connection to `ContextShield` (which persists the definitions into its authoritative database):
+
+```bash
+SHIELD_MASTER_KEY="your_vaulted_master_key" \
+CONTEXTSHIELD_GRPC_URL="grpc://<shield_ip>:50054" \
+uv run python -m contextcore.cli.admin sync-policy /path/to/contextunity.project.yaml
+```
+
+*Note: This command generates a short-lived "system" token signed by the `SHIELD_MASTER_KEY` and transmits it via `Authorization: Bearer`. ContextShield validates the system key and updates the project permissions. This ensures `cu-projects` or CI runners do not need permanent access to Shield's internal database.*
 
 ---
 
@@ -436,15 +561,15 @@ config = SharedConfig(
 | `OTEL_ENDPOINT` | str | None | OTLP collector URL |
 | `TENANT_ID` | str | None | Default tenant identifier |
 
-### Security Configuration (nested)
+### Security Configuration
 
-`SharedConfig.security` contains signing and token settings:
+Security is always on — no toggle needed. Backend is auto-detected from environment:
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `SECURITY_ENABLED` | bool | false | Enable token validation |
-| `SIGNING_BACKEND` | str | unsigned | `unsigned`, `hmac`, `ed25519`, or `kms` |
-| `TOKEN_TTL_SECONDS` | int | 3600 | Token time-to-live |
+| `CU_PROJECT_SECRET` | str | None | HMAC secret (Open Source mode) |
+| `CONTEXTSHIELD_GRPC_URL` | str | None | Shield endpoint (Enterprise mode) |
+| `REDIS_SECRET_KEY` | str | false | Redis encryption key (false = disabled) |
 | `READ_PERMISSION` | str | brain:read | Default read permission |
 | `WRITE_PERMISSION` | str | brain:write | Default write permission |
 
@@ -527,16 +652,24 @@ uv run pytest --cov=contextcore --cov-report=html
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `sdk/context_unit.py` | ~100 | ContextUnit Pydantic model |
-| `sdk/models.py` | ~80 | SecurityScopes, UnitMetrics, CotStep, SearchResult |
+| `manifest/models.py` | ~400 | ContextUnityProject schema (Pydantic) |
+| `manifest/generators.py` | ~180 | ArtifactGenerator — manifest → service bundles |
+| `sdk/config.py` | ~220 | ProjectBootstrapConfig — validated env config |
+| `sdk/bootstrap.py` | ~460 | `bootstrap_standalone()` / `bootstrap_django()` entry points |
+| `sdk/stream.py` | ~320 | BiDi ToolExecutorStream transport |
+| `sdk/context_unit.py` | ~200 | ContextUnit Pydantic model |
+| `sdk/models.py` | ~60 | SecurityScopes, UnitMetrics, CotStep, SearchResult |
+| `sdk/router_client.py` | ~180 | RouterClient (execute_tool, execute_agent) |
+| `sdk/smart_client.py` | ~120 | BrainClient, WorkerClient (auto-discovery) |
 | `sdk/brain/` | ~600 | BrainClient (modular: knowledge, commerce, news, memory, traces) |
 | `sdk/worker_client.py` | ~100 | WorkerClient gRPC wrapper |
 | `tokens.py` | ~150 | ContextToken, TokenBuilder |
 | `permissions.py` | ~300 | Permission constants, access checkers, ToolPolicy |
-| `config.py` | ~180 | SharedConfig, SharedSecurityConfig, LogLevel |
+| `config.py` | ~330 | SharedConfig, SharedSecurityConfig, LogLevel |
 | `logging.py` | ~200 | Structured logging, secret redaction |
-| `security.py` | ~360 | SecurityGuard, TokenValidationInterceptor |
-| `signing.py` | ~200 | SigningBackend protocol, UnsignedBackend |
+| `authz/engine.py` | ~260 | authorize(), AuthzDecision, VerifiedAuthContext |
+| `security/interceptors.py` | ~200 | ServicePermissionInterceptor base class |
+| `signing.py` | ~200 | SigningBackend protocol, HmacBackend, SessionTokenBackend |
 | `token_utils.py` | ~450 | Token extraction/serialization for gRPC and HTTP |
 | `discovery.py` | ~260 | Service registration and discovery via Redis |
 | `exceptions.py` | ~320 | Error hierarchy, ErrorRegistry, gRPC error handlers |
@@ -551,7 +684,7 @@ uv run pytest --cov=contextcore --cov-report=html
 
 ---
 
-*Last updated: February 2026*
+*Last updated: March 2026*
 
 
 ---

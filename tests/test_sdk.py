@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-import pytest
 from contextcore import ContextUnit, CotStep, SecurityScopes, UnitMetrics
 
 
@@ -20,7 +19,6 @@ class TestContextUnit:
         assert unit.parent_unit_id is None
         assert unit.modality == "text"
         assert unit.payload == {}
-        assert unit.provenance == []
         assert unit.chain_of_thought == []
         assert isinstance(unit.metrics, UnitMetrics)
         assert isinstance(unit.security, SecurityScopes)
@@ -31,36 +29,15 @@ class TestContextUnit:
         unit_id = uuid4()
         trace_id = uuid4()
         payload = {"content": "test", "metadata": {"key": "value"}}
-        provenance = ["source1", "source2"]
-
         unit = ContextUnit(
             unit_id=unit_id,
             trace_id=trace_id,
             payload=payload,
-            provenance=provenance,
         )
 
         assert unit.unit_id == unit_id
         assert unit.trace_id == trace_id
         assert unit.payload == payload
-        assert unit.provenance == provenance
-
-    def test_provenance_append(self) -> None:
-        """Test appending to provenance."""
-        unit = ContextUnit()
-        unit.provenance.append("new_source")
-        assert "new_source" in unit.provenance
-
-    def test_invalid_uuid_string_rejected(self) -> None:
-        """ContextUnit should reject invalid UUID strings."""
-        with pytest.raises((ValueError, TypeError)):
-            ContextUnit(unit_id="invalid-uuid")  # type: ignore[arg-type]
-
-    def test_provenance_append_none(self) -> None:
-        """Appending None to provenance should not crash."""
-        unit = ContextUnit()
-        unit.provenance.append(None)  # type: ignore[arg-type]
-        assert None in unit.provenance or "None" in unit.provenance
 
     def test_chain_of_thought(self) -> None:
         """Test chain of thought steps."""

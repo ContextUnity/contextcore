@@ -6,8 +6,6 @@
 python = "3.13"
 uv = "latest"
 
-env_shell_expand = true
-
 [env]
 _.file = { path = ".env", tools = true }
 PYTHON = "$(mise which python)"

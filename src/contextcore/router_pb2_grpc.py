@@ -61,13 +61,8 @@ class RouterServiceStub(object):
                 request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
                 response_deserializer=context__unit__pb2.ContextUnit.FromString,
                 _registered_method=True)
-        self.RegisterTools = channel.unary_unary(
-                '/contextrouter.RouterService/RegisterTools',
-                request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-                response_deserializer=context__unit__pb2.ContextUnit.FromString,
-                _registered_method=True)
-        self.DeregisterTools = channel.unary_unary(
-                '/contextrouter.RouterService/DeregisterTools',
+        self.RegisterManifest = channel.unary_unary(
+                '/contextrouter.RouterService/RegisterManifest',
                 request_serializer=context__unit__pb2.ContextUnit.SerializeToString,
                 response_deserializer=context__unit__pb2.ContextUnit.FromString,
                 _registered_method=True)
@@ -130,74 +125,30 @@ class RouterServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def RegisterTools(self, request, context):
+    def RegisterManifest(self, request, context):
         """=========================================
         Project Tool & Graph Registration
         =========================================
 
-        Register project tools and graph in Router.
-        SQL tools use ToolExecutorStream for remote execution —
-        DB credentials never leave the project's process.
+        Deregister project tools and graph (on shutdown).
+        Request payload: {project_id: "contextmed"}
+        Response payload: {deregistered: [...], status: "ok"}
+
+        =========================================
+        Dynamic Project Manifest Registration
+        =========================================
+
+        Register an entire ContextUnity project manifest at once via dynamic gRPC push.
+        Replaces RegisterTools by acting on the Canonical Project Manifest directly.
 
         Security: Requires "tools:register" write scope in ContextUnit.
 
         Request payload: {
-        project_id: "contextmed",
-        tools: [{
-        name: "execute_medical_sql",
-        type: "sql",
-        description: "...",
-        config: {
-        project_id: "contextmed",              # for stream routing
-        schema_description: "...",              # DB schema for LLM
-        read_only: true,                       # constraint: SELECT only
-        max_rows: 500,
-        statement_timeout_ms: 5000,
-        schema_description: "..."
-        }
-        }],
-
-        # Graph — choose one:
-
-        # Option A: Use Router's built-in graph template with project config
-        graph: {
-        name: "contextmed",
-        template: "sql_analytics",            # built-in template
-        config: {
-        planner_prompt: "Ти — медичний аналітик...",
-        verifier_prompt: "Перевір SQL...",
-        visualizer_prompt: "Сформуй UI...",
-        tool_bindings: ["execute_medical_sql"],
-        max_retries: 2
-        }
+        bundle: {... compiled dictionary from ArtifactGenerator ...},
+        hash: "a1b2c3d4..." // Optional: Used for idempotent validation against Redis cache
         }
 
-        # Option B: Declarative custom graph
-        graph: {
-        name: "my_custom_graph",
-        nodes: [
-        {name: "step1", type: "llm", prompt: "..."},
-        {name: "step2", type: "tool", tool: "my_tool"},
-        ...
-        ],
-        edges: [
-        {from: "START", to: "step1"},
-        {from: "step1", to: "step2", condition: "..."},
-        ...
-        ]
-        }
-        }
-
-        Response payload: {registered_tools: [...], graph: "contextmed", status: "ok"}
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def DeregisterTools(self, request, context):
-        """Deregister project tools and graph (on shutdown).
-        Request payload: {project_id: "contextmed"}
-        Response payload: {deregistered: [...], status: "ok"}
+        Response payload: {registered_tools: [...], graph: "contextmed", status: "ok", hash_matched: true/false}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -252,13 +203,8 @@ def add_RouterServiceServicer_to_server(servicer, server):
                     request_deserializer=context__unit__pb2.ContextUnit.FromString,
                     response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
             ),
-            'RegisterTools': grpc.unary_unary_rpc_method_handler(
-                    servicer.RegisterTools,
-                    request_deserializer=context__unit__pb2.ContextUnit.FromString,
-                    response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
-            ),
-            'DeregisterTools': grpc.unary_unary_rpc_method_handler(
-                    servicer.DeregisterTools,
+            'RegisterManifest': grpc.unary_unary_rpc_method_handler(
+                    servicer.RegisterManifest,
                     request_deserializer=context__unit__pb2.ContextUnit.FromString,
                     response_serializer=context__unit__pb2.ContextUnit.SerializeToString,
             ),
@@ -394,7 +340,7 @@ class RouterService(object):
             _registered_method=True)
 
     @staticmethod
-    def RegisterTools(request,
+    def RegisterManifest(request,
             target,
             options=(),
             channel_credentials=None,
@@ -407,34 +353,7 @@ class RouterService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/contextrouter.RouterService/RegisterTools',
-            context__unit__pb2.ContextUnit.SerializeToString,
-            context__unit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def DeregisterTools(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/contextrouter.RouterService/DeregisterTools',
+            '/contextrouter.RouterService/RegisterManifest',
             context__unit__pb2.ContextUnit.SerializeToString,
             context__unit__pb2.ContextUnit.FromString,
             options,

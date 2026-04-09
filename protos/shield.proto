@@ -98,4 +98,32 @@ service ShieldService {
     // Request payload: { ciphertext_b64: string }
     // Response payload: { plaintext: string }
     rpc Decrypt(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // =====================================================
+    // Per-Project PKI RPCs
+    // =====================================================
+    // Key management for per-project Ed25519 signing.
+    // Projects authenticate with CU_PROJECT_SECRET (HMAC)
+    // and receive Shield-signed session tokens.
+    // =====================================================
+
+    // Sync project policy given a manifest
+    // Request payload: { project_id, manifest_yaml }
+    // Response payload: { updated: true, allowed_permissions: [...] }
+    rpc SyncProjectPolicy(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // IssueSessionToken — Project authenticates and gets a session token
+    // Request payload: { project_id: string, hmac_proof: string }
+    // Response payload: { session_token: string, kid: string, expires_at: float, permissions: [...] }
+    rpc IssueSessionToken(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // GetProjectPublicKey — Router fetches a project's Ed25519 public key
+    // Request payload: { project_id: string }
+    // Response payload: { public_key_b64: string, algorithm: string, kid: string }
+    rpc GetProjectPublicKey(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+
+    // RotateProjectKey — Rotate Ed25519 keypair for a project
+    // Request payload: { project_id: string }
+    // Response payload: { new_public_key_b64: string, kid: string, rotation_count: int }
+    rpc RotateProjectKey(contextcore.ContextUnit) returns (contextcore.ContextUnit);
 }

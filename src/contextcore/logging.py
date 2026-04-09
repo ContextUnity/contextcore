@@ -17,9 +17,7 @@ from typing import Any, Optional
 from uuid import UUID
 
 from .config import LogLevel, SharedConfig
-from .sdk import ContextUnit
 
-# Patterns for detecting secrets (common patterns to redact)
 SECRET_PATTERNS = [
     r'(?i)(?:password|passwd|pwd|secret|token|key|api[_-]?key|auth[_-]?token)\s*[:=]\s*["\']?([^"\'\s]+)',
     r"(?i)(?:bearer|basic)\s+([a-zA-Z0-9+/=]+)",
@@ -254,9 +252,9 @@ class ContextUnitLoggerAdapter(logging.LoggerAdapter):
 
         # Extract ContextUnit if provided
         unit = kwargs.pop("unit", None)
-        if isinstance(unit, ContextUnit):
-            trace_id = trace_id or unit.trace_id
-            unit_id = unit_id or unit.unit_id
+        if unit is not None and getattr(unit, "__class__", None) and unit.__class__.__name__ == "ContextUnit":
+            trace_id = trace_id or getattr(unit, "trace_id", None)
+            unit_id = unit_id or getattr(unit, "unit_id", None)
 
         # Add to extra for formatter
         extra = kwargs.get("extra", {})
@@ -338,7 +336,7 @@ def setup_logging(
 
 
 def get_context_unit_logger(
-    name: str,
+    name: Optional[str] = None,
     trace_id: Optional[UUID | str] = None,
     unit_id: Optional[UUID | str] = None,
 ) -> ContextUnitLoggerAdapter:
@@ -360,7 +358,10 @@ def get_context_unit_logger(
         logger = get_context_unit_logger(__name__)
         logger.info("Processing request", unit=context_unit)
     """
-    logger = logging.getLogger(name)
+    if name is None:
+        logger = logging.getLogger()
+    else:
+        logger = logging.getLogger(name)
     return ContextUnitLoggerAdapter(logger, trace_id=trace_id, unit_id=unit_id)
 
 

@@ -22,8 +22,9 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import logging
 from typing import Any, Callable, TypeVar, cast
+
+from .logging import get_context_unit_logger
 
 __all__ = [
     # Base hierarchy
@@ -33,6 +34,7 @@ __all__ = [
     "IntentDetectionError",
     "ProviderError",
     "SecurityError",
+    "TamperDetectedError",
     "ConnectorError",
     "ModelError",
     "IngestionError",
@@ -50,7 +52,7 @@ __all__ = [
     "grpc_stream_error_handler",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_context_unit_logger(__name__)
 
 
 # ---- Exception Hierarchy ----------------------------------------------------
@@ -103,6 +105,12 @@ class SecurityError(ContextUnityError):
     """Authorization/security failure (token missing/invalid/expired)."""
 
     code: str = "SECURITY_ERROR"
+
+
+class TamperDetectedError(SecurityError):
+    """Prompt integrity violation — signature does not match content."""
+
+    code: str = "TAMPER_DETECTED"
 
 
 class ConnectorError(ContextUnityError):
@@ -194,6 +202,7 @@ error_registry.register("RETRIEVAL_ERROR", RetrievalError)
 error_registry.register("INTENT_ERROR", IntentDetectionError)
 error_registry.register("PROVIDER_ERROR", ProviderError)
 error_registry.register("SECURITY_ERROR", SecurityError)
+error_registry.register("TAMPER_DETECTED", TamperDetectedError)
 error_registry.register("CONNECTOR_ERROR", ConnectorError)
 error_registry.register("MODEL_ERROR", ModelError)
 error_registry.register("INGESTION_ERROR", IngestionError)
@@ -219,6 +228,7 @@ def get_grpc_status_code(error: ContextUnityError) -> int:
         "PERMISSION_DENIED": grpc.StatusCode.PERMISSION_DENIED,
         "CONFIGURATION_ERROR": grpc.StatusCode.FAILED_PRECONDITION,
         "SECURITY_ERROR": grpc.StatusCode.PERMISSION_DENIED,
+        "TAMPER_DETECTED": grpc.StatusCode.ABORTED,
         "RETRIEVAL_ERROR": grpc.StatusCode.NOT_FOUND,
         "PROVIDER_ERROR": grpc.StatusCode.UNAVAILABLE,
         "STORAGE_ERROR": grpc.StatusCode.UNAVAILABLE,
@@ -233,7 +243,7 @@ def get_grpc_status_code(error: ContextUnityError) -> int:
     return error_to_status.get(error.code, grpc.StatusCode.INTERNAL)
 
 
-def grpc_error_handler(method):
+def grpc_error_handler(method=None, *, response_factory=None):
     """Decorator for unary gRPC service methods with proper error handling.
 
     Catches ContextUnityError and sets appropriate gRPC status codes.
@@ -244,6 +254,8 @@ def grpc_error_handler(method):
         async def MyMethod(self, request, context):
             ...
     """
+    if method is None:
+        return functools.partial(grpc_error_handler, response_factory=response_factory)
 
     @functools.wraps(method)
     async def wrapper(self, request, context):
@@ -251,7 +263,7 @@ def grpc_error_handler(method):
             return await method(self, request, context)
         except asyncio.CancelledError:
             logger.info("Request %s cancelled (client disconnected or server shutting down)", method.__name__)
-            return
+            raise
         except ContextUnityError as e:
             import grpc
 
@@ -269,23 +281,43 @@ def grpc_error_handler(method):
             )
 
             context.set_trailing_metadata([("error-code", e.code)])
+
+            if response_factory:
+                context.set_code(status_code)
+                context.set_details(error_message)
+                return response_factory(request, context, e)
+
             await context.abort(status_code, error_message)
-            return  # Explicit return — prevent implicit None response
+            # Raise CancelledError to prevent Cython from proceeding to serialize None
+            raise asyncio.CancelledError("Aborted via ContextUnityError")
 
         except Exception as e:
             import grpc
 
+            if isinstance(e, ValueError):
+                status_code = grpc.StatusCode.INVALID_ARGUMENT
+                err_msg = str(e) or "Validation error"
+            elif isinstance(e, PermissionError):
+                status_code = grpc.StatusCode.PERMISSION_DENIED
+                err_msg = str(e) or "Permission denied"
+            else:
+                status_code = grpc.StatusCode.INTERNAL
+                err_msg = f"Unexpected {type(e).__name__}: {e}"
+
             logger.exception("%s unexpected error: %s", method.__name__, e)
-            await context.abort(
-                grpc.StatusCode.INTERNAL,
-                f"Unexpected {type(e)}: {e}",
-            )
-            return  # Explicit return — prevent implicit None response
+
+            if response_factory:
+                context.set_code(status_code)
+                context.set_details(err_msg)
+                return response_factory(request, context, e)
+
+            await context.abort(status_code, err_msg)
+            raise asyncio.CancelledError("Aborted via Exception")
 
     return wrapper
 
 
-def grpc_stream_error_handler(method):
+def grpc_stream_error_handler(method=None, *, response_factory=None):
     """Decorator for streaming gRPC service methods with proper error handling.
 
     Works with async generator methods that use 'yield'.
@@ -297,6 +329,8 @@ def grpc_stream_error_handler(method):
             yield item1
             yield item2
     """
+    if method is None:
+        return functools.partial(grpc_stream_error_handler, response_factory=response_factory)
 
     @functools.wraps(method)
     async def wrapper(self, request, context):
@@ -305,7 +339,7 @@ def grpc_stream_error_handler(method):
                 yield item
         except asyncio.CancelledError:
             logger.info("Stream %s cancelled (client disconnected or server shutting down)", method.__name__)
-            return
+            raise
         except ContextUnityError as e:
             import grpc
 
@@ -323,17 +357,38 @@ def grpc_stream_error_handler(method):
             )
 
             context.set_trailing_metadata([("error-code", e.code)])
+
+            if response_factory:
+                context.set_code(status_code)
+                context.set_details(error_message)
+                yield response_factory(request, context, e)
+                return
+
             await context.abort(status_code, error_message)
-            return  # Explicit return — prevent implicit None response
+            raise asyncio.CancelledError("Aborted via ContextUnityError")
 
         except Exception as e:
             import grpc
 
+            if isinstance(e, ValueError):
+                status_code = grpc.StatusCode.INVALID_ARGUMENT
+                err_msg = str(e) or "Validation error"
+            elif isinstance(e, PermissionError):
+                status_code = grpc.StatusCode.PERMISSION_DENIED
+                err_msg = str(e) or "Permission denied"
+            else:
+                status_code = grpc.StatusCode.INTERNAL
+                err_msg = f"Unexpected {type(e).__name__}: {e}"
+
             logger.exception("%s unexpected error: %s", method.__name__, e)
-            await context.abort(
-                grpc.StatusCode.INTERNAL,
-                f"Unexpected {type(e)}: {e}",
-            )
-            return  # Explicit return — prevent implicit None response
+
+            if response_factory:
+                context.set_code(status_code)
+                context.set_details(err_msg)
+                yield response_factory(request, context, e)
+                return
+
+            await context.abort(status_code, err_msg)
+            raise asyncio.CancelledError("Aborted via Exception")
 
     return wrapper
