@@ -121,8 +121,8 @@ class TestContextToken:
             permissions=("router:execute",),
             allowed_tenants=(),  # admin
         )
-        assert token.can_access_tenant("traverse") is True
-        assert token.can_access_tenant("nszu") is True
+        assert token.can_access_tenant("tenant_b") is True
+        assert token.can_access_tenant("tenant_a") is True
         assert token.can_access_tenant("any_tenant") is True
 
     def test_can_access_tenant_scoped(self) -> None:
@@ -130,22 +130,22 @@ class TestContextToken:
         token = ContextToken(
             token_id="traverse_token",
             permissions=("router:execute",),
-            allowed_tenants=("traverse",),
+            allowed_tenants=("tenant_b",),
         )
-        assert token.can_access_tenant("traverse") is True
-        assert token.can_access_tenant("nszu") is False
-        assert token.can_access_tenant("pinkpony") is False
+        assert token.can_access_tenant("tenant_b") is True
+        assert token.can_access_tenant("tenant_a") is False
+        assert token.can_access_tenant("tenant_c") is False
 
     def test_can_access_tenant_multi(self) -> None:
         """Token scoped to multiple tenants."""
         token = ContextToken(
             token_id="multi_token",
             permissions=("router:execute",),
-            allowed_tenants=("traverse", "pinkpony"),
+            allowed_tenants=("tenant_b", "tenant_c"),
         )
-        assert token.can_access_tenant("traverse") is True
-        assert token.can_access_tenant("pinkpony") is True
-        assert token.can_access_tenant("nszu") is False
+        assert token.can_access_tenant("tenant_b") is True
+        assert token.can_access_tenant("tenant_c") is True
+        assert token.can_access_tenant("tenant_a") is False
 
     def test_can_access_tenant_empty_id_rejected(self) -> None:
         """Empty tenant_id is always rejected, even for admin tokens."""
@@ -188,11 +188,11 @@ class TestTokenBuilder:
             user_ctx={},
             permissions=["router:execute"],
             ttl_s=3600,
-            allowed_tenants=["traverse", "pinkpony"],
+            allowed_tenants=["tenant_b", "tenant_c"],
         )
-        assert token.allowed_tenants == ("traverse", "pinkpony")
-        assert token.can_access_tenant("traverse") is True
-        assert token.can_access_tenant("nszu") is False
+        assert token.allowed_tenants == ("tenant_b", "tenant_c")
+        assert token.can_access_tenant("tenant_b") is True
+        assert token.can_access_tenant("tenant_a") is False
 
     def test_attenuate_token_permissions(self) -> None:
         """Test attenuating token permissions."""

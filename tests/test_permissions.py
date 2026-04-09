@@ -201,12 +201,12 @@ class TestTokenIdentityScoping:
             user_id="dr_ivanov",
             agent_id="dispatcher",
             user_namespace="pro",
-            allowed_tenants=["nszu"],
+            allowed_tenants=["tenant_a"],
         )
         assert token.user_id == "dr_ivanov"
         assert token.agent_id == "dispatcher"
         assert token.user_namespace == "pro"
-        assert token.allowed_tenants == ("nszu",)
+        assert token.allowed_tenants == ("tenant_a",)
 
     def test_attenuate_propagates_user_id(self) -> None:
         """Attenuation preserves user_id and user_namespace."""
@@ -218,7 +218,7 @@ class TestTokenIdentityScoping:
             user_id="dr_ivanov",
             agent_id="dispatcher",
             user_namespace="pro",
-            allowed_tenants=["nszu"],
+            allowed_tenants=["tenant_a"],
         )
         child = builder.attenuate(
             parent,
@@ -228,7 +228,7 @@ class TestTokenIdentityScoping:
         # user_id and user_namespace inherited
         assert child.user_id == "dr_ivanov"
         assert child.user_namespace == "pro"
-        assert child.allowed_tenants == ("nszu",)
+        assert child.allowed_tenants == ("tenant_a",)
         # agent_id changed
         assert child.agent_id == "rag_agent"
         # permissions attenuated
@@ -257,7 +257,7 @@ class TestTokenIdentityScoping:
             user_id=None,
             agent_id="gardener",
             user_namespace="system",
-            allowed_tenants=["traverse"],
+            allowed_tenants=["tenant_b"],
         )
         assert token.user_id is None
         assert token.agent_id == "gardener"
@@ -276,7 +276,7 @@ class TestTokenIdentitySerialization:
         token = ContextToken(
             token_id="test_roundtrip",
             permissions=(Permissions.BRAIN_READ, Permissions.MEMORY_WRITE),
-            allowed_tenants=("nszu",),
+            allowed_tenants=("tenant_a",),
             exp_unix=9999999999.0,
             user_id="dr_ivanov",
             agent_id="dispatcher",
@@ -705,8 +705,8 @@ class TestRegistrationPermissions:
 
     def test_register_builder(self) -> None:
         """Permissions.register() creates tools:register:{id} permission."""
-        assert Permissions.register("nszu") == "tools:register:nszu"
-        assert Permissions.register("traverse") == "tools:register:traverse"
+        assert Permissions.register("tenant_a") == "tools:register:tenant_a"
+        assert Permissions.register("tenant_b") == "tools:register:tenant_b"
 
     def test_register_constant(self) -> None:
         """TOOLS_REGISTER constant is the generic form."""
@@ -715,45 +715,45 @@ class TestRegistrationPermissions:
     def test_generic_grants_all(self) -> None:
         """Generic tools:register grants registration for any project."""
         perms = (Permissions.TOOLS_REGISTER,)
-        assert has_registration_access(perms, "nszu") is True
-        assert has_registration_access(perms, "traverse") is True
+        assert has_registration_access(perms, "tenant_a") is True
+        assert has_registration_access(perms, "tenant_b") is True
         assert has_registration_access(perms, "anything") is True
 
     def test_project_specific_grants_only_that_project(self) -> None:
         """Project-specific permission grants only that project."""
-        perms = (Permissions.register("nszu"),)
-        assert has_registration_access(perms, "nszu") is True
-        assert has_registration_access(perms, "traverse") is False
+        perms = (Permissions.register("tenant_a"),)
+        assert has_registration_access(perms, "tenant_a") is True
+        assert has_registration_access(perms, "tenant_b") is False
         assert has_registration_access(perms, "acme") is False
 
     def test_admin_all_grants_registration(self) -> None:
         """admin:all grants registration for any project."""
         perms = (Permissions.ADMIN_ALL,)
-        assert has_registration_access(perms, "nszu") is True
+        assert has_registration_access(perms, "tenant_a") is True
         assert has_registration_access(perms, "anything") is True
 
     def test_no_registration_permission(self) -> None:
         """Non-registration permissions don't grant registration."""
         perms = (Permissions.BRAIN_READ, Permissions.MEMORY_WRITE)
-        assert has_registration_access(perms, "nszu") is False
+        assert has_registration_access(perms, "tenant_a") is False
 
     def test_empty_permissions(self) -> None:
         """Empty permissions deny registration."""
-        assert has_registration_access((), "nszu") is False
+        assert has_registration_access((), "tenant_a") is False
 
     def test_multiple_project_permissions(self) -> None:
         """Multiple project-specific permissions work independently."""
-        perms = (Permissions.register("nszu"), Permissions.register("traverse"))
-        assert has_registration_access(perms, "nszu") is True
-        assert has_registration_access(perms, "traverse") is True
+        perms = (Permissions.register("tenant_a"), Permissions.register("tenant_b"))
+        assert has_registration_access(perms, "tenant_a") is True
+        assert has_registration_access(perms, "tenant_b") is True
         assert has_registration_access(perms, "acme") is False
 
     def test_with_token(self) -> None:
         """Registration permission works with ContextToken."""
         token = ContextToken(
             token_id="test",
-            permissions=(Permissions.register("nszu"),),
-            allowed_tenants=("nszu",),
+            permissions=(Permissions.register("tenant_a"),),
+            allowed_tenants=("tenant_a",),
         )
-        assert has_registration_access(token.permissions, "nszu") is True
+        assert has_registration_access(token.permissions, "tenant_a") is True
         assert has_registration_access(token.permissions, "acme") is False

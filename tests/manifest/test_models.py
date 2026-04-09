@@ -9,9 +9,9 @@ def minimal_nszu_payload() -> dict:
         "apiVersion": "contextunity/v1alpha1",
         "kind": "ContextUnityProject",
         "project": {
-            "id": "nszu",
-            "name": "NSZU",
-            "tenant": "nszu",
+            "id": "tenant_a",
+            "name": "TenantA",
+            "tenant": "tenant_a",
         },
         "services": {
             "router": {"enabled": True},
@@ -23,21 +23,21 @@ def minimal_nszu_payload() -> dict:
         },
         "router": {
             "graph": {
-                "id": "nszu",
+                "id": "tenant_a",
                 "template": "sql_analytics",
                 "config_ref": "router/sql_analytics.yaml",
             },
             "tools": [
                 {
-                    "name": "execute_medical_sql",
+                    "name": "execute_test_sql",
                     "type": "sql",
                     "execution": "federated",
                     "description": "SQL Tool",
-                    "config_ref": "router/tools/execute_medical_sql.yaml",
+                    "config_ref": "router/tools/execute_test_sql.yaml",
                 }
             ],
             "policy": {
-                "allowed_tools": ["execute_medical_sql"],
+                "allowed_tools": ["execute_test_sql"],
                 "ai_model_policy_ref": "router/ai_models.yaml",
                 "prompts_ref": "router/prompts/",
                 "langfuse_tracing_enabled": True,
@@ -59,9 +59,9 @@ def minimal_nszu_payload() -> dict:
 
 
 def test_positive_nszu_validates(minimal_nszu_payload):
-    """Positive test for remote router archetype (nszu-style)."""
+    """Positive test for remote router archetype (tenant_a-style)."""
     project = ContextUnityProject(**minimal_nszu_payload)
-    assert project.project.id == "nszu"
+    assert project.project.id == "tenant_a"
     assert project.services.worker.enabled is False
     assert getattr(project, "worker", None) is None
 
@@ -99,7 +99,7 @@ def test_mutually_exclusive_policy_refs(minimal_nszu_payload):
 def test_reject_declarative_router_graph_mode(minimal_nszu_payload):
     """Negative: v1alpha runtime no longer accepts declarative graph mode."""
     minimal_nszu_payload["router"]["graph"] = {
-        "id": "nszu",
+        "id": "tenant_a",
         "mode": "declarative",
         "nodes": [{"name": "planner", "type": "llm", "model": "openai/gpt-5-mini"}],
         "edges": [{"from": "planner", "to": "planner"}],

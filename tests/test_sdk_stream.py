@@ -20,24 +20,24 @@ class TestFederatedToolStream:
         _handle_execute(
             payload={
                 "request_id": "req-123",
-                "tool": "execute_medical_sql",
+                "tool": "execute_test_sql",
                 "args": {"sql": "SELECT 1"},
-                "caller_tenant": "nszu",
+                "caller_tenant": "tenant_a",
                 "user_id": "doctor-42",
             },
             tool_handler=tool_handler,
-            project_id="nszu",
+            project_id="tenant_a",
             response_queue=response_queue,
             session=1,
         )
 
-        assert seen["tool_name"] == "execute_medical_sql"
+        assert seen["tool_name"] == "execute_test_sql"
         assert seen["args"] == {"sql": "SELECT 1"}
         assert seen["auth_context"] == FederatedToolCallContext(
-            project_id="nszu",
-            tool_name="execute_medical_sql",
+            project_id="tenant_a",
+            tool_name="execute_test_sql",
             request_id="req-123",
-            caller_tenant="nszu",
+            caller_tenant="tenant_a",
             user_id="doctor-42",
         )
 

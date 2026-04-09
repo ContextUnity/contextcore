@@ -8,16 +8,16 @@ from contextcore.tokens import ContextToken
 
 class TestHmacBackend:
     def test_bootstrap_metadata_is_project_scoped(self):
-        backend = HmacBackend("nszu", "secret-123")
+        backend = HmacBackend("tenant_a", "secret-123")
 
         metadata = dict(backend.get_auth_metadata())
         token = parse_token_string(metadata["authorization"][7:])
 
         assert token is not None
-        assert token.can_access_tenant("nszu")
+        assert token.can_access_tenant("tenant_a")
         assert Permissions.SHIELD_SESSION_TOKEN_ISSUE in token.permissions
         assert Permissions.SHIELD_PROJECT_KEY_ROTATE in token.permissions
-        assert token.agent_id == "project:nszu"
+        assert token.agent_id == "project:tenant_a"
 
     def test_verify_rejects_unexpected_kid(self):
         signing_backend = HmacBackend("proj-a", "shared-secret")

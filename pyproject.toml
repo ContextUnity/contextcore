@@ -1,6 +1,6 @@
 [project]
 name = "contextcore"
-version = "0.5.2"
+version = "0.6.0"
 description = "The Kernel of ContextUnity — shared type system, gRPC contracts, ContextUnit protocol, and security tokens for the entire service mesh"
 readme = "README.md"
 requires-python = "==3.13.*"

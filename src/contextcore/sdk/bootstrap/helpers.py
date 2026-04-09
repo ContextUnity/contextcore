@@ -10,7 +10,6 @@ the low-level ``register_and_start()``.
 
 from __future__ import annotations
 
-import os
 import threading
 from pathlib import Path
 from typing import Any
@@ -36,7 +35,9 @@ def _find_manifest_path(hint: str = "") -> str:
     if hint:
         return hint
 
-    env_path = os.environ.get("CONTEXTUNITY_MANIFEST_PATH", "")
+    from contextcore.config import get_core_config
+
+    env_path = get_core_config().manifest_path
     if env_path:
         return env_path
 
@@ -145,15 +146,10 @@ def bootstrap_django(
 
         class ChatConfig(AppConfig):
             def ready(self):
-                # Avoid double startup in runserver parent process
-                is_runserver = "runserver" in sys.argv
-                is_gunicorn = "gunicorn" in os.environ.get("SERVER_SOFTWARE", "")
+                import chat.tools  # triggers @federated_tool registration
+                from chat.prompts import PLANNER_PROMPT, DB_SCHEMA
 
-                if is_gunicorn or (is_runserver and os.environ.get("RUN_MAIN") == "true"):
-                    import chat.tools  # triggers @federated_tool registration
-                    from chat.prompts import PLANNER_PROMPT, DB_SCHEMA
-
-                    bootstrap_django(prompts={"planner": PLANNER_PROMPT, "schema_description": DB_SCHEMA})
+                bootstrap_django(prompts={"planner": PLANNER_PROMPT, "schema_description": DB_SCHEMA})
     """
     # Auto-resolve manifest path from Django settings if not given
     if not manifest_path:

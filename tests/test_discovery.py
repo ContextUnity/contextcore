@@ -54,20 +54,20 @@ class TestServiceInfo:
     def test_serves_tenant_shared(self):
         """Shared service (empty tenants) serves all tenants."""
         info = ServiceInfo(service="brain", instance="shared", endpoint="localhost:50051")
-        assert info.serves_tenant("traverse") is True
-        assert info.serves_tenant("nszu") is True
+        assert info.serves_tenant("tenant_b") is True
+        assert info.serves_tenant("tenant_a") is True
         assert info.serves_tenant("any") is True
 
     def test_serves_tenant_scoped(self):
         """Scoped service only serves listed tenants."""
         info = ServiceInfo(
             service="brain",
-            instance="nszu",
+            instance="tenant_a",
             endpoint="localhost:50053",
-            tenants=["nszu"],
+            tenants=["tenant_a"],
         )
-        assert info.serves_tenant("nszu") is True
-        assert info.serves_tenant("traverse") is False
+        assert info.serves_tenant("tenant_a") is True
+        assert info.serves_tenant("tenant_b") is False
 
     def test_serves_tenant_multi(self):
         """Service serving multiple tenants."""
@@ -75,11 +75,11 @@ class TestServiceInfo:
             service="brain",
             instance="shared",
             endpoint="localhost:50051",
-            tenants=["traverse", "pinkpony"],
+            tenants=["tenant_b", "tenant_c"],
         )
-        assert info.serves_tenant("traverse") is True
-        assert info.serves_tenant("pinkpony") is True
-        assert info.serves_tenant("nszu") is False
+        assert info.serves_tenant("tenant_b") is True
+        assert info.serves_tenant("tenant_c") is True
+        assert info.serves_tenant("tenant_a") is False
 
 
 class TestRedisKey:
@@ -119,7 +119,7 @@ class TestDiscoverServices:
         mock_redis = MagicMock()
         mock_redis.keys.return_value = [
             "contextunity:services:brain:shared",
-            "contextunity:services:brain:nszu",
+            "contextunity:services:brain:tenant_a",
         ]
         mock_redis.get.side_effect = [
             json.dumps(
@@ -134,8 +134,8 @@ class TestDiscoverServices:
                 {
                     "endpoint": "localhost:50053",
                     "service": "brain",
-                    "instance": "nszu",
-                    "tenants": ["nszu"],
+                    "instance": "tenant_a",
+                    "tenants": ["tenant_a"],
                 }
             ),
         ]
@@ -146,14 +146,14 @@ class TestDiscoverServices:
         assert len(result) == 2
         assert result[0].service == "brain"
         assert result[0].tenants == []  # shared
-        assert result[1].tenants == ["nszu"]
+        assert result[1].tenants == ["tenant_a"]
 
     def test_discover_with_tenant_filter(self):
-        """Test tenant-scoped discovery: traverse sees shared + traverse-scoped, not nszu."""
+        """Test tenant-scoped discovery: tenant_b sees shared + tenant_b-scoped, not tenant_a."""
         mock_redis = MagicMock()
         mock_redis.keys.return_value = [
             "contextunity:services:brain:shared",
-            "contextunity:services:brain:nszu",
+            "contextunity:services:brain:tenant_a",
         ]
         mock_redis.get.side_effect = [
             json.dumps(
@@ -168,17 +168,17 @@ class TestDiscoverServices:
                 {
                     "endpoint": "localhost:50053",
                     "service": "brain",
-                    "instance": "nszu",
-                    "tenants": ["nszu"],  # scoped → only nszu
+                    "instance": "tenant_a",
+                    "tenants": ["tenant_a"],  # scoped → only tenant_a
                 }
             ),
         ]
 
         with patch("redis.from_url", return_value=mock_redis):
-            # traverse should see shared but NOT nszu
+            # tenant_b should see shared but NOT tenant_a
             result = discover_services(
                 service_type="brain",
-                tenant_id="traverse",
+                tenant_id="tenant_b",
                 redis_url="redis://localhost:6379/0",
             )
 
@@ -190,7 +190,7 @@ class TestDiscoverServices:
         mock_redis = MagicMock()
         mock_redis.keys.return_value = [
             "contextunity:services:brain:shared",
-            "contextunity:services:brain:nszu",
+            "contextunity:services:brain:tenant_a",
         ]
         mock_redis.get.side_effect = [
             json.dumps(
@@ -205,8 +205,8 @@ class TestDiscoverServices:
                 {
                     "endpoint": "localhost:50053",
                     "service": "brain",
-                    "instance": "nszu",
-                    "tenants": ["nszu"],
+                    "instance": "tenant_a",
+                    "tenants": ["tenant_a"],
                 }
             ),
         ]
@@ -281,7 +281,7 @@ class TestDiscoverEndpoints:
         mock_redis = MagicMock()
         mock_redis.keys.return_value = [
             "contextunity:services:brain:shared",
-            "contextunity:services:brain:nszu",
+            "contextunity:services:brain:tenant_a",
         ]
         mock_redis.get.side_effect = [
             json.dumps(
@@ -296,8 +296,8 @@ class TestDiscoverEndpoints:
                 {
                     "endpoint": "localhost:50053",
                     "service": "brain",
-                    "instance": "nszu",
-                    "tenants": ["nszu"],
+                    "instance": "tenant_a",
+                    "tenants": ["tenant_a"],
                 }
             ),
         ]
@@ -307,7 +307,7 @@ class TestDiscoverEndpoints:
 
         assert result == {
             "shared": "localhost:50051",
-            "nszu": "localhost:50053",
+            "tenant_a": "localhost:50053",
         }
 
     def test_with_tenant_filter(self):
@@ -315,7 +315,7 @@ class TestDiscoverEndpoints:
         mock_redis = MagicMock()
         mock_redis.keys.return_value = [
             "contextunity:services:brain:shared",
-            "contextunity:services:brain:nszu",
+            "contextunity:services:brain:tenant_a",
         ]
         mock_redis.get.side_effect = [
             json.dumps(
@@ -330,16 +330,16 @@ class TestDiscoverEndpoints:
                 {
                     "endpoint": "localhost:50053",
                     "service": "brain",
-                    "instance": "nszu",
-                    "tenants": ["nszu"],
+                    "instance": "tenant_a",
+                    "tenants": ["tenant_a"],
                 }
             ),
         ]
 
         with patch("redis.from_url", return_value=mock_redis):
-            result = discover_endpoints("brain", tenant_id="traverse", redis_url="redis://localhost:6379/0")
+            result = discover_endpoints("brain", tenant_id="tenant_b", redis_url="redis://localhost:6379/0")
 
-        # traverse should see shared but not nszu
+        # tenant_b should see shared but not tenant_a
         assert result == {"shared": "localhost:50051"}
 
     def test_empty_when_no_services(self):
@@ -363,7 +363,7 @@ class TestProjectRegistry:
         mock_redis.get.return_value = None  # Not registered yet
 
         with patch("redis.from_url", return_value=mock_redis):
-            result = register_project("nszu", "nszu", tools=["execute_medical_sql"], redis_url="redis://localhost")
+            result = register_project("tenant_a", "tenant_a", tools=["execute_test_sql"], redis_url="redis://localhost")
 
         assert result is True
         mock_redis.set.assert_called_once()
@@ -375,14 +375,14 @@ class TestProjectRegistry:
         mock_redis = MagicMock()
         mock_redis.get.return_value = json.dumps(
             {
-                "project_id": "nszu",
-                "owner_tenant": "nszu",
+                "project_id": "tenant_a",
+                "owner_tenant": "tenant_a",
                 "tools": ["old_tool"],
             }
         )
 
         with patch("redis.from_url", return_value=mock_redis):
-            result = register_project("nszu", "nszu", tools=["new_tool"], redis_url="redis://localhost")
+            result = register_project("tenant_a", "tenant_a", tools=["new_tool"], redis_url="redis://localhost")
 
         assert result is True
         mock_redis.set.assert_called_once()
@@ -394,14 +394,14 @@ class TestProjectRegistry:
         mock_redis = MagicMock()
         mock_redis.get.return_value = json.dumps(
             {
-                "project_id": "nszu",
-                "owner_tenant": "nszu",
+                "project_id": "tenant_a",
+                "owner_tenant": "tenant_a",
                 "tools": [],
             }
         )
 
         with patch("redis.from_url", return_value=mock_redis):
-            result = register_project("nszu", "attacker", tools=[], redis_url="redis://localhost")
+            result = register_project("tenant_a", "attacker", tools=[], redis_url="redis://localhost")
 
         assert result is False
         mock_redis.set.assert_not_called()
@@ -413,14 +413,14 @@ class TestProjectRegistry:
         mock_redis = MagicMock()
         mock_redis.get.return_value = json.dumps(
             {
-                "project_id": "nszu",
-                "owner_tenant": "nszu",
+                "project_id": "tenant_a",
+                "owner_tenant": "tenant_a",
                 "tools": [],
             }
         )
 
         with patch("redis.from_url", return_value=mock_redis):
-            assert verify_project_owner("nszu", "nszu", redis_url="redis://localhost") is True
+            assert verify_project_owner("tenant_a", "tenant_a", redis_url="redis://localhost") is True
 
     def test_verify_owner_mismatch(self):
         """verify_project_owner returns False when owner doesn't match."""
@@ -429,14 +429,14 @@ class TestProjectRegistry:
         mock_redis = MagicMock()
         mock_redis.get.return_value = json.dumps(
             {
-                "project_id": "nszu",
-                "owner_tenant": "nszu",
+                "project_id": "tenant_a",
+                "owner_tenant": "tenant_a",
                 "tools": [],
             }
         )
 
         with patch("redis.from_url", return_value=mock_redis):
-            assert verify_project_owner("nszu", "attacker", redis_url="redis://localhost") is False
+            assert verify_project_owner("tenant_a", "attacker", redis_url="redis://localhost") is False
 
     def test_verify_unregistered_allows(self):
         """verify_project_owner allows unregistered projects (first-time)."""
@@ -454,12 +454,12 @@ class TestProjectRegistry:
 
         mock_redis = MagicMock()
         mock_redis.keys.return_value = [
-            "contextunity:projects:nszu",
-            "contextunity:projects:traverse",
+            "contextunity:projects:tenant_a",
+            "contextunity:projects:tenant_b",
         ]
         mock_redis.get.side_effect = [
-            json.dumps({"project_id": "nszu", "owner_tenant": "nszu", "tools": ["sql"]}),
-            json.dumps({"project_id": "traverse", "owner_tenant": "traverse", "tools": []}),
+            json.dumps({"project_id": "tenant_a", "owner_tenant": "tenant_a", "tools": ["sql"]}),
+            json.dumps({"project_id": "tenant_b", "owner_tenant": "tenant_b", "tools": []}),
         ]
 
         with patch("redis.from_url", return_value=mock_redis):
@@ -467,7 +467,7 @@ class TestProjectRegistry:
 
         assert len(projects) == 2
         ids = {p["project_id"] for p in projects}
-        assert ids == {"nszu", "traverse"}
+        assert ids == {"tenant_a", "tenant_b"}
 
     def test_graceful_degradation_no_redis(self):
         """Functions degrade gracefully without Redis."""
