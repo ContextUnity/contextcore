@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from contextcore.permissions import Permissions
-from contextcore.signing import HmacBackend
-from contextcore.token_utils import parse_token_string, serialize_token
-from contextcore.tokens import ContextToken
+from contextunity.core.permissions import Permissions
+from contextunity.core.signing import HmacBackend
+from contextunity.core.token_utils import parse_token_string, serialize_token
+from contextunity.core.tokens import ContextToken
 
 
 class TestHmacBackend:

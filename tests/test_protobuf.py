@@ -1,14 +1,14 @@
 """Tests for ContextUnit protobuf conversion.
 
 These tests verify the ContextUnit ↔ protobuf round-trip contract.
-All proto stubs live at `contextcore.*_pb2` (e.g. contextcore.context_unit_pb2).
+All proto stubs live at `cu.core.*_pb2` (e.g. cu.core.contextunit_pb2).
 """
 
 from __future__ import annotations
 
 from uuid import uuid4
 
-from contextcore import ContextUnit, CotStep, SecurityScopes, UnitMetrics, context_unit_pb2
+from contextunity.core import ContextUnit, CotStep, SecurityScopes, UnitMetrics, contextunit_pb2
 from google.protobuf.struct_pb2 import Struct
 
 
@@ -25,7 +25,7 @@ class TestProtobufConversion:
             payload={"test": "data"},
         )
 
-        unit_pb = unit.to_protobuf(context_unit_pb2)
+        unit_pb = unit.to_protobuf(contextunit_pb2)
         assert unit_pb is not None
         assert unit_pb.unit_id == str(uid)
         assert unit_pb.trace_id == str(tid)
@@ -35,7 +35,7 @@ class TestProtobufConversion:
         uid = str(uuid4())
         tid = str(uuid4())
 
-        unit_pb = context_unit_pb2.ContextUnit(
+        unit_pb = contextunit_pb2.ContextUnit(
             unit_id=uid,
             trace_id=tid,
             modality=0,  # TEXT
@@ -54,7 +54,7 @@ class TestProtobufConversion:
         unit = ContextUnit()
         unit.chain_of_thought.append(CotStep(agent="test_agent", action="test_action", status="completed"))
 
-        unit_pb = unit.to_protobuf(context_unit_pb2)
+        unit_pb = unit.to_protobuf(contextunit_pb2)
         assert len(unit_pb.chain_of_thought) == 1
         assert unit_pb.chain_of_thought[0].agent == "test_agent"
         assert unit_pb.chain_of_thought[0].action == "test_action"
@@ -69,7 +69,7 @@ class TestProtobufConversion:
             )
         )
 
-        unit_pb = unit.to_protobuf(context_unit_pb2)
+        unit_pb = unit.to_protobuf(contextunit_pb2)
         assert unit_pb.security is not None
         assert len(unit_pb.security.read) == 2
         assert "read:data" in unit_pb.security.read
@@ -87,7 +87,7 @@ class TestProtobufConversion:
             )
         )
 
-        unit_pb = unit.to_protobuf(context_unit_pb2)
+        unit_pb = unit.to_protobuf(contextunit_pb2)
         assert unit_pb.metrics is not None
         assert unit_pb.metrics.latency_ms == 100
         assert unit_pb.metrics.cost_usd == 0.05
@@ -104,7 +104,7 @@ class TestProtobufConversion:
         original.chain_of_thought.append(CotStep(agent="agent1", action="action1", status="completed"))
 
         # ContextUnit → protobuf
-        unit_pb = original.to_protobuf(context_unit_pb2)
+        unit_pb = original.to_protobuf(contextunit_pb2)
 
         # protobuf → ContextUnit
         restored = ContextUnit.from_protobuf(unit_pb)
@@ -120,7 +120,7 @@ class TestProtobufConversion:
         """Test ContextUnit with empty payload to protobuf."""
         unit = ContextUnit(payload={})
 
-        unit_pb = unit.to_protobuf(context_unit_pb2)
+        unit_pb = unit.to_protobuf(contextunit_pb2)
         assert unit_pb.payload is not None
 
     def test_to_protobuf_nested_payload(self) -> None:
@@ -132,7 +132,7 @@ class TestProtobufConversion:
             }
         )
 
-        unit_pb = unit.to_protobuf(context_unit_pb2)
+        unit_pb = unit.to_protobuf(contextunit_pb2)
         assert unit_pb.payload is not None
         # Verify nested structure survives serialization
         payload_dict = dict(unit_pb.payload)
@@ -157,7 +157,7 @@ class TestProtobufConversion:
             }
         )
         # This must not raise TypeError
-        unit_pb = unit.to_protobuf(context_unit_pb2)
+        unit_pb = unit.to_protobuf(contextunit_pb2)
         assert unit_pb is not None
         # Verify round-trip
         restored = ContextUnit.from_protobuf(unit_pb)
@@ -182,7 +182,7 @@ class TestProtobufConversion:
             }
         )
         # Must not raise
-        unit_pb = unit.to_protobuf(context_unit_pb2)
+        unit_pb = unit.to_protobuf(contextunit_pb2)
         assert unit_pb is not None
 
         restored = ContextUnit.from_protobuf(unit_pb)
@@ -237,7 +237,7 @@ class TestProtobufConversion:
             }
         )
         # Must serialize without errors
-        unit_pb = unit.to_protobuf(context_unit_pb2)
+        unit_pb = unit.to_protobuf(contextunit_pb2)
         assert unit_pb is not None
         # Must also fully serialize to wire bytes
         wire = unit_pb.SerializeToString()

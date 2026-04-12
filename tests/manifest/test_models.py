@@ -1,5 +1,5 @@
 import pytest
-from contextcore.manifest import ContextUnityMigrationOverlay, ContextUnityProject
+from contextunity.core.manifest import ContextUnityMigrationOverlay, ContextUnityProject
 from pydantic import ValidationError
 
 

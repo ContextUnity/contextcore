@@ -1,8 +1,8 @@
-"""Tests for contextcore.prompt_integrity — signing and content-addressable versioning."""
+"""Tests for cu.core.prompt_integrity — signing and content-addressable versioning."""
 
 import pytest
-from contextcore.sdk.prompt_integrity import compute_prompt_version, sign_prompt, verify_prompt
-from contextcore.signing import HmacBackend
+from contextunity.core.sdk.prompt_integrity import compute_prompt_version, sign_prompt, verify_prompt
+from contextunity.core.signing import HmacBackend
 
 
 @pytest.fixture

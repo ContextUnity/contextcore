@@ -1,5 +1,5 @@
 [project]
-name = "contextcore"
+name = "contextunity-core"
 version = "0.6.0"
 description = "The Kernel of ContextUnity — shared type system, gRPC contracts, ContextUnit protocol, and security tokens for the entire service mesh"
 readme = "README.md"
@@ -21,13 +21,18 @@ dependencies = [
     "pydantic>=2.6.0",
     "cryptography>=42.0.0",
     "PyYAML>=6.0.0",
+    "typer>=0.12.0",
+    "rich>=13.7.0",
 ]
 
+[project.scripts]
+contextunity-core = "contextunity.core.cli.main:app"
+
 [project.urls]
-Homepage = "https://contextcore.dev"
-Documentation = "https://contextcore.dev"
-Repository = "https://github.com/ContextUnity/contextcore"
-Issues = "https://github.com/ContextUnity/contextcore/issues"
+Homepage = "https://contextunity.dev"
+Documentation = "https://contextunity.dev"
+Repository = "https://github.com/ContextUnity/contextunity-core"
+Issues = "https://github.com/ContextUnity/cu/core/issues"
 
 [project.optional-dependencies]
 dev = [

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import queue
 
-from contextcore.sdk.streaming.bidi import FederatedToolCallContext, _handle_execute
+from contextunity.core.sdk.streaming.bidi import FederatedToolCallContext, _handle_execute
 from google.protobuf.json_format import MessageToDict
 
 

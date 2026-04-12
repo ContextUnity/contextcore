@@ -1,4 +1,4 @@
-"""Tests for contextcore.sdk.bootstrap.helpers — bootstrap_django, bootstrap_standalone."""
+"""Tests for cu.core.sdk.bootstrap.helpers — bootstrap_django, bootstrap_standalone."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import yaml
-from contextcore.sdk.bootstrap.helpers import (
+from contextunity.core.sdk.bootstrap.helpers import (
     _build_prompt_map,
     _find_manifest_path,
 )
@@ -16,22 +16,22 @@ from contextcore.sdk.bootstrap.helpers import (
 
 class TestFindManifestPath:
     def test_explicit_hint_wins(self):
-        import contextcore.config as core_config
+        import contextunity.core.config as core_config
 
         core_config._core_config = None
         result = _find_manifest_path("/some/explicit/path.yaml")
         assert result == "/some/explicit/path.yaml"
 
     def test_env_var_second(self, monkeypatch):
-        import contextcore.config as core_config
+        import contextunity.core.config as core_config
 
         core_config._core_config = None
-        monkeypatch.setenv("CONTEXTUNITY_MANIFEST_PATH", "/env/manifest.yaml")
+        monkeypatch.setenv("CU_MANIFEST_PATH", "/env/manifest.yaml")
         result = _find_manifest_path()
         assert result == "/env/manifest.yaml"
 
     def test_walks_up_cwd(self, tmp_path, monkeypatch):
-        import contextcore.config as core_config
+        import contextunity.core.config as core_config
 
         core_config._core_config = None
         manifest = tmp_path / "contextunity.project.yaml"
@@ -40,17 +40,17 @@ class TestFindManifestPath:
         subdir = tmp_path / "src" / "app"
         subdir.mkdir(parents=True)
         monkeypatch.chdir(subdir)
-        monkeypatch.delenv("CONTEXTUNITY_MANIFEST_PATH", raising=False)
+        monkeypatch.delenv("CU_MANIFEST_PATH", raising=False)
 
         result = _find_manifest_path()
         assert result == str(manifest)
 
     def test_default_fallback(self, tmp_path, monkeypatch):
-        import contextcore.config as core_config
+        import contextunity.core.config as core_config
 
         core_config._core_config = None
         monkeypatch.chdir(tmp_path)
-        monkeypatch.delenv("CONTEXTUNITY_MANIFEST_PATH", raising=False)
+        monkeypatch.delenv("CU_MANIFEST_PATH", raising=False)
         result = _find_manifest_path()
         assert result == "contextunity.project.yaml"
 
@@ -148,7 +148,7 @@ class TestBuildPromptMap:
 
 # helpers.py does `_bootstrap_api.register_and_start(...)` where _bootstrap_api
 # is imported from `.api`. We patch the function on that module object.
-_PATCH_TARGET = "contextcore.sdk.bootstrap.helpers._bootstrap_api.register_and_start"
+_PATCH_TARGET = "contextunity.core.sdk.bootstrap.helpers._bootstrap_api.register_and_start"
 
 
 # ── bootstrap_standalone ──
@@ -157,10 +157,10 @@ _PATCH_TARGET = "contextcore.sdk.bootstrap.helpers._bootstrap_api.register_and_s
 class TestBootstrapStandalone:
     def test_runs_once(self, monkeypatch, tmp_path):
         """Double-checked locking should ensure single execution."""
-        import contextcore.sdk.bootstrap.helpers as helpers_mod
+        import contextunity.core.sdk.bootstrap.helpers as helpers_mod
 
         helpers_mod._BOOTSTRAPPED = False
-        monkeypatch.setenv("CONTEXTUNITY_MANIFEST_PATH", str(tmp_path / "m.yaml"))
+        monkeypatch.setenv("CU_MANIFEST_PATH", str(tmp_path / "m.yaml"))
 
         with patch(_PATCH_TARGET) as mock_reg:
             helpers_mod.bootstrap_standalone()

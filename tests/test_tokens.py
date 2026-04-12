@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 import pytest
-from contextcore import ContextToken, ContextUnit, SecurityScopes, TokenBuilder
+from contextunity.core import ContextToken, ContextUnit, SecurityScopes, TokenBuilder
 
 
 class TestContextToken:
@@ -365,7 +365,7 @@ class TestTokenEdgeCases:
         """Invalid operation should raise ValueError."""
         builder = TokenBuilder()
         token = builder.mint_root(user_ctx={}, permissions=["read:data"], ttl_s=3600)
-        from contextcore import ContextUnit, SecurityScopes
+        from contextunity.core import ContextUnit, SecurityScopes
 
         unit = ContextUnit(security=SecurityScopes(read=["read:data"]))
         with pytest.raises(ValueError, match="Invalid operation"):
@@ -373,7 +373,7 @@ class TestTokenEdgeCases:
 
     def test_can_read_with_no_permissions(self) -> None:
         """Token with no permissions cannot satisfy non-empty read scopes."""
-        from contextcore import SecurityScopes
+        from contextunity.core import SecurityScopes
 
         token = ContextToken(token_id="empty", permissions=())
         scopes = SecurityScopes(read=["read:data"])
@@ -381,7 +381,7 @@ class TestTokenEdgeCases:
 
     def test_can_write_with_no_permissions(self) -> None:
         """Token with no permissions cannot satisfy non-empty write scopes."""
-        from contextcore import SecurityScopes
+        from contextunity.core import SecurityScopes
 
         token = ContextToken(token_id="empty", permissions=())
         scopes = SecurityScopes(write=["write:data"])

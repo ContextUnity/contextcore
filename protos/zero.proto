@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package contextzero;
+package contextunity.zero;
 
-import "context_unit.proto";
+import "contextunit.proto";
 
 // =====================================================
 // ContextZero Service - Privacy Proxy
@@ -15,30 +15,30 @@ service ZeroService {
     // Anonymize PII in a prompt before external LLM call
     // Request payload: {prompt, session_id?, persona_name?, tenant_id}
     // Response payload: {anonymized_prompt, entities_masked, entity_types, session_id}
-    rpc Anonymize(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc Anonymize(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Deanonymize (restore PII) in an LLM response
     // Request payload: {text, session_id}
     // Response payload: {restored_text}
-    rpc Deanonymize(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc Deanonymize(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Scan text for PII without modifying it
     // Request payload: {text}
     // Response payload: {contains_pii, entities_found, entity_types}
-    rpc ScanPII(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc ScanPII(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Full pipeline: anonymize → (LLM call) → deanonymize in one call
     // Request payload: {prompt, session_id?, persona_name?, llm_endpoint?}
     // Response payload: {restored_response, audit: {...}}
-    rpc ProcessPrompt(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc ProcessPrompt(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Destroy a session and wipe all keys from RAM
     // Request payload: {session_id}
     // Response payload: {destroyed: true}
-    rpc DestroySession(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc DestroySession(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get service statistics (active sessions, encryption status)
     // Request payload: {}
     // Response payload: {active_sessions, total_processed, ...}
-    rpc GetStats(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetStats(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 }

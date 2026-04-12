@@ -1,12 +1,12 @@
-"""Tests for contextcore.sdk.tools — @federated_tool decorator and ToolRegistry."""
+"""Tests for cu.core.sdk.tools — @federated_tool decorator and ToolRegistry."""
 
 from __future__ import annotations
 
 import asyncio
 
 import pytest
-from contextcore.sdk.streaming.bidi import FederatedToolCallContext
-from contextcore.sdk.tools import ToolRegistry, federated_tool
+from contextunity.core.sdk.streaming.bidi import FederatedToolCallContext
+from contextunity.core.sdk.tools import ToolRegistry, federated_tool
 
 
 @pytest.fixture(autouse=True)

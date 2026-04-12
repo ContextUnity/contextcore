@@ -1,4 +1,4 @@
-"""Tests for contextcore.security module."""
+"""Tests for cu.core.security module."""
 
 from __future__ import annotations
 
@@ -9,18 +9,18 @@ from unittest.mock import MagicMock
 import pytest
 
 os.environ["CU_PROJECT_SECRET"] = "test_secret"
-from contextcore.permissions import Permissions
-from contextcore.security import (
+from contextunity.core.permissions import Permissions
+from contextunity.core.security import (
     ServicePermissionInterceptor,
     check_permission,
 )
-from contextcore.token_utils import (
+from contextunity.core.token_utils import (
     build_verifier_backend_from_token_string,
     extract_and_verify_token_from_http_request,
     serialize_token,
     verify_token_string,
 )
-from contextcore.tokens import ContextToken
+from contextunity.core.tokens import ContextToken
 
 # ── check_permission ────────────────────────────────────────────
 
@@ -76,7 +76,7 @@ class TestHttpTokenVerification:
     """Tests for verified HTTP token extraction helpers."""
 
     def test_build_verifier_backend_from_token_string_uses_project_secret(self, monkeypatch):
-        from contextcore.signing import HmacBackend
+        from contextunity.core.signing import HmacBackend
 
         backend = HmacBackend("test_proj", "test_secret")
         token = ContextToken(
@@ -87,7 +87,7 @@ class TestHttpTokenVerification:
         token_str = serialize_token(token, backend=backend)
 
         monkeypatch.setattr(
-            "contextcore.discovery.get_project_key",
+            "contextunity.core.discovery.get_project_key",
             lambda project_id, **kwargs: {"project_secret": "test_secret"},
         )
 
@@ -98,7 +98,7 @@ class TestHttpTokenVerification:
         assert verified.token_id == token.token_id
 
     def test_extract_and_verify_token_from_http_request(self, monkeypatch):
-        from contextcore.signing import HmacBackend
+        from contextunity.core.signing import HmacBackend
 
         backend = HmacBackend("test_proj", "test_secret")
         token = ContextToken(
@@ -113,7 +113,7 @@ class TestHttpTokenVerification:
         )
 
         monkeypatch.setattr(
-            "contextcore.token_utils.http.build_verifier_backend_from_token_string",
+            "contextunity.core.token_utils.http.build_verifier_backend_from_token_string",
             lambda *args, **kwargs: backend,
         )
 
@@ -141,7 +141,7 @@ def _make_handler_call_details(method: str, metadata: list | None = None):
 
 def _make_token_metadata(token: ContextToken) -> list[tuple[str, str]]:
     """Serialize a token and return it as gRPC metadata."""
-    from contextcore.signing import HmacBackend
+    from contextunity.core.signing import HmacBackend
 
     backend = HmacBackend("test_proj", "test_secret")
     token_str = serialize_token(token, backend=backend)
@@ -156,7 +156,7 @@ class TestServicePermissionInterceptor:
         def _mock_get_project_key(project_id, **kwargs):
             return {"project_secret": "test_secret"}
 
-        monkeypatch.setattr("contextcore.discovery.get_project_key", _mock_get_project_key)
+        monkeypatch.setattr("contextunity.core.discovery.get_project_key", _mock_get_project_key)
 
     @pytest.mark.asyncio
     async def test_health_check_skipped(self):

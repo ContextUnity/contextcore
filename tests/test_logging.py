@@ -1,4 +1,4 @@
-"""Tests for contextcore.logging module."""
+"""Tests for cu.core.logging module."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ import logging
 from uuid import uuid4
 
 import pytest
-from contextcore import (
+from contextunity.core import (
     ContextUnit,
     LogLevel,
     SharedConfig,
-    get_context_unit_logger,
+    get_contextunit_logger,
     redact_secrets,
     safe_log_value,
     safe_preview,
@@ -145,7 +145,7 @@ class TestSetupLogging:
         config = SharedConfig(log_level=LogLevel.INFO)
         setup_logging(config=config, json_format=True)
 
-        logger = get_context_unit_logger("test")
+        logger = get_contextunit_logger("test")
         logger.info("Test message")
 
         # Capture stderr output (where StreamHandler writes)
@@ -164,7 +164,7 @@ class TestSetupLogging:
         config = SharedConfig(log_level=LogLevel.INFO)
         setup_logging(config=config, json_format=False)
 
-        logger = get_context_unit_logger("test")
+        logger = get_contextunit_logger("test")
         logger.info("Test message")
 
         # Capture stderr output (where StreamHandler writes)
@@ -184,7 +184,7 @@ class TestContextUnitLogger:
     def test_logger_with_trace_id(self, caplog: pytest.LogCaptureFixture) -> None:
         """Test logger with trace_id."""
         trace_id = uuid4()
-        logger = get_context_unit_logger("test", trace_id=trace_id)
+        logger = get_contextunit_logger("test", trace_id=trace_id)
 
         with caplog.at_level(logging.INFO):
             logger.info("Test message")
@@ -201,7 +201,7 @@ class TestContextUnitLogger:
             payload={"test": "data"},
         )
 
-        logger = get_context_unit_logger("test")
+        logger = get_contextunit_logger("test")
 
         with caplog.at_level(logging.INFO):
             logger.info("Processing unit", unit=unit)
@@ -210,7 +210,7 @@ class TestContextUnitLogger:
 
     def test_logger_without_context(self, caplog: pytest.LogCaptureFixture) -> None:
         """Test logger without trace context."""
-        logger = get_context_unit_logger("test")
+        logger = get_contextunit_logger("test")
 
         with caplog.at_level(logging.INFO):
             logger.info("Test message")
@@ -223,7 +223,7 @@ class TestContextUnitFormatter:
 
     def test_json_format(self) -> None:
         """Test JSON formatter."""
-        from contextcore.logging import ContextUnitFormatter
+        from contextunity.core.logging import ContextUnitFormatter
 
         formatter = ContextUnitFormatter(json_format=True)
         record = logging.LogRecord(
@@ -246,7 +246,7 @@ class TestContextUnitFormatter:
 
     def test_plain_format(self) -> None:
         """Test plain text formatter."""
-        from contextcore.logging import ContextUnitFormatter
+        from contextunity.core.logging import ContextUnitFormatter
 
         formatter = ContextUnitFormatter(json_format=False)
         record = logging.LogRecord(

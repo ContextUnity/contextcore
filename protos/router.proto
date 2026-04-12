@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package contextrouter;
+package contextunity.router;
 
-import "context_unit.proto";
+import "contextunit.proto";
 
 // =====================================================
 // Router Service - AI Agent Orchestration
@@ -15,12 +15,12 @@ service RouterService {
     // Execute a single turn of an agent
     // Request payload: {tenant_id, agent_id, input_text, context?: {...}}
     // Response payload: {output_text, tool_calls?: {...}, metadata?: {...}}
-    rpc ExecuteAgent(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc ExecuteAgent(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Stream agent execution (for UI with real-time output)
     // Request payload: {tenant_id, agent_id, input_text, context?: {...}}
     // Response payload: {output_text, tool_calls?: {...}, metadata?: {...}}
-    rpc StreamAgent(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    rpc StreamAgent(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // =========================================
     // Dispatcher Agent - Always-Active Agent
@@ -30,13 +30,13 @@ service RouterService {
     // Request payload: {tenant_id, messages: [{role, content}], session_id?, platform?, max_iterations?}
     // Response payload: {messages: [...], session_id, metadata: {...}}
     // Security: Uses SecurityScopes from ContextUnit for access control
-    rpc ExecuteDispatcher(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc ExecuteDispatcher(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Stream dispatcher agent execution
     // Request payload: {tenant_id, messages: [{role, content}], session_id?, platform?, max_iterations?}
     // Response payload: {event_type, data: {...}} (streaming events)
     // Security: Uses SecurityScopes from ContextUnit for access control
-    rpc StreamDispatcher(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    rpc StreamDispatcher(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // =========================================
     // Project Tool & Graph Registration
@@ -61,7 +61,7 @@ service RouterService {
     // }
     //
     // Response payload: {registered_tools: [...], graph: "contextmed", status: "ok", hash_matched: true/false}
-    rpc RegisterManifest(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc RegisterManifest(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // =========================================
     // Tool Executor Stream (Bidi Callback)
@@ -83,6 +83,6 @@ service RouterService {
     //                        "error": "timeout"}
     //
     // Security: Requires ContextToken with "tools:execute" permission.
-    rpc ToolExecutorStream(stream contextcore.ContextUnit)
-        returns (stream contextcore.ContextUnit);
+    rpc ToolExecutorStream(stream contextunity.core.ContextUnit)
+        returns (stream contextunity.core.ContextUnit);
 }

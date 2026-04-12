@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package contextshield;
+package contextunity.shield;
 
-import "context_unit.proto";
+import "contextunit.proto";
 
 // =====================================================
 // ContextShield Service - AI Firewall & Security Authority
@@ -16,42 +16,42 @@ service ShieldService {
     // Scan text for prompt injection, jailbreak, PII leaks
     // Request payload: {text, context?, validators?: ["pii","rag_context"]}
     // Response payload: {allowed, blocked, threats: [...], risk_score, severity, latency_ms}
-    rpc Scan(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc Scan(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Evaluate policy engine for authorization decision
     // Request payload: {token_id, permissions, tenant_id, operation, resource, context?: {...}}
     // Response payload: {allowed, reason, matched_policy, evaluation_ms}
-    rpc EvaluatePolicy(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc EvaluatePolicy(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Run compliance posture check
     // Request payload: {standards?: ["soc2","gdpr","hipaa","pci_dss"]}
     // Response payload: {passed, score, findings: [...], summary}
-    rpc CheckCompliance(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc CheckCompliance(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Record a security audit event
     // Request payload: {event_type, description, actor?, tenant?, metadata?: {...}}
     // Response payload: {recorded: true, event_id}
-    rpc RecordAudit(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc RecordAudit(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Mint a new ContextToken
     // Request payload: {permissions: [...], tenant_ids?: [...], ttl_s, user_ctx?: {...}}
     // Response payload: {token_id, permissions, allowed_tenants, exp_unix, revocation_id}
-    rpc MintToken(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc MintToken(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Verify a ContextToken has the required permission
     // Request payload: {token_id, required_permission, tenant_id?}
     // Response payload: {valid, reason?}
-    rpc VerifyToken(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc VerifyToken(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Revoke a token immediately
     // Request payload: {revocation_id}
     // Response payload: {revoked: true}
-    rpc RevokeToken(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc RevokeToken(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get service health and statistics
     // Request payload: {}
     // Response payload: {active_tokens, policies_loaded, audit_events_total, ...}
-    rpc GetStats(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetStats(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // =====================================================
     // Secret Management RPCs
@@ -64,22 +64,22 @@ service ShieldService {
     // GetSecret — Read a secret value by path
     // Request payload: { path: string, version?: int, tenant_id?: string }
     // Response payload: { path, value, version, created_at, expires_at, tags, encryption_backend }
-    rpc GetSecret(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetSecret(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // PutSecret — Store or update a secret
     // Request payload: { path: string, value: string, tags?: {}, ttl_seconds?: int, tenant_id?: string }
     // Response payload: { path, version, created_at, expires_at }
-    rpc PutSecret(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc PutSecret(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // ListSecrets — List secret paths and metadata (NO values)
     // Request payload: { prefix?: string, tenant_id?: string }
     // Response payload: { secrets: [{ path, version, created_at, expires_at, tags }] }
-    rpc ListSecrets(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc ListSecrets(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // RotateSecret — Create new version, optionally invalidate old
     // Request payload: { path: string, new_value: string, invalidate_previous?: bool, tenant_id?: string }
     // Response payload: { path, old_version, new_version, created_at }
-    rpc RotateSecret(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc RotateSecret(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // =====================================================
     // General-Purpose Encryption RPCs
@@ -92,12 +92,12 @@ service ShieldService {
     // Encrypt — Encrypt arbitrary data
     // Request payload: { plaintext: string, backend?: "fernet"|"aes256"|"age"|"kms_transit" }
     // Response payload: { ciphertext_b64: string, encryption_kid: string, algorithm: string }
-    rpc Encrypt(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc Encrypt(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Decrypt — Decrypt data encrypted by Shield
     // Request payload: { ciphertext_b64: string }
     // Response payload: { plaintext: string }
-    rpc Decrypt(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc Decrypt(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // =====================================================
     // Per-Project PKI RPCs
@@ -110,20 +110,20 @@ service ShieldService {
     // Sync project policy given a manifest
     // Request payload: { project_id, manifest_yaml }
     // Response payload: { updated: true, allowed_permissions: [...] }
-    rpc SyncProjectPolicy(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc SyncProjectPolicy(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // IssueSessionToken — Project authenticates and gets a session token
     // Request payload: { project_id: string, hmac_proof: string }
     // Response payload: { session_token: string, kid: string, expires_at: float, permissions: [...] }
-    rpc IssueSessionToken(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc IssueSessionToken(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // GetProjectPublicKey — Router fetches a project's Ed25519 public key
     // Request payload: { project_id: string }
     // Response payload: { public_key_b64: string, algorithm: string, kid: string }
-    rpc GetProjectPublicKey(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetProjectPublicKey(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // RotateProjectKey — Rotate Ed25519 keypair for a project
     // Request payload: { project_id: string }
     // Response payload: { new_public_key_b64: string, kid: string, rotation_count: int }
-    rpc RotateProjectKey(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc RotateProjectKey(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 }

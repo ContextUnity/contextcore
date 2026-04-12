@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from contextcore import (
+from contextunity.core import (
     DEFAULT_TOOL_POLICIES,
     NAMESPACE_PROFILES,
     PROJECT_PROFILES,
@@ -269,8 +269,8 @@ class TestTokenIdentitySerialization:
 
     def test_roundtrip_with_identity(self) -> None:
         """Token with identity fields survives serialization roundtrip."""
-        from contextcore.signing import HmacBackend
-        from contextcore.token_utils import parse_token_string, serialize_token
+        from contextunity.core.signing import HmacBackend
+        from contextunity.core.token_utils import parse_token_string, serialize_token
 
         backend = HmacBackend("test_proj", "test_secret")
         token = ContextToken(
@@ -293,8 +293,8 @@ class TestTokenIdentitySerialization:
 
     def test_roundtrip_default_namespace(self) -> None:
         """Token with default namespace omits it in serialization (compact)."""
-        from contextcore.signing import HmacBackend
-        from contextcore.token_utils import parse_token_string, serialize_token
+        from contextunity.core.signing import HmacBackend
+        from contextunity.core.token_utils import parse_token_string, serialize_token
 
         backend = HmacBackend("test_proj", "test_secret")
         token = ContextToken(
@@ -314,8 +314,8 @@ class TestTokenIdentitySerialization:
 
     def test_backward_compat_old_token(self) -> None:
         """Old tokens without identity fields parse with defaults."""
-        from contextcore.signing import HmacBackend
-        from contextcore.token_utils import parse_token_string, serialize_token
+        from contextunity.core.signing import HmacBackend
+        from contextunity.core.token_utils import parse_token_string, serialize_token
 
         backend = HmacBackend("test_proj", "test_secret")
         # Simulate old token (no identity fields)

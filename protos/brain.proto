@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package contextbrain;
+package contextunity.brain;
 
-import "context_unit.proto";
+import "contextunit.proto";
 
 // =====================================================
 // Brain Service - Universal Knowledge Operations
@@ -19,27 +19,27 @@ service BrainService {
     // Semantic/Hybrid search
     // Request payload: {tenant_id, query_text, limit?, source_types?}
     // Response payload: {id, content, score, source_type, metadata}
-    rpc Search(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    rpc Search(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // Graph Traversal
     // Request payload: {tenant_id, entrypoint_ids, max_hops?, allowed_relations?}
     // Response payload: {nodes: [...], edges: [...]}
-    rpc GraphSearch(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GraphSearch(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Create Knowledge Graph relation
     // Request payload: {tenant_id, source_type, source_id, relation, target_type, target_id}
     // Response payload: {success}
-    rpc CreateKGRelation(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc CreateKGRelation(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Upsert content (generic)
     // Request payload: {tenant_id, content, source_type, metadata?}
     // Response payload: {id, success}
-    rpc Upsert(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc Upsert(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Query memory (hybrid search with provenance)
     // Request payload: {tenant_id, content, filters?}
     // Response payload: {content, metadata, score}
-    rpc QueryMemory(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    rpc QueryMemory(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // =========================================
     // NewsEngine Operations
@@ -52,21 +52,21 @@ service BrainService {
 
     // Add conversation episode
     // Request payload: {user_id, tenant_id, session_id?, content, metadata?}
-    rpc AddEpisode(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc AddEpisode(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get recent episodes for a user
     // Request payload: {tenant_id, user_id, limit?}
     // Response payload: {id, content, metadata, created_at}
-    rpc GetRecentEpisodes(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    rpc GetRecentEpisodes(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // Upsert user fact
     // Request payload: {user_id, tenant_id, key, value, confidence?, source_id?}
-    rpc UpsertFact(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc UpsertFact(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get all facts for a user
     // Request payload: {tenant_id, user_id}
     // Response payload: {fact_key, fact_value, confidence, updated_at}
-    rpc GetUserFacts(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    rpc GetUserFacts(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // =========================================
     // Agent Traces
@@ -76,13 +76,13 @@ service BrainService {
     // Request payload: {tenant_id, agent_id, session_id?, graph_name?,
     //   tool_calls?, token_usage?, timing_ms?, security_flags?, metadata?}
     // Response payload: {id, success}
-    rpc LogTrace(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc LogTrace(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get traces (admin/observability)
     // Request payload: {tenant_id, agent_id?, session_id?, limit?, since?}
     // Response payload: {id, agent_id, graph_name, tool_calls, token_usage,
     //   timing_ms, security_flags, metadata, created_at}
-    rpc GetTraces(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    rpc GetTraces(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // =========================================
     // Taxonomy Operations
@@ -90,12 +90,12 @@ service BrainService {
 
     // Upsert taxonomy entry
     // Request payload: {tenant_id, domain, name, path, keywords?, metadata?}
-    rpc UpsertTaxonomy(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc UpsertTaxonomy(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get taxonomy entries
     // Request payload: {tenant_id, domain?}
     // Response payload: {domain, name, path, keywords, metadata}
-    rpc GetTaxonomy(contextcore.ContextUnit) returns (stream contextcore.ContextUnit);
+    rpc GetTaxonomy(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // =========================================
     // DuckDB Operations
@@ -104,5 +104,5 @@ service BrainService {
     // Execute high-speed DuckDB string/fuzzy matching on Parquet files
     // Request payload: {tenant_id, unmatched_uri, canonical_uri}
     // Response payload: {duckdb_matches: [...], duckdb_leftovers: [...]}
-    rpc MatchDuckDB(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc MatchDuckDB(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 }

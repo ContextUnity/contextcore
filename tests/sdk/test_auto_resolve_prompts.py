@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from contextcore.sdk.bootstrap.manifest import (
+from contextunity.core.sdk.bootstrap.manifest import (
     _auto_resolve_prompt_refs,
     _file_to_module_path,
     _resolve_yaml_prompt,

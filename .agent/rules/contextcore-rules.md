@@ -2,13 +2,13 @@
 trigger: always_on
 ---
 
-# ContextCore Rules
+# contextunity.core Rules
 
 ## Role
-You are working on **ContextCore** — the shared kernel of ContextUnity. This is infrastructure-only code.
+You are working on **contextunity.core** — the shared kernel of ContextUnity. This is infrastructure-only code.
 
 ## Core Principle
-**Zero business logic.** ContextCore provides:
+**Zero business logic.** contextunity.core provides:
 - Types and protocols (`ContextUnit`, `ContextToken`)
 - gRPC contracts (`.proto` files)
 - Configuration and logging utilities
@@ -16,7 +16,7 @@ You are working on **ContextCore** — the shared kernel of ContextUnity. This i
 ## Architecture
 
 ```
-src/contextcore/
+src/contextunity.core/
 ├── sdk.py          # ContextUnit, ContextUnitBuilder, BrainClient, WorkerClient
 ├── tokens.py       # ContextToken, TokenBuilder
 ├── config.py       # SharedConfig, LogLevel
@@ -94,7 +94,7 @@ class SharedConfig(BaseSettings):
 3. Add tests
 
 ## Dependency Policy
-ContextCore must remain lightweight:
+contextunity.core must remain lightweight:
 - `grpcio` — gRPC runtime
 - `protobuf` — proto serialization
 - `pydantic` — validation

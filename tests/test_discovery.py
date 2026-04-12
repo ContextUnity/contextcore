@@ -1,4 +1,4 @@
-"""Tests for contextcore.discovery module."""
+"""Tests for cu.core.discovery module."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
-from contextcore.discovery import (
+from contextunity.core.discovery import (
     ServiceInfo,
     _redis_key,
     discover_endpoints,
@@ -97,7 +97,7 @@ class TestRedisKey:
         mock_config.service_discovery_prefix = "myapp:svc"
         mock_config.redis_url = None
 
-        with patch("contextcore.discovery.load_shared_config_from_env", return_value=mock_config):
+        with patch("contextunity.core.discovery.load_shared_config_from_env", return_value=mock_config):
             key = _redis_key("router", "default")
         assert key == "myapp:svc:router:default"
 
@@ -105,7 +105,8 @@ class TestRedisKey:
 class TestDiscoverServices:
     """Test synchronous discovery."""
 
-    def test_no_redis_url_returns_empty(self):
+    @patch("contextunity.core.discovery._get_redis_url", return_value=None)
+    def test_no_redis_url_returns_empty(self, mock_get_url):
         result = discover_services(redis_url=None)
         assert result == []
 
@@ -357,7 +358,7 @@ class TestProjectRegistry:
 
     def test_register_new_project(self):
         """First registration of a project succeeds."""
-        from contextcore.discovery import register_project
+        from contextunity.core.discovery import register_project
 
         mock_redis = MagicMock()
         mock_redis.get.return_value = None  # Not registered yet
@@ -370,7 +371,7 @@ class TestProjectRegistry:
 
     def test_register_same_owner_idempotent(self):
         """Re-registering by same owner is idempotent."""
-        from contextcore.discovery import register_project
+        from contextunity.core.discovery import register_project
 
         mock_redis = MagicMock()
         mock_redis.get.return_value = json.dumps(
@@ -389,7 +390,7 @@ class TestProjectRegistry:
 
     def test_register_different_owner_conflict(self):
         """Registering a project already owned by another tenant fails."""
-        from contextcore.discovery import register_project
+        from contextunity.core.discovery import register_project
 
         mock_redis = MagicMock()
         mock_redis.get.return_value = json.dumps(
@@ -408,7 +409,7 @@ class TestProjectRegistry:
 
     def test_verify_owner_matches(self):
         """verify_project_owner returns True when owner matches."""
-        from contextcore.discovery import verify_project_owner
+        from contextunity.core.discovery import verify_project_owner
 
         mock_redis = MagicMock()
         mock_redis.get.return_value = json.dumps(
@@ -424,7 +425,7 @@ class TestProjectRegistry:
 
     def test_verify_owner_mismatch(self):
         """verify_project_owner returns False when owner doesn't match."""
-        from contextcore.discovery import verify_project_owner
+        from contextunity.core.discovery import verify_project_owner
 
         mock_redis = MagicMock()
         mock_redis.get.return_value = json.dumps(
@@ -440,7 +441,7 @@ class TestProjectRegistry:
 
     def test_verify_unregistered_allows(self):
         """verify_project_owner allows unregistered projects (first-time)."""
-        from contextcore.discovery import verify_project_owner
+        from contextunity.core.discovery import verify_project_owner
 
         mock_redis = MagicMock()
         mock_redis.get.return_value = None
@@ -450,7 +451,7 @@ class TestProjectRegistry:
 
     def test_get_registered_projects(self):
         """get_registered_projects returns all registered projects."""
-        from contextcore.discovery import get_registered_projects
+        from contextunity.core.discovery import get_registered_projects
 
         mock_redis = MagicMock()
         mock_redis.keys.return_value = [
@@ -471,7 +472,7 @@ class TestProjectRegistry:
 
     def test_graceful_degradation_no_redis(self):
         """Functions degrade gracefully without Redis."""
-        from contextcore.discovery import get_registered_projects, register_project, verify_project_owner
+        from contextunity.core.discovery import get_registered_projects, register_project, verify_project_owner
 
         with patch.dict("sys.modules", {"redis": None}):
             assert register_project("x", "x") is True

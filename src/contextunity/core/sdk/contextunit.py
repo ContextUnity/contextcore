@@ -1,0 +1,206 @@
+"""ContextUnit - The universal data contract for ContextUnity protocol.
+
+All gRPC communication uses ContextUnit as the envelope.
+Domain-specific data is passed via the payload field.
+"""
+
+from __future__ import annotations
+
+# IMPORTANT: Import google well-known types FIRST, before any other imports
+# that might trigger loading of our pb2 files through circular imports.
+try:
+    from google.protobuf import struct_pb2 as _struct_pb2  # noqa: F401
+    from google.protobuf import timestamp_pb2 as _timestamp_pb2  # noqa: F401
+except ImportError:
+    pass  # protobuf not installed, gRPC features won't work
+
+from datetime import datetime, timezone
+from typing import Any
+from uuid import UUID, uuid4
+
+from pydantic import BaseModel, Field
+
+from .models import CotStep, SecurityScopes, UnitMetrics
+
+
+def _sanitize_for_protobuf(obj: Any) -> Any:
+    """Recursively convert payload values to protobuf Struct-safe types.
+
+    Protobuf Struct.update() only supports: None/null, bool, int, float,
+    str, list, and dict.  Anything else (UUID, datetime, bytes, set, Pydantic
+    models, etc.) is converted to its string representation.
+
+    None values are converted to empty strings to avoid the
+    ``TypeError: descriptor 'SerializeToString' for ... doesn't apply
+    to a 'NoneType' object`` that occurs when gRPC tries to serialize
+    a handler response of None.
+    """
+    if obj is None:
+        return ""
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, (int, float)):
+        return obj
+    if isinstance(obj, str):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): _sanitize_for_protobuf(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_for_protobuf(v) for v in obj]
+    if isinstance(obj, set):
+        return [_sanitize_for_protobuf(v) for v in sorted(obj, key=str)]
+    # Everything else (UUID, datetime, bytes, Pydantic, etc.) → str
+    return str(obj)
+
+
+class ContextUnit(BaseModel):
+    """Core data structure for ContextUnity protocol - universal data contract.
+
+    All gRPC communication in ContextUnity uses ContextUnit.
+    Domain-specific data is passed via the payload field.
+
+    Example:
+        unit = ContextUnit(
+            payload={"tenant_id": "abc", "query_text": "climate solutions"},
+        )
+        response_pb = await stub.Search(unit.to_protobuf(contextunit_pb2))
+        result = ContextUnit.from_protobuf(response_pb)
+    """
+
+    unit_id: UUID = Field(default_factory=uuid4)
+    trace_id: UUID = Field(default_factory=uuid4)
+    parent_unit_id: UUID | None = None
+
+    modality: str = "text"
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+    chain_of_thought: list[CotStep] = Field(default_factory=list)
+
+    metrics: UnitMetrics = Field(default_factory=UnitMetrics)
+    security: SecurityScopes = Field(default_factory=SecurityScopes)
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def to_protobuf(self, pb_module):
+        """Converts Pydantic model to Protobuf message."""
+        from google.protobuf.struct_pb2 import Struct
+        from google.protobuf.timestamp_pb2 import Timestamp
+
+        payload_struct = Struct()
+        payload_struct.update(_sanitize_for_protobuf(self.payload))
+
+        created_at_pb = Timestamp()
+        created_at_pb.FromDatetime(self.created_at)
+
+        # Convert chain_of_thought to protobuf CotStep messages
+        cot_steps = []
+        for step in self.chain_of_thought:
+            step_timestamp = Timestamp()
+            step_timestamp.FromDatetime(step.timestamp)
+            cot_pb = pb_module.CotStep(
+                agent=step.agent,
+                action=step.action,
+                status=step.status,
+                timestamp=step_timestamp,
+            )
+            cot_steps.append(cot_pb)
+
+        # Convert metrics to protobuf — always create (Pydantic provides defaults)
+        metrics_pb = pb_module.UnitMetrics(
+            latency_ms=self.metrics.latency_ms if self.metrics else 0,
+            cost_usd=self.metrics.cost_usd if self.metrics else 0.0,
+            tokens_used=self.metrics.tokens_used if self.metrics else 0,
+            cost_limit_usd=self.metrics.cost_limit_usd if self.metrics else 0.0,
+        )
+
+        # Convert security scopes to protobuf — always create
+        security_pb = pb_module.SecurityScopes(
+            read=list(self.security.read) if self.security else [],
+            write=list(self.security.write) if self.security else [],
+        )
+
+        unit_pb = pb_module.ContextUnit(
+            unit_id=str(self.unit_id),
+            trace_id=str(self.trace_id),
+            parent_unit_id=str(self.parent_unit_id) if self.parent_unit_id else "",
+            modality=0,  # Need mapping for enum
+            payload=payload_struct,
+            chain_of_thought=cot_steps,
+            metrics=metrics_pb,
+            security=security_pb,
+            created_at=created_at_pb,
+        )
+        return unit_pb
+
+    @classmethod
+    def from_protobuf(cls, unit_pb) -> "ContextUnit":
+        """Converts Protobuf message to Pydantic model."""
+        # Convert chain_of_thought from protobuf
+        cot_steps = []
+        for step_pb in unit_pb.chain_of_thought:
+            cot_steps.append(
+                CotStep(
+                    agent=step_pb.agent,
+                    action=step_pb.action,
+                    status=step_pb.status,
+                    timestamp=step_pb.timestamp.ToDatetime(),
+                )
+            )
+
+        # Convert metrics from protobuf
+        metrics = None
+        if unit_pb.metrics:
+            metrics = UnitMetrics(
+                latency_ms=unit_pb.metrics.latency_ms,
+                cost_usd=unit_pb.metrics.cost_usd,
+                tokens_used=unit_pb.metrics.tokens_used,
+                cost_limit_usd=unit_pb.metrics.cost_limit_usd,
+            )
+
+        # Convert security scopes from protobuf
+        security = None
+        if unit_pb.security:
+            security = SecurityScopes(
+                read=list(unit_pb.security.read),
+                write=list(unit_pb.security.write),
+            )
+
+        from google.protobuf.json_format import MessageToDict
+
+        # MessageToDict does deep conversion (nested Struct/ListValue → dict/list)
+        # plain dict() only converts top level, leaving nested protobuf objects
+        payload = MessageToDict(unit_pb.payload) if unit_pb.payload else {}
+
+        kwargs = {
+            "unit_id": UUID(unit_pb.unit_id) if unit_pb.unit_id else uuid4(),
+            "trace_id": UUID(unit_pb.trace_id) if unit_pb.trace_id else uuid4(),
+            "parent_unit_id": UUID(unit_pb.parent_unit_id) if unit_pb.parent_unit_id else None,
+            "payload": payload,
+            "chain_of_thought": cot_steps,
+            "created_at": unit_pb.created_at.ToDatetime() if unit_pb.created_at.seconds else datetime.now(timezone.utc),
+        }
+
+        if metrics is not None:
+            kwargs["metrics"] = metrics
+        if security is not None:
+            kwargs["security"] = security
+
+        return cls(**kwargs)
+
+    @classmethod
+    def from_protobuf_bytes(cls, data: bytes, pb_module) -> "ContextUnit":
+        """Deserialize raw protobuf bytes to Pydantic ContextUnit.
+
+        This is the conformant way to deserialize bytes without creating
+        a bare pb2 constructor in production code.
+
+        Args:
+            data: Serialized protobuf bytes
+            pb_module: The contextunit_pb2 module
+        """
+        pb = pb_module.ContextUnit()
+        pb.ParseFromString(data)
+        return cls.from_protobuf(pb)
+
+
+__all__ = ["ContextUnit"]

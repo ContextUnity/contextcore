@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package contextunity;
 
-import "context_unit.proto";
+import "contextunit.proto";
 
 // =====================================================
 // Admin Service - System Administration & Monitoring
@@ -19,17 +19,17 @@ service AdminService {
     // Get health status of all services
     // Request payload: {}
     // Response payload: {services: {...}, timestamp: "..."}
-    rpc GetServiceHealth(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetServiceHealth(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get detailed metrics for a specific service
     // Request payload: {service_endpoint: "..."}
     // Response payload: {metrics: {...}}
-    rpc GetServiceMetrics(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetServiceMetrics(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Test connectivity to a service
     // Request payload: {service_endpoint: "..."}
     // Response payload: {connected: bool, latency_ms: float}
-    rpc CheckServiceConnectivity(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc CheckServiceConnectivity(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // =========================================
     // Memory Statistics
@@ -38,12 +38,12 @@ service AdminService {
     // Get statistics for all memory layers
     // Request payload: {tenant_id?: "..."}
     // Response payload: {memory_layers: {...}}
-    rpc GetMemoryStats(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetMemoryStats(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get statistics for a specific memory layer
     // Request payload: {layer: "...", tenant_id?: "..."}
     // Response payload: {layer_stats: {...}}
-    rpc GetMemoryLayerStats(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetMemoryLayerStats(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // =========================================
     // Agent Management
@@ -52,27 +52,27 @@ service AdminService {
     // List all registered agents
     // Request payload: {service?: "...", tenant_id?: "..."}
     // Response payload: {agents: [...], total: int}
-    rpc ListAgents(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc ListAgents(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get configuration for a specific agent
     // Request payload: {agent_id: "..."}
     // Response payload: {agent: {...}}
-    rpc GetAgentConfig(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetAgentConfig(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Update permissions for an agent
     // Request payload: {agent_id: "...", permissions: [...]}
     // Response payload: {success: bool}
-    rpc UpdateAgentPermissions(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc UpdateAgentPermissions(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Update allowed/denied tools for an agent
     // Request payload: {agent_id: "...", allowed_tools: [...], denied_tools: [...]}
     // Response payload: {success: bool}
-    rpc UpdateAgentTools(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc UpdateAgentTools(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get activity log for an agent
     // Request payload: {agent_id: "...", hours?: int}
     // Response payload: {activity: {...}}
-    rpc GetAgentActivity(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetAgentActivity(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // =========================================
     // Trace Management
@@ -81,17 +81,17 @@ service AdminService {
     // Get full trace details
     // Request payload: {trace_id: "..."}
     // Response payload: {trace_id: "...", events: [...], services: [...], duration_ms: int, status: "..."}
-    rpc GetTraceDetails(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetTraceDetails(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Search traces by criteria
     // Request payload: {service?: "...", agent_id?: "...", status?: "...", hours?: int}
     // Response payload: {traces: [...], total: int}
-    rpc SearchTraces(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc SearchTraces(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get chain of thought for a trace
     // Request payload: {trace_id: "..."}
     // Response payload: {chain_of_thought: "..."}
-    rpc GetTraceChainOfThought(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetTraceChainOfThought(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // =========================================
     // Analytics
@@ -100,12 +100,12 @@ service AdminService {
     // Get system-wide analytics
     // Request payload: {hours?: int}
     // Response payload: {analytics: {...}}
-    rpc GetSystemAnalytics(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetSystemAnalytics(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get error analytics
     // Request payload: {hours?: int}
     // Response payload: {errors: [...], total: int}
-    rpc GetErrorAnalytics(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetErrorAnalytics(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // =========================================
     // Self-Healing
@@ -114,15 +114,15 @@ service AdminService {
     // Detect system errors
     // Request payload: {error_id?: "..."}
     // Response payload: {errors: [...], total: int}
-    rpc DetectSystemErrors(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc DetectSystemErrors(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Trigger self-healing workflow
     // Request payload: {error_id?: "..."}
     // Response payload: {healing_id: "...", status: "..."}
-    rpc TriggerSelfHealing(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc TriggerSelfHealing(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Get healing status
     // Request payload: {healing_id: "..."}
     // Response payload: {status: "...", progress: {...}}
-    rpc GetHealingStatus(contextcore.ContextUnit) returns (contextcore.ContextUnit);
+    rpc GetHealingStatus(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 }

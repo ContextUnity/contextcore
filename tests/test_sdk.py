@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from contextcore import ContextUnit, CotStep, SecurityScopes, UnitMetrics
+from contextunity.core import ContextUnit, CotStep, SecurityScopes, UnitMetrics
 
 
 class TestContextUnit:
