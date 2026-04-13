@@ -137,7 +137,7 @@ def _register_schedules(
     schedules: list[dict],
     backend: AuthBackend | None,
 ) -> int:
-    """Sync project schedules to cu.worker."""
+    """Sync project schedules to contextunity.worker."""
     from contextunity.core import ContextUnit, contextunit_pb2, worker_pb2_grpc
     from contextunity.core.config import get_core_config
     from contextunity.core.discovery import resolve_service_endpoint

@@ -1,7 +1,7 @@
 """Tests for ContextUnit protobuf conversion.
 
 These tests verify the ContextUnit ↔ protobuf round-trip contract.
-All proto stubs live at `cu.core.*_pb2` (e.g. cu.core.contextunit_pb2).
+All proto stubs live at `contextunity.core.*_pb2` (e.g. contextunity.core.contextunit_pb2).
 """
 
 from __future__ import annotations

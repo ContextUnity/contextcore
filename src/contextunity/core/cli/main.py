@@ -34,7 +34,7 @@ def mint_hmac():
 
 @app.command("shield")
 def mint_shield():
-    """Generate a new SHIELD_MASTER_KEY for cu.shield Enterprise."""
+    """Generate a new SHIELD_MASTER_KEY for contextunity.shield Enterprise."""
     _mint_shield()
 
 

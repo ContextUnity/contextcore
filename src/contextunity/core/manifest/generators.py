@@ -4,7 +4,7 @@ Projection Layer Builder: transforms a validated ContextUnityProject
 into runtime bundles for individual services (Router, Worker, etc.).
 
 Lives in Core because:
-  - Zero Router dependencies (only uses cu.core.manifest models)
+  - Zero Router dependencies (only uses contextunity.core.manifest models)
   - Project needs to compile bundles locally
   - Router receives ready bundles — doesn't need to compile
 

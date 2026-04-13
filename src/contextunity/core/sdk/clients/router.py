@@ -1,4 +1,4 @@
-"""RouterClient - SDK client for cu.router service.
+"""RouterClient - SDK client for contextunity.router service.
 
 Uses ContextUnit protocol for all gRPC communication.
 Provides execute_tool() and execute_agent() for calling
@@ -39,7 +39,7 @@ def _ensure_protos():
 
 
 class RouterClient:
-    """Client for interacting with cu.router using ContextUnit protocol.
+    """Client for interacting with contextunity.router using ContextUnit protocol.
 
     Provides methods to execute tools (via BiDi-registered services)
     and LangGraph agents remotely, without importing any Router code.
@@ -264,7 +264,7 @@ class RouterClient:
 
 
 class SyncRouterClient:
-    """Synchronous client for interacting with cu.router (e.g. for Django views)."""
+    """Synchronous client for interacting with contextunity.router (e.g. for Django views)."""
 
     def __init__(
         self,

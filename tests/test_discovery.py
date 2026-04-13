@@ -1,4 +1,4 @@
-"""Tests for cu.core.discovery module."""
+"""Tests for contextunity.core.discovery module."""
 
 from __future__ import annotations
 

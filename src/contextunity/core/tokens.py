@@ -4,7 +4,7 @@ ContextToken provides authorization for ContextUnit operations.
 It integrates with ContextUnit.security (SecurityScopes) for capability-based access control.
 
 This is the canonical implementation of ContextToken for the ContextUnit protocol.
-All services (cu.brain, cu.router, cu.commerce) should import from here.
+All services (contextunity.brain, contextunity.router, contextunity.commerce) should import from here.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ class ContextToken:
         """Check if token has a specific permission (including inherited).
 
         Uses expanded permissions: ``admin:all`` implies ``brain:read``, etc.
-        See :data:`~cu.core.permissions.inheritance.PERMISSION_INHERITANCE`.
+        See :data:`~contextunity.core.permissions.inheritance.PERMISSION_INHERITANCE`.
         """
         return permission in self._effective_permissions
 
@@ -125,7 +125,7 @@ class TokenBuilder:
     that integrate with ContextUnit.security for capability-based access control.
 
     Security is always enforced — there is no opt-out.
-    Signing is handled by cu.core.signing backends (auto-detected).
+    Signing is handled by contextunity.core.signing backends (auto-detected).
     """
 
     def mint_root(

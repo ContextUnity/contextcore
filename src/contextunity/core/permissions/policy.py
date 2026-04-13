@@ -102,7 +102,7 @@ class ToolPolicy:
 
 
 # ── Default Tool Policies ──────────────────────────────
-# Kept in cu.core as sensible defaults. Services can override.
+# Kept in contextunity.core as sensible defaults. Services can override.
 
 DEFAULT_TOOL_POLICIES: dict[str, ToolPolicy] = {
     "sql": ToolPolicy(

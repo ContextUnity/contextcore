@@ -3,11 +3,11 @@
 Provides registration (heartbeat) and discovery of running service instances
 via Redis. Used by:
 - Services: register themselves on startup (call `register_service()` in server main)
-- cu.view: discover all running instances (call `discover_services()`) — admin, no tenant filter
+- contextunity.view: discover all running instances (call `discover_services()`) — admin, no tenant filter
 - Projects: discover only their tenant-scoped services via `discover_services(tenant_id=...)`
 
 All discovery uses the SAME shared Redis that services already connect to.
-cu.view knows Redis via REDIS_URL in settings.py — same Redis as Brain/Router/Worker.
+contextunity.view knows Redis via REDIS_URL in settings.py — same Redis as Brain/Router/Worker.
 
 Redis dependency is OPTIONAL — if redis is not installed, registration/discovery
 are no-ops (graceful degradation).
@@ -188,7 +188,7 @@ async def deregister_service(
         await r.aclose()
 
 
-# ── Discovery (called by cu.view or other services) ─────────────
+# ── Discovery (called by contextunity.view or other services) ─────────────
 
 
 def discover_services(
@@ -203,7 +203,7 @@ def discover_services(
                       If None, returns all services.
         tenant_id: Filter by tenant scope. If set, only returns services that
                    serve this tenant (or shared services with empty tenants list).
-                   If None, returns ALL services (admin mode for cu.view).
+                   If None, returns ALL services (admin mode for contextunity.view).
         redis_url: Redis URL (defaults to REDIS_URL env var)
 
     Returns:
@@ -639,7 +639,7 @@ def verify_project_owner(
 def get_registered_projects(
     redis_url: str | None = None,
 ) -> list[dict]:
-    """List all registered projects. Used by cu.view admin dashboard.
+    """List all registered projects. Used by contextunity.view admin dashboard.
 
     Returns:
         List of project registry entries.

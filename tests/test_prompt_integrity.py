@@ -1,4 +1,4 @@
-"""Tests for cu.core.prompt_integrity — signing and content-addressable versioning."""
+"""Tests for contextunity.core.prompt_integrity — signing and content-addressable versioning."""
 
 import pytest
 from contextunity.core.sdk.prompt_integrity import compute_prompt_version, sign_prompt, verify_prompt

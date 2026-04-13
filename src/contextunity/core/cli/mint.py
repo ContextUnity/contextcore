@@ -1,7 +1,7 @@
 """CLI operations for ContextUnity security generation.
 
 Provides commands to generate new HMAC secrets, Shield keys, and rotate keys
-for projects connecting to cu.router or cu.shield.
+for projects connecting to contextunity.router or contextunity.shield.
 """
 
 from __future__ import annotations
@@ -40,11 +40,11 @@ def mint_shield() -> None:
     # Fernet strict url-safe requirement
     secret = generate_hmac_secret(urlsafe=True)
 
-    print("🛡️ cu.shield Master Key Generated")
+    print("🛡️ contextunity.shield Master Key Generated")
     print("====================================")
     print("This secret is used to encrypt the Shield SQLite Database.")
     print("Keep it safe. Do NOT commit it to version control.\n")
-    print("🔑 Add this to your cu.shield .env:")
+    print("🔑 Add this to your contextunity.shield .env:")
     print(f"SHIELD_MASTER_KEY={secret}")
 
 

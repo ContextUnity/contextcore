@@ -95,7 +95,7 @@ class BrainClientBase:
 
                 self._service = BrainService()
             except ImportError:
-                logger.error("Brain local mode requested but cu.brain not installed")
+                logger.error("Brain local mode requested but contextunity.brain not installed")
                 raise
 
     def _get_metadata(self) -> list[tuple[str, str]]:

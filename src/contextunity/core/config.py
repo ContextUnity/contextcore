@@ -5,7 +5,7 @@ common settings across all context* services (LOG_LEVEL, REDIS_URL, etc.).
 
 All services MUST use these models as base configuration and extend
 them with service-specific settings. Direct os.environ/os.getenv usage
-is FORBIDDEN for any setting defined here (see cu.core-rules.md #4).
+is FORBIDDEN for any setting defined here.
 
 Security configuration is unified via SharedSecurityConfig —
 services should NOT duplicate SecurityConfig locally.
@@ -40,7 +40,7 @@ class SharedSecurityConfig(BaseModel):
         Enterprise    → SessionTokenBackend (Shield-signed, Ed25519)
 
     Token signing is ALWAYS active. HmacBackend is the default.
-    Ed25519/KMS backends require cu.shield.
+    Ed25519/KMS backends require contextunity.shield.
     """
 
     model_config = {"extra": "ignore"}
@@ -75,7 +75,7 @@ class SharedConfig(BaseModel):
     Services should extend this model with their own specific settings.
 
     RULE: All settings MUST come through this config chain.
-    Direct os.environ/os.getenv is FORBIDDEN (cu.core-rules.md #4).
+    Direct os.environ/os.getenv is FORBIDDEN.
     """
 
     # Logging

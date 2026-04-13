@@ -1,8 +1,8 @@
 """Unified security integration for ContextUnity services.
 
 This package provides a single integration point that services use for:
-1. **Token validation** (always available via cu.core)
-2. **Shield firewall** (auto-activates when cu.shield is installed)
+1. **Token validation** (always available via contextunity.core)
+2. **Shield firewall** (auto-activates when contextunity.shield is installed)
 3. **gRPC interceptors** (unified, parameterised permission enforcement)
 
 Usage (in any service)::

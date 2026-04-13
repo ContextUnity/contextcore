@@ -21,7 +21,7 @@ Usage (Django):
                 tool_handler=my_tool_handler,
             )
 
-After bootstrap, project code can use the cached identity via cu.core.sdk.identity.get_project_id().
+After bootstrap, project code can use the cached identity via contextunity.core.sdk.identity.get_project_id().
 """
 
 from .api import register_and_start

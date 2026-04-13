@@ -1,4 +1,4 @@
-"""BrainClient - SDK client for cu.brain service.
+"""BrainClient - SDK client for contextunity.brain service.
 
 Uses ContextUnit protocol for all gRPC communication.
 Composed of modular mixins for different domains.
@@ -20,7 +20,7 @@ class BrainClient(
     TraceMixin,
     BrainClientBase,
 ):
-    """Client for interacting with cu.brain using ContextUnit protocol.
+    """Client for interacting with contextunity.brain using ContextUnit protocol.
 
     Supports 'local' (library) and 'grpc' (network) modes.
     All methods use ContextUnit internally for type safety and provenance tracking.

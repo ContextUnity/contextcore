@@ -1,1 +1,1 @@
-"""CLI package for cu.core."""
+"""CLI package for contextunity.core."""

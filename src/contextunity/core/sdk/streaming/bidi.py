@@ -9,7 +9,7 @@ Generic gRPC BiDi stream lifecycle:
 This module is a **transport layer** — it does NOT execute tools.
 Tool execution is delegated to handlers provided by the project.
 
-Projects use ``register_and_start()`` from ``cu.core.sdk.bootstrap``.
+Projects use ``register_and_start()`` from ``contextunity.core.sdk.bootstrap``.
 """
 
 from __future__ import annotations

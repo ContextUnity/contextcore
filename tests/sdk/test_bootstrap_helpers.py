@@ -1,4 +1,4 @@
-"""Tests for cu.core.sdk.bootstrap.helpers — bootstrap_django, bootstrap_standalone."""
+"""Tests for contextunity.core.sdk.bootstrap.helpers — bootstrap_django, bootstrap_standalone."""
 
 from __future__ import annotations
 

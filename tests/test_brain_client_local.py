@@ -159,11 +159,11 @@ class TestBrainClientModeSelection:
 
     @pytest.fixture(autouse=True)
     def reset_core_config(self):
-        import contextunity as cu
+        import contextunity.core.config
 
-        cu.core.config._core_config = None
+        contextunity.core.config._core_config = None
         yield
-        cu.core.config._core_config = None
+        contextunity.core.config._core_config = None
 
     def test_default_mode_is_grpc(self, monkeypatch):
         """Without env or explicit arg, mode defaults to 'grpc'."""
@@ -236,7 +236,7 @@ class TestBrainClientModeSelection:
             )
 
     def test_local_mode_fails_without_cu_brain(self, monkeypatch):
-        """Local mode should raise ImportError if cu.brain is not installed."""
+        """Local mode should raise ImportError if contextunity.brain is not installed."""
         monkeypatch.setenv("CU_BRAIN_MODE", "local")
 
         with patch.dict("sys.modules", {"contextunity.brain": None}):

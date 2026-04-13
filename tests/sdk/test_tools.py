@@ -1,4 +1,4 @@
-"""Tests for cu.core.sdk.tools — @federated_tool decorator and ToolRegistry."""
+"""Tests for contextunity.core.sdk.tools — @federated_tool decorator and ToolRegistry."""
 
 from __future__ import annotations
 

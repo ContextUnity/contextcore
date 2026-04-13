@@ -1,1 +1,1 @@
-"""Tests for cu.core."""
+"""Tests for contextunity.core."""

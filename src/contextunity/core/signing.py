@@ -1,9 +1,9 @@
 """Signing backend interface for ContextUnity.
 
 Provides the AuthBackend protocol — the interface that signing implementations
-must satisfy. Actual implementations live in cu.shield (Pro) and here.
+must satisfy. Actual implementations live in contextunity.shield (Pro) and here.
 
-cu.core (public) provides:
+contextunity.core (public) provides:
 - AuthBackend Protocol (interface)
 - SignedPayload dataclass (wire format)
 - HmacBackend (OpenSource symmetric mode)

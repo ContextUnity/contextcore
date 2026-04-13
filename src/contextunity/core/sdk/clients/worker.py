@@ -1,4 +1,4 @@
-"""WorkerClient - SDK client for cu.worker service.
+"""WorkerClient - SDK client for contextunity.worker service.
 
 Uses ContextUnit protocol for all gRPC communication.
 """
@@ -36,7 +36,7 @@ def _ensure_protos():
 
 
 class WorkerClient:
-    """Client for interacting with cu.worker using ContextUnit protocol.
+    """Client for interacting with contextunity.worker using ContextUnit protocol.
 
     Supports 'grpc' (network) and 'local' (direct Temporal client) modes.
 
@@ -140,7 +140,7 @@ class WorkerClient:
             return unit
 
     async def register_schedules(self, unit: ContextUnit) -> ContextUnit:
-        """Register schedules via cu.worker.
+        """Register schedules via contextunity.worker.
 
         Args:
             unit: ContextUnit with schedules data in payload

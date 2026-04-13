@@ -1,4 +1,4 @@
-"""Tests for cu.core.security module."""
+"""Tests for contextunity.core.security module."""
 
 from __future__ import annotations
 

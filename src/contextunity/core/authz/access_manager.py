@@ -1,9 +1,9 @@
 """Canonical AccessManager — unified authorization gate for providers/sinks.
 
 Replaces the duplicated AccessManager implementations that existed in both
-``cu.brain.core.tokens`` and ``cu.router.core.tokens``.
+``contextunity.brain.core.tokens`` and ``contextunity.router.core.tokens``.
 
-The canonical version lives here in ``cu.core.authz`` and does NOT depend
+The canonical version lives here in ``contextunity.core.authz`` and does NOT depend
 on any service-specific Config. Service modules pass their read/write
 permission defaults at construction time.
 
