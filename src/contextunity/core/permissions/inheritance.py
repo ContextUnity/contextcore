@@ -36,15 +36,15 @@ PERMISSION_INHERITANCE: dict[str, tuple[str, ...]] = {
     Permissions.MEMORY_WRITE: (Permissions.MEMORY_READ,),
     Permissions.BRAIN_WRITE: (Permissions.BRAIN_READ,),
     Permissions.ADMIN_TRACE: (Permissions.TRACE_READ,),
-    Permissions.ZERO_ALL: (
-        Permissions.ZERO_ANONYMIZE,
-        Permissions.ZERO_DEANONYMIZE,
-        Permissions.ZERO_CHECK_PII,
-        Permissions.ZERO_AUDIT,
+    Permissions.PRIVACY_ALL: (
+        Permissions.PRIVACY_ANONYMIZE,
+        Permissions.PRIVACY_DEANONYMIZE,
+        Permissions.PRIVACY_CHECK_PII,
+        Permissions.PRIVACY_AUDIT,
     ),
-    Permissions.ZERO_ANONYMIZE: (
-        Permissions.ZERO_DEANONYMIZE,
-        Permissions.ZERO_CHECK_PII,
+    Permissions.PRIVACY_ANONYMIZE: (
+        Permissions.PRIVACY_DEANONYMIZE,
+        Permissions.PRIVACY_CHECK_PII,
     ),
 }
 
@@ -59,14 +59,13 @@ def expand_permissions(permissions: tuple[str, ...] | list[str]) -> tuple[str, .
         permissions: Raw permission strings from token or profile.
 
     Returns:
-        Deduplicated, sorted tuple with all implied permissions.
+        tuple[str, ...]: Deduplicated, sorted tuple with all implied permissions.
 
-    Example::
-
+    Examples:
         >>> expand_permissions(("admin:all",))
-        ('admin:all', 'admin:read', 'admin:trace', 'admin:write',
-         'brain:read', 'brain:write', 'memory:read', 'memory:write',
-         'trace:read', 'trace:write')
+        ('admin:all', 'admin:read', 'admin:trace', 'admin:write', \
+'brain:read', 'brain:write', 'memory:read', 'memory:write', \
+'trace:read', 'trace:write')
     """
     expanded: set[str] = set(permissions)
     queue = list(permissions)
@@ -103,7 +102,7 @@ NAMESPACE_PROFILES: dict[str, tuple[str, ...]] = {
         Permissions.TRACE_WRITE,
         Permissions.TOOL_WEB_SEARCH,
         Permissions.TOOL_MEMORY,
-        Permissions.ZERO_ANONYMIZE,
+        Permissions.PRIVACY_ANONYMIZE,
     ),
     UserNamespace.ADMIN: (Permissions.ADMIN_ALL,),
     UserNamespace.SYSTEM: (
@@ -112,8 +111,8 @@ NAMESPACE_PROFILES: dict[str, tuple[str, ...]] = {
         Permissions.MEMORY_WRITE,
         Permissions.TRACE_WRITE,
         Permissions.WORKER_SCHEDULE,
-        Permissions.ZERO_ANONYMIZE,
-        Permissions.ZERO_AUDIT,
+        Permissions.PRIVACY_ANONYMIZE,
+        Permissions.PRIVACY_AUDIT,
     ),
 }
 
@@ -144,8 +143,8 @@ PROJECT_PROFILES: dict[str, tuple[str, ...]] = {
         Permissions.MEMORY_READ,
         Permissions.MEMORY_WRITE,
         Permissions.TRACE_WRITE,
-        Permissions.ZERO_ANONYMIZE,
-        Permissions.ZERO_AUDIT,
+        Permissions.PRIVACY_ANONYMIZE,
+        Permissions.PRIVACY_AUDIT,
     ),
     "admin": (Permissions.ADMIN_ALL,),
 }

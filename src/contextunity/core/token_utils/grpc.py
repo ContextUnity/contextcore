@@ -1,107 +1,98 @@
-"""gRPC Token Utilities."""
+"""gRPC token utilities — extract, verify, and inject ContextTokens in gRPC metadata.
+
+Used by service interceptors to deserialize ``authorization`` metadata into
+validated ``ContextToken`` instances.
+"""
 
 from __future__ import annotations
 
-from typing import Optional
-
 import grpc
+from contextunity.core.grpc_metadata import (
+    GRPC_AUTH_HEADER,
+    extract_bearer_token,
+    invocation_metadata_from_context,
+)
 
+from ..exceptions import ConfigurationError
 from ..logging import get_contextunit_logger
+from ..sdk.types import GrpcMetadata, GrpcMetadataEntry, TokenStringProvider
 from ..signing import AuthBackend
 from ..tokens import ContextToken
 from .serialization import parse_token_string, verify_token_string
 
 logger = get_contextunit_logger(__name__)
 
-# gRPC metadata keys
-GRPC_AUTH_HEADER = "authorization"
-GRPC_TOKEN_HEADER = "x-context-token"  # nosec B105
+TokenProvider = ContextToken | str | TokenStringProvider
 
 
 def extract_token_from_grpc_metadata(
     context: grpc.ServicerContext,
-) -> Optional[ContextToken]:
-    """UNSAFE: Extract ContextToken from gRPC without verification.
-
-    FOR LOGGING ONLY. Security guards MUST use extract_and_verify_token_from_grpc_metadata().
-    """
+) -> ContextToken | None:
+    """UNSAFE: Extract ContextToken from gRPC without verification."""
     try:
-        metadata = dict(context.invocation_metadata())
-
-        auth_header = metadata.get(GRPC_AUTH_HEADER, "")
-        if auth_header.startswith("Bearer "):
-            token_str = auth_header[7:].strip()
-            if token_str:
-                return parse_token_string(token_str)
-
-        token_str = metadata.get(GRPC_TOKEN_HEADER, "").strip()
+        token_str = extract_bearer_token(context)
         if token_str:
             return parse_token_string(token_str)
     except Exception as e:
         logger.warning("Failed to extract token from gRPC metadata: %s", e)
-
     return None
 
 
 def extract_and_verify_token_from_grpc_metadata(
     context: grpc.ServicerContext,
     verifier_backend: AuthBackend,
-) -> Optional[ContextToken]:
+) -> ContextToken | None:
     """Extract and securely verify ContextToken from gRPC metadata."""
     try:
-        metadata = dict(context.invocation_metadata())
-
-        auth_header = metadata.get(GRPC_AUTH_HEADER, "")
-        if auth_header.startswith("Bearer "):
-            token_str = auth_header[7:].strip()
-            if token_str:
-                return verify_token_string(token_str, verifier_backend)
-
-        token_str = metadata.get(GRPC_TOKEN_HEADER, "").strip()
+        token_str = extract_bearer_token(context)
         if token_str:
             return verify_token_string(token_str, verifier_backend)
     except Exception as e:
         logger.warning("Failed to verify token from gRPC metadata: %s", e)
-
     return None
 
 
 def create_grpc_metadata_with_token(
-    token: Optional[ContextToken | str] = None,
-    additional_metadata: Optional[list[tuple[str, str]]] = None,
-    backend: Optional[AuthBackend] = None,
-) -> list[tuple[str, str]]:
-    """Create gRPC metadata list with token.
-
-    Delegates completely to the provided AuthBackend which handles
-    the specifics of local signing (HMAC) vs propagating pre-issued tokens (Shield).
-    """
+    token: ContextToken | str | None = None,
+    additional_metadata: list[tuple[str, str]] | None = None,
+    backend: AuthBackend | None = None,
+) -> GrpcMetadata:
+    """Create gRPC metadata list with token."""
     if backend is None:
-        raise ValueError("create_grpc_metadata_with_token requires a backend")
+        raise ConfigurationError("create_grpc_metadata_with_token requires an AuthBackend")
 
     if token is not None:
-        metadata = backend.create_grpc_metadata(token)
+        metadata: list[GrpcMetadataEntry] = list(backend.create_grpc_metadata(token))
     else:
-        metadata = backend.get_auth_metadata()
+        metadata = list(backend.get_auth_metadata())
 
     if additional_metadata:
         metadata.extend(additional_metadata)
 
-    return metadata
+    return tuple(metadata)
 
 
-def resolve_client_metadata(token_provider) -> list[tuple[str, str]]:
-    """Resolve a token provider into a gRPC metadata list.
-
-    Delegates to the active AuthBackend. Compatible with:
-    - Pre-serialized token strings (SPOT wrapper)
-    - Callable providers
-    - ContextToken objects
-    """
-    actual_token = token_provider() if callable(token_provider) else token_provider
+def resolve_client_metadata(token_provider: TokenProvider) -> GrpcMetadata:
+    """Resolve a token provider into a gRPC metadata list."""
+    actual_token: ContextToken | str
+    if isinstance(token_provider, ContextToken | str):
+        actual_token = token_provider
+    else:
+        actual_token = token_provider()
 
     from ..signing import get_signing_backend
 
     backend = get_signing_backend()
 
-    return backend.create_grpc_metadata(actual_token)
+    return tuple(backend.create_grpc_metadata(actual_token))
+
+
+__all__ = [
+    "GRPC_AUTH_HEADER",
+    "extract_and_verify_token_from_grpc_metadata",
+    "extract_bearer_token",
+    "extract_token_from_grpc_metadata",
+    "create_grpc_metadata_with_token",
+    "invocation_metadata_from_context",
+    "resolve_client_metadata",
+]

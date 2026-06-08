@@ -1,199 +1,224 @@
 """WorkerClient - SDK client for contextunity.worker service.
 
-Uses ContextUnit protocol for all gRPC communication.
+Unary RPCs follow the platform SDK contract: typed kwargs on input,
+``ContextUnitPayload`` wire on output. ``ContextUnit`` envelopes are built
+internally for gRPC transport (provenance, trace_id, …).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
+from uuid import UUID
 
-from contextunity.core.logging import get_contextunit_logger
+from contextunity.core.grpc_client_errors import wrap_client_error
+from contextunity.core.sdk.payload import copy_wire_payload
+from contextunity.core.sdk.types import UnaryContextUnitRpc
+from contextunity.core.types import ContextUnitPayload, JsonValue
+from contextunity.core.worker_pb2_grpc import WorkerServiceStub
 
 from ..contextunit import ContextUnit
+from ._base import BaseServiceClient
 
 if TYPE_CHECKING:
-    from contextunity.core import ContextToken
+    from typing import TypeAlias
 
-logger = get_contextunit_logger(__name__)
+    from contextunity.core.worker_pb2_grpc import WorkerServiceAsyncStub
 
-# Proto imports (lazy, may not be available)
-contextunit_pb2 = None
-worker_pb2_grpc = None
-
-
-def _ensure_protos():
-    """Lazy load proto modules."""
-    global contextunit_pb2, worker_pb2_grpc
-    if contextunit_pb2 is None:
-        try:
-            from contextunity.core import contextunit_pb2 as cu_pb2
-            from contextunity.core import worker_pb2_grpc as worker_grpc
-
-            contextunit_pb2 = cu_pb2
-            worker_pb2_grpc = worker_grpc
-        except ImportError:
-            raise ImportError("Worker gRPC protos not available")
+    _WorkerBase: TypeAlias = BaseServiceClient[WorkerServiceAsyncStub]
+else:
+    _WorkerBase = BaseServiceClient
 
 
-class WorkerClient:
-    """Client for interacting with contextunity.worker using ContextUnit protocol.
-
-    Supports 'grpc' (network) and 'local' (direct Temporal client) modes.
+class WorkerClient(_WorkerBase):
+    """Client for interacting with contextunity.worker.
 
     Example:
-        client = WorkerClient(host="localhost:50052", token=my_token)
-        result = await client.start_workflow(ContextUnit(
-            payload={"workflow_type": "harvest", "supplier_code": "xyz"}
-        ))
+        async with WorkerClient(host="localhost:50052", token=my_token) as client:
+            wire = await client.start_workflow(
+                workflow_type="sync",
+                args=[],
+            )
+            workflow_id = wire.get("workflow_id")
     """
 
-    def __init__(
+    _service_name: ClassVar[str] = "worker"
+    _default_port: ClassVar[str] = "50052"
+    _config_url_attr: ClassVar[str] = "worker_url"
+    _stub_class: ClassVar[type] = WorkerServiceStub
+
+    def _request_unit(
         self,
-        host: str | None = None,
-        mode: str | None = None,
-        token: "ContextToken | None" = None,
-        tenant_id: str | None = None,
-    ):
-        """Initialize WorkerClient.
+        payload: ContextUnitPayload,
+        *,
+        rpc_name: str,
+        provenance: list[str] | None = None,
+        trace_id: UUID | None = None,
+        parent_unit_id: UUID | None = None,
+    ) -> ContextUnit:
+        """Build a transport ``ContextUnit`` for Worker unary RPCs."""
+        chain = list(provenance or [])
+        chain.append(f"sdk:worker_client:{rpc_name}")
+        if trace_id is not None and parent_unit_id is not None:
+            return ContextUnit(
+                payload=payload,
+                provenance=chain,
+                trace_id=trace_id,
+                parent_unit_id=parent_unit_id,
+            )
+        if trace_id is not None:
+            return ContextUnit(payload=payload, provenance=chain, trace_id=trace_id)
+        if parent_unit_id is not None:
+            return ContextUnit(payload=payload, provenance=chain, parent_unit_id=parent_unit_id)
+        return ContextUnit(payload=payload, provenance=chain)
+
+    async def _dispatch_unary(
+        self,
+        rpc: UnaryContextUnitRpc,
+        payload: ContextUnitPayload,
+        *,
+        rpc_name: str,
+        provenance: list[str] | None = None,
+        trace_id: UUID | None = None,
+        parent_unit_id: UUID | None = None,
+    ) -> ContextUnitPayload:
+        unit = self._request_unit(
+            payload,
+            rpc_name=rpc_name,
+            provenance=provenance,
+            trace_id=trace_id,
+            parent_unit_id=parent_unit_id,
+        )
+        req = unit.to_protobuf(self._cu_pb2)
+        metadata = self._get_metadata()
+        with wrap_client_error("Worker", rpc_name):
+            response_pb = await rpc(req, metadata=metadata)
+        return copy_wire_payload(ContextUnit.from_protobuf(response_pb).payload)
+
+    async def start_workflow(
+        self,
+        *,
+        workflow_type: str,
+        args: JsonValue | None = None,
+        task_queue: str | None = None,
+        timeout_seconds: int | None = None,
+        wire: ContextUnitPayload | None = None,
+        provenance: list[str] | None = None,
+        trace_id: UUID | None = None,
+        parent_unit_id: UUID | None = None,
+    ) -> ContextUnitPayload:
+        """Start a durable workflow via Temporal/Huey.
 
         Args:
-            host: Specific Worker gRPC endpoint (bypasses discovery)
-            mode: "grpc" or "local"
-            token: Optional ContextToken for authorization
-            tenant_id: Explicit tenant to discover Worker for
-        """
-
-        from contextunity.core.config import get_core_config
-
-        config = get_core_config()
-        self.mode = mode or config.worker_mode
-        self.temporal_host = config.temporal_host
-        self.token = token
-        self._stub = None
-        self.channel = None
-        self.host = host
-
-        if self.mode == "grpc":
-            from contextunity.core.discovery import resolve_service_endpoint
-            from contextunity.core.sdk.identity import get_tenant_id
-
-            t_id = tenant_id or get_tenant_id()
-            self.host = host or resolve_service_endpoint(
-                "worker", configured_host=config.worker_url, default_host="localhost:50052", tenant_id=t_id
-            )
-            _ensure_protos()
-            from contextunity.core.grpc_utils import create_channel
-
-            self.channel = create_channel(self.host)
-            self._stub = worker_pb2_grpc.WorkerServiceStub(self.channel)
-
-    def _get_metadata(self) -> list[tuple[str, str]]:
-        """Get gRPC metadata with token for requests.
+            workflow_type: Registered workflow name.
+            args: Workflow arguments (server expects a JSON array).
+            task_queue: Target queue; server defaults to ``{tenant}-tasks``.
+            timeout_seconds: Optional execution timeout hint for the engine.
+            wire: Open payload extension for evolving Worker RPC fields.
+            provenance: Caller lineage labels appended before SDK transport tag.
+            trace_id: Optional distributed trace id for the envelope.
+            parent_unit_id: Optional parent ContextUnit id for lineage.
 
         Returns:
-            List of (key, value) tuples for gRPC metadata
+            Full server wire payload (``workflow_id``, ``run_id``, ``status``, …).
         """
-        from contextunity.core import create_grpc_metadata_with_token
-        from contextunity.core.signing import get_signing_backend
+        payload: ContextUnitPayload = dict(wire or {})
+        payload["workflow_type"] = workflow_type
+        if args is not None:
+            payload["args"] = args
+        if task_queue is not None:
+            payload["task_queue"] = task_queue
+        if timeout_seconds is not None:
+            payload["timeout_seconds"] = timeout_seconds
 
-        actual_token = self.token() if callable(self.token) else self.token
-        if isinstance(actual_token, str):
-            return [("authorization", f"Bearer {actual_token}")]
+        return await self._dispatch_unary(
+            self._stub.StartWorkflow,
+            payload,
+            rpc_name="StartWorkflow",
+            provenance=provenance,
+            trace_id=trace_id,
+            parent_unit_id=parent_unit_id,
+        )
 
-        backend = get_signing_backend()
-        return create_grpc_metadata_with_token(actual_token, backend=backend)
-
-    async def start_workflow(self, unit: ContextUnit) -> ContextUnit:
-        """Start a durable workflow via Temporal.
+    async def register_schedules(
+        self,
+        *,
+        project_id: str,
+        schedules: list[ContextUnitPayload],
+        provenance: list[str] | None = None,
+    ) -> ContextUnitPayload:
+        """Register recurring workflow schedules.
 
         Args:
-            unit: ContextUnit with workflow_type and parameters in payload.
-                  Expected payload keys:
-                  - workflow_type: "harvest", "gardener", "sync", etc.
-                  - tenant_id: Tenant identifier.
-                  - Additional workflow-specific parameters.
+            project_id: Project identifier owning the schedules.
+            schedules: Schedule definitions (``schedule_id``, ``cron``, …).
+            provenance: Caller lineage labels appended before SDK transport tag.
 
         Returns:
-            ContextUnit with workflow_id and run_id in payload.
+            Full server wire payload (``status``, ``registered_count``, …).
         """
-        # Add provenance (create new list to avoid mutating caller's data)
-        unit.provenance = list(unit.provenance) + ["sdk:worker_client:start_workflow"]
+        payload: ContextUnitPayload = {
+            "project_id": project_id,
+            "schedules": schedules,
+        }
 
-        if self.mode == "grpc":
-            req = unit.to_protobuf(contextunit_pb2)
-            metadata = self._get_metadata()  # Include token in metadata
-            response_pb = await self._stub.StartWorkflow(req, metadata=metadata)
-            return ContextUnit.from_protobuf(response_pb)
-        else:
-            from contextunity.worker.workflows import HarvesterImportWorkflow
-            from temporalio.client import Client
+        return await self._dispatch_unary(
+            self._stub.RegisterSchedules,
+            payload,
+            rpc_name="RegisterSchedules",
+            provenance=provenance,
+        )
 
-            client = await Client.connect(self.temporal_host)
-            url = unit.payload.get("url")
-            handle = await client.start_workflow(
-                HarvesterImportWorkflow.run,
-                url,
-                id=f"harvest-{unit.unit_id}",
-                task_queue="harvester-tasks",
-            )
-            unit.payload["workflow_id"] = handle.id
-            return unit
-
-    async def register_schedules(self, unit: ContextUnit) -> ContextUnit:
-        """Register schedules via contextunity.worker.
-
-        Args:
-            unit: ContextUnit with schedules data in payload
-                  - schedules: list of schedule dicts
-                  - project_id: string
-                  - tenant_id: string
-        """
-        unit.provenance = list(unit.provenance) + ["sdk:worker_client:register_schedules"]
-
-        if self.mode == "grpc":
-            req = unit.to_protobuf(contextunit_pb2)
-            metadata = self._get_metadata()
-            response_pb = await self._stub.RegisterSchedules(req, metadata=metadata)
-            return ContextUnit.from_protobuf(response_pb)
-        else:
-            from contextunity.worker.schedules import ScheduleConfig, create_schedule
-            from temporalio.client import Client
-
-            client = await Client.connect(self.temporal_host)
-            schedules = unit.payload.get("schedules", [])
-            tenant_id = unit.payload.get("tenant_id")
-
-            registered_count = 0
-            for sched_data in schedules:
-                config = ScheduleConfig(**sched_data)
-                await create_schedule(client, config, tenant_id=tenant_id)
-                registered_count += 1
-
-            unit.payload["registered_count"] = registered_count
-            unit.payload["status"] = "ok"
-            return unit
-
-    async def get_task_status(self, workflow_id: str) -> ContextUnit:
+    async def get_task_status(self, workflow_id: str) -> ContextUnitPayload:
         """Get status of a running workflow.
+
+        Tenant identity is carried by the ``ContextToken`` — not an argument.
 
         Args:
             workflow_id: Workflow identifier.
 
         Returns:
-            ContextUnit with status, result, or error in payload.
+            Full server wire payload (``status``, ``result``, ``error``, …).
         """
-        unit = ContextUnit(
-            payload={"workflow_id": workflow_id},
-            provenance=["sdk:worker_client:get_task_status"],
+        payload = await self._call_unary(
+            self._stub.GetTaskStatus,
+            {"workflow_id": workflow_id},
+            rpc_name="GetTaskStatus",
         )
+        return copy_wire_payload(payload)
 
-        if self.mode == "grpc":
-            req = unit.to_protobuf(contextunit_pb2)
-            metadata = self._get_metadata()  # Include token in metadata
-            response_pb = await self._stub.GetTaskStatus(req, metadata=metadata)
-            return ContextUnit.from_protobuf(response_pb)
-        else:
-            raise NotImplementedError("Local mode get_task_status not implemented")
+    async def execute_code(
+        self,
+        *,
+        code: str,
+        language: str = "python",
+        timeout_seconds: int = 30,
+        sandbox: bool = True,
+    ) -> ContextUnitPayload:
+        """Execute source code securely via contextunity.worker.
+
+        Args:
+            code: The source code string to execute.
+            language: The runtime language (e.g., "python").
+            timeout_seconds: Maximum allowed execution time in seconds.
+            sandbox: Whether to execute the code in an isolated sandbox environment.
+
+        Returns:
+            Full server wire payload (``stdout``, ``stderr``, ``exit_code``, …).
+
+        Raises:
+            PlatformServiceError: If the execution request fails.
+        """
+        payload = await self._call_unary(
+            self._stub.ExecuteCode,
+            {
+                "code": code,
+                "language": language,
+                "timeout": timeout_seconds,
+                "sandbox": sandbox,
+            },
+            rpc_name="ExecuteCode",
+        )
+        return copy_wire_payload(payload)
 
 
 __all__ = ["WorkerClient"]

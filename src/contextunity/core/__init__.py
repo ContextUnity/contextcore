@@ -1,9 +1,18 @@
+"""ContextUnity Core — shared kernel for the service mesh.
+
+Re-exports gRPC stubs, ``ContextUnit``, ``ContextToken``, ``TokenBuilder``,
+logging utilities, and the exception hierarchy.  Every service in the
+ecosystem depends on this package.
+"""
+
 # Proto modules (gRPC)
 # 1. Well-known types MUST load first (protobuf 5+ requires explicit dep loading)
 # 2. contextunit_pb2 next (all other protos depend on it)
 # 3. Service protos last
-from google.protobuf import struct_pb2 as _struct_pb2  # isort:skip  # noqa: F401
-from google.protobuf import timestamp_pb2 as _timestamp_pb2  # isort:skip  # noqa: F401
+from google.protobuf import struct_pb2 as _struct_pb2  # isort:skip
+from google.protobuf import timestamp_pb2 as _timestamp_pb2  # isort:skip
+
+__proto_deps__ = (_struct_pb2, _timestamp_pb2)
 from . import contextunit_pb2  # isort:skip  # noqa: F401
 from . import (  # isort:skip
     admin_pb2,
@@ -16,15 +25,17 @@ from . import (  # isort:skip
     shield_pb2_grpc,
     worker_pb2,
     worker_pb2_grpc,
-    zero_pb2,
-    zero_pb2_grpc,
 )
 from .config import (
     LogLevel,
+    ServiceConfig,
     SharedConfig,
     SharedSecurityConfig,
+    get_bool_env,
     get_core_config,
-    load_shared_config_from_env,
+    get_env,
+    load_service_config,
+    set_env_default,
 )
 
 # Proto enums re-exported for convenience
@@ -42,25 +53,22 @@ from .discovery import (
 )
 from .exceptions import (
     ConfigurationError,
-    ConnectorError,
     ContextUnityError,
     DatabaseConnectionError,
     ErrorRegistry,
-    GraphBuilderError,
-    IngestionError,
-    IntentDetectionError,
-    ModelError,
     ProviderError,
-    RetrievalError,
+    RedisConnectionError,
     SecurityError,
     StorageError,
     TamperDetectedError,
-    TransformerError,
     error_registry,
+    register_error,
+)
+from .grpc_errors import (
     get_grpc_status_code,
     grpc_error_handler,
     grpc_stream_error_handler,
-    register_error,
+    grpc_sync_error_handler,
 )
 from .grpc_utils import (
     bind_server_port,
@@ -106,6 +114,7 @@ from .sdk import (
     RouterClient,
     SearchResult,
     SecurityScopes,
+    ShieldClient,
     UnitMetrics,
     WorkerClient,
 )
@@ -148,42 +157,42 @@ __all__ = [
     "ContextUnitFormatter",
     "ContextUnitLoggerAdapter",
     # Config
-    "load_shared_config_from_env",
+    "load_service_config",
     "get_core_config",
     "SharedConfig",
     "SharedSecurityConfig",
+    "ServiceConfig",
     "LogLevel",
+    "get_env",
+    "get_bool_env",
+    "set_env_default",
     # SDK
     "ContextUnit",
     "BrainClient",
     "RouterClient",
+    "ShieldClient",
     "WorkerClient",
     "SecurityScopes",
     "CotStep",
     "UnitMetrics",
     "SearchResult",
     "FederatedToolCallContext",
-    # Exceptions
+    # Exceptions (infrastructure)
     "ContextUnityError",
     "ConfigurationError",
-    "RetrievalError",
-    "IntentDetectionError",
     "ProviderError",
     "SecurityError",
     "TamperDetectedError",
-    "ConnectorError",
-    "ModelError",
-    "IngestionError",
-    "GraphBuilderError",
-    "TransformerError",
     "StorageError",
     "DatabaseConnectionError",
+    "RedisConnectionError",
     "ErrorRegistry",
     "error_registry",
     "register_error",
     "get_grpc_status_code",
     "grpc_error_handler",
     "grpc_stream_error_handler",
+    "grpc_sync_error_handler",
     # Tokens
     "ContextToken",
     "TokenBuilder",
@@ -234,7 +243,7 @@ __all__ = [
     # Security integration
     "check_permission",
     "ServicePermissionInterceptor",
-    # Proto modules (gRPC) — all 8 services
+    # Proto modules (gRPC)
     "contextunit_pb2",
     "admin_pb2",
     "admin_pb2_grpc",
@@ -246,8 +255,6 @@ __all__ = [
     "shield_pb2_grpc",
     "worker_pb2",
     "worker_pb2_grpc",
-    "zero_pb2",
-    "zero_pb2_grpc",
     # gRPC TLS utilities
     "tls_enabled",
     "create_channel",

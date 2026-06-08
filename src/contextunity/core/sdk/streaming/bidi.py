@@ -1,14 +1,11 @@
 """ContextUnity SDK — BiDi Stream Transport.
-
 Generic gRPC BiDi stream lifecycle:
   - Connection + reconnection with exponential backoff
   - Heartbeat
   - Action routing to project-provided tool handlers
   - Session tracking
-
 This module is a **transport layer** — it does NOT execute tools.
 Tool execution is delegated to handlers provided by the project.
-
 Projects use ``register_and_start()`` from ``contextunity.core.sdk.bootstrap``.
 """
 
@@ -17,13 +14,20 @@ from __future__ import annotations
 import queue
 import threading
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING
 
 from contextunity.core.logging import get_contextunit_logger
+from contextunity.core.sdk.payload import get_int, get_str, parse_federated_execute
+from contextunity.core.sdk.types import ManifestRegistrationCallback, ToolHandler, ToolResult
+from contextunity.core.types import ContextUnitPayload
 
 if TYPE_CHECKING:
-    from contextunity.core.security.protocols import AuthBackend
+    from contextunity.core import contextunit_pb2
+    from contextunity.core.sdk.types import GrpcMetadata
+    from contextunity.core.signing import AuthBackend
+    from contextunity.core.tokens import ContextToken
 
 logger = get_contextunit_logger(__name__)
 
@@ -49,11 +53,12 @@ class FederatedToolCallContext:
     user_id: str | None = None
 
 
-# Type alias for tool handler: (tool_name, args_dict, auth_context) -> result_dict
-ToolHandler = Callable[[str, dict[str, Any], FederatedToolCallContext], dict[str, Any]]
-
-
 def _next_session() -> int:
+    """Get the next unique session index.
+
+    Returns:
+        int: The next session index.
+    """
     global _session_counter
     with _session_lock:
         _session_counter += 1
@@ -66,17 +71,49 @@ def _next_session() -> int:
 
 
 def format_grpc_error(e: Exception) -> str:
-    """Format gRPC error into a concise one-liner."""
+    """Format gRPC error into a concise one-liner.
+
+    Args:
+        e: The exception to format.
+
+    Returns:
+        str: The formatted error message.
+    """
     try:
         import grpc
 
         if isinstance(e, grpc.RpcError):
-            code = e.code().name if hasattr(e.code(), "name") else str(e.code())
-            details = e.details() or "no details"
-            return f"gRPC {code}: {details}"
+            code_fn = getattr(e, "code", None)
+            details_fn = getattr(e, "details", None)
+            if callable(code_fn):
+                raw_status: object = code_fn()
+                code = raw_status.name if isinstance(raw_status, grpc.StatusCode) else str(raw_status)
+            else:
+                code = "UNKNOWN"
+            details = details_fn() if details_fn is not None else "no details"
+            return f"gRPC {code}: {details or 'no details'}"
     except ImportError:
         pass
     return str(e)[:120]
+
+
+def _create_stream_metadata(
+    token: ContextToken,
+    backend: AuthBackend | None,
+) -> GrpcMetadata:
+    """Create metadata for ToolExecutorStream using the active auth backend.
+
+    Args:
+        token: The security token for authentication.
+        backend: The authentication backend used to sign metadata.
+
+    Returns:
+        list[tuple[str, str]]: The list of gRPC metadata tuples.
+    """
+
+    from contextunity.core.token_utils import create_grpc_metadata_with_token
+
+    return create_grpc_metadata_with_token(token, backend=backend)
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +126,7 @@ def run_stream_loop(
     project_id: str,
     tool_names: list[str],
     tool_handler: ToolHandler,
-    register_fn: Callable[[], tuple[str, str]] | None = None,
+    register_fn: ManifestRegistrationCallback | None = None,
     stream_secret: str = "",
     backend: AuthBackend | None = None,
 ) -> None:
@@ -130,7 +167,7 @@ def run_stream_loop(
                 logger.info("Re-registering (session #%d)...", session)
                 result = register_fn()
                 if result:
-                    new_secret = result[0] if isinstance(result, tuple) else result
+                    new_secret = result[0]
                     if new_secret:
                         stream_secret = new_secret
                 logger.info("Re-registration OK (session #%d)", session)
@@ -153,6 +190,9 @@ def run_stream_loop(
                 session,
             )
             delay = RECONNECT_DELAY_MIN
+            # Graceful end — reconnect immediately without sleeping.
+            # The stream closed due to idle timeout, not an error.
+            continue
         except Exception as e:
             reason = format_grpc_error(e)
             logger.warning(
@@ -179,34 +219,43 @@ def _run_stream(
     stream_secret: str = "",
     backend: AuthBackend | None = None,
 ) -> None:
-    """Run a single BiDi stream session."""
+    """Run a single BiDi stream session.
+
+    Args:
+        router_url: The router gRPC URL.
+        project_id: The identifier of the project.
+        tool_names: List of federated tool names.
+        tool_handler: The target tool execution handler.
+        session: The session index/counter.
+        stream_secret: The stream secret.
+        backend: Optional authentication backend.
+    """
     import grpc
     from contextunity.core import router_pb2_grpc
     from contextunity.core.grpc_utils import create_channel_sync
-    from contextunity.core.token_utils import create_grpc_metadata_with_token
     from contextunity.core.tokens import ContextToken
 
     token = ContextToken(
         token_id=f"{project_id}-executor",
-        permissions=tuple([f"tool:{t}" for t in tool_names] + ["stream:executor", "tools:register"]),
+        permissions=("stream:executor", f"stream:executor:{project_id}"),
         allowed_tenants=(project_id,),
         exp_unix=time.time() + TOKEN_TTL_STREAM,
     )
-    metadata = create_grpc_metadata_with_token(token, backend=backend)
+    metadata = _create_stream_metadata(token, backend)
 
     channel = create_channel_sync(router_url)
     try:
         logger.info("Connected (session #%d) | channel ready", session)
         stub = router_pb2_grpc.RouterServiceStub(channel)
 
-        response_queue: queue.Queue = queue.Queue()
+        response_queue: queue.Queue[contextunit_pb2.ContextUnit | None] = queue.Queue()
         heartbeat_count = 0
 
-        def request_generator():
+        def request_generator() -> Iterator[contextunit_pb2.ContextUnit]:
+            """Generate stream of outgoing requests, heartbeats, and responses for the bidirectional stream."""
             nonlocal heartbeat_count
             from contextunity.core import ContextUnit, contextunit_pb2
 
-            # Send 'ready' announcement
             ready_unit = ContextUnit(
                 payload={
                     "action": "ready",
@@ -247,10 +296,10 @@ def _run_stream(
 
         # Process incoming requests from Router
         for msg in responses:
-            from google.protobuf.json_format import MessageToDict
+            from contextunity.core.signing.shield_client import protobuf_payload_dict
 
-            payload_dict = MessageToDict(msg.payload)
-            action = payload_dict.get("action", "")
+            payload_dict = protobuf_payload_dict(msg.payload)
+            action = get_str(payload_dict, "action")
 
             if action == "execute":
                 _handle_execute(
@@ -265,11 +314,14 @@ def _run_stream(
             elif action == "_registered":
                 logger.info("Stream authenticated by Router (session #%d)", session)
             elif action == "error":
+                error_msg = get_str(payload_dict, "error", "unknown")
                 logger.warning(
                     "Router error (session #%d): %s",
                     session,
-                    payload_dict.get("error", "unknown"),
+                    error_msg,
                 )
+                # Break stream so reconnect loop re-registers with Router.
+                break
             else:
                 logger.warning("Unknown action '%s' (session #%d)", action, session)
 
@@ -285,29 +337,39 @@ def _run_stream(
 
 
 def _handle_execute(
-    payload: dict,
+    payload: ContextUnitPayload,
     tool_handler: ToolHandler,
     project_id: str,
-    response_queue: queue.Queue,
+    response_queue: queue.Queue[contextunit_pb2.ContextUnit | None],
     session: int,
 ) -> None:
-    """Route tool execute request to the project-provided handler."""
+    """Route tool execute request to the project-provided handler.
+
+    Args:
+        payload: The payload dictionary to process.
+        tool_handler: The tool handler callback.
+        project_id: The identifier of the project.
+        response_queue: The response queue.
+        session: The session index/counter.
+    """
     from contextunity.core import ContextUnit, contextunit_pb2
 
-    request_id = payload.get("request_id", "")
-    tool_name = payload.get("tool", "")
-    args = dict(payload.get("args", {}) or {})
+    execute = parse_federated_execute(payload)
+    request_id = execute["request_id"]
+    tool_name = execute["tool"]
+    args = execute["args"]
+    caller_tenant = execute["caller_tenant"]
+    user_id = execute["user_id"]
 
-    caller_tenant = payload.get("caller_tenant", "")
     auth_context = FederatedToolCallContext(
         project_id=project_id,
         tool_name=tool_name,
         request_id=request_id,
         caller_tenant=caller_tenant,
-        user_id=payload.get("user_id", payload.get("caller_user")) or None,
+        user_id=user_id,
     )
 
-    sql_preview = args.get("sql", "").replace("\n", " ")[:100]
+    sql_preview = get_str(args, "sql").replace("\n", " ")[:100]
     logger.info(
         "Execute (session #%d) | tool=%s req=%s... sql=%s...",
         session,
@@ -317,13 +379,14 @@ def _handle_execute(
     )
 
     start = time.time()
+    result: ToolResult
     try:
         # Delegate to project-provided handler
         result = tool_handler(tool_name, args, auth_context)
         elapsed_ms = int((time.time() - start) * 1000)
         result["action"] = "result"
         result["request_id"] = request_id
-        row_count = result.get("row_count", 0)
+        row_count = get_int(result, "row_count", 0)
         logger.info(
             "Result (session #%d) | req=%s... rows=%d time=%dms",
             session,

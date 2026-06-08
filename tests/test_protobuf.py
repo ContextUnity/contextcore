@@ -6,10 +6,13 @@ All proto stubs live at `contextunity.core.*_pb2` (e.g. contextunity.core.contex
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import uuid4
 
+import pytest
 from contextunity.core import ContextUnit, CotStep, SecurityScopes, UnitMetrics, contextunit_pb2
 from google.protobuf.struct_pb2 import Struct
+from google.protobuf.timestamp_pb2 import Timestamp
 
 
 class TestProtobufConversion:
@@ -116,6 +119,36 @@ class TestProtobufConversion:
         assert len(restored.chain_of_thought) == 1
         assert restored.chain_of_thought[0].agent == "agent1"
 
+    def test_round_trip_preserves_non_text_modality(self) -> None:
+        """Regression: protobuf round-trip must not collapse modality to text."""
+        original = ContextUnit(
+            unit_id=uuid4(),
+            trace_id=uuid4(),
+            modality="audio",
+            payload={"chunk": "hello"},
+        )
+
+        restored = ContextUnit.from_protobuf(original.to_protobuf(contextunit_pb2))
+
+        assert restored.modality == "audio"
+
+    def test_from_protobuf_preserves_epoch_created_at(self) -> None:
+        """Regression: a valid epoch timestamp must not be replaced with now()."""
+        created_at = Timestamp()
+        created_at.FromDatetime(datetime(1970, 1, 1, tzinfo=timezone.utc))
+
+        unit_pb = contextunit_pb2.ContextUnit(
+            unit_id=str(uuid4()),
+            trace_id=str(uuid4()),
+            modality=contextunit_pb2.TEXT,
+            payload=Struct(),
+            created_at=created_at,
+        )
+
+        restored = ContextUnit.from_protobuf(unit_pb)
+
+        assert restored.created_at == datetime(1970, 1, 1, tzinfo=timezone.utc)
+
     def test_to_protobuf_empty_payload(self) -> None:
         """Test ContextUnit with empty payload to protobuf."""
         unit = ContextUnit(payload={})
@@ -139,12 +172,7 @@ class TestProtobufConversion:
         assert "nested" in payload_dict
 
     def test_to_protobuf_payload_with_none_values(self) -> None:
-        """Test that None values in payload don't cause SerializeToString errors.
-
-        Regression test: protobuf Struct cannot handle None values natively
-        in all Python protobuf implementations—_sanitize_for_protobuf must
-        convert them to empty strings.
-        """
+        """Test that None values survive protobuf Struct round-trips."""
         unit = ContextUnit(
             payload={
                 "tenant_id": "default",
@@ -162,9 +190,9 @@ class TestProtobufConversion:
         # Verify round-trip
         restored = ContextUnit.from_protobuf(unit_pb)
         assert restored.payload["tenant_id"] == "default"
-        # None values become empty strings
-        assert restored.payload["user_id"] == ""
-        assert restored.payload["agent_id"] == ""
+        assert restored.payload["user_id"] is None
+        assert restored.payload["agent_id"] is None
+        assert restored.payload["nested"]["key"] is None
 
     def test_to_protobuf_payload_with_non_primitive_types(self) -> None:
         """Test that UUID, datetime, bytes, set are converted to strings.
@@ -242,3 +270,6 @@ class TestProtobufConversion:
         # Must also fully serialize to wire bytes
         wire = unit_pb.SerializeToString()
         assert len(wire) > 0
+
+
+pytestmark = pytest.mark.unit

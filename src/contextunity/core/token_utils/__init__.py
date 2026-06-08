@@ -12,7 +12,6 @@ for security decisions is FORBIDDEN.
 
 from .grpc import (
     GRPC_AUTH_HEADER,
-    GRPC_TOKEN_HEADER,
     create_grpc_metadata_with_token,
     extract_and_verify_token_from_grpc_metadata,
     extract_token_from_grpc_metadata,
@@ -59,7 +58,6 @@ __all__ = [
     "verify_token_string",
     # Constants
     "GRPC_AUTH_HEADER",
-    "GRPC_TOKEN_HEADER",
     "HTTP_AUTH_HEADER",
     "HTTP_TOKEN_HEADER",
 ]

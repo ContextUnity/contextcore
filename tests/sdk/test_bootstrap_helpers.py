@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 import yaml
 from contextunity.core.sdk.bootstrap.helpers import (
     _build_prompt_map,
@@ -16,24 +17,24 @@ from contextunity.core.sdk.bootstrap.helpers import (
 
 class TestFindManifestPath:
     def test_explicit_hint_wins(self):
-        import contextunity.core.config as core_config
+        from contextunity.core.config import reset_core_config
 
-        core_config._core_config = None
+        reset_core_config()
         result = _find_manifest_path("/some/explicit/path.yaml")
         assert result == "/some/explicit/path.yaml"
 
     def test_env_var_second(self, monkeypatch):
-        import contextunity.core.config as core_config
+        from contextunity.core.config import reset_core_config
 
-        core_config._core_config = None
+        reset_core_config()
         monkeypatch.setenv("CU_MANIFEST_PATH", "/env/manifest.yaml")
         result = _find_manifest_path()
         assert result == "/env/manifest.yaml"
 
     def test_walks_up_cwd(self, tmp_path, monkeypatch):
-        import contextunity.core.config as core_config
+        from contextunity.core.config import reset_core_config
 
-        core_config._core_config = None
+        reset_core_config()
         manifest = tmp_path / "contextunity.project.yaml"
         manifest.write_text("project:\n  id: test\n")
 
@@ -46,9 +47,9 @@ class TestFindManifestPath:
         assert result == str(manifest)
 
     def test_default_fallback(self, tmp_path, monkeypatch):
-        import contextunity.core.config as core_config
+        from contextunity.core.config import reset_core_config
 
-        core_config._core_config = None
+        reset_core_config()
         monkeypatch.chdir(tmp_path)
         monkeypatch.delenv("CU_MANIFEST_PATH", raising=False)
         result = _find_manifest_path()
@@ -90,7 +91,6 @@ class TestBuildPromptMap:
                 "router": {
                     "graph": {
                         "id": "test",
-                        "template": "sql_analytics",
                         "nodes": [
                             {
                                 "name": "planner",
@@ -107,16 +107,6 @@ class TestBuildPromptMap:
                             },
                         ],
                     },
-                    "tools": [
-                        {
-                            "name": "test_sql",
-                            "type": "sql",
-                            "execution": "federated",
-                            "config": {
-                                "schema_description_ref": "src/prompts.py::SCHEMA",
-                            },
-                        }
-                    ],
                 },
             },
         )
@@ -125,7 +115,6 @@ class TestBuildPromptMap:
             "planner": "You are a planner.",
             "visualizer": "Make charts.",
             "visualizer_sub_prompts": {"chart": "Chart sub-prompt"},
-            "schema_description": "CREATE TABLE records ...",
         }
         result = _build_prompt_map(prompts, str(manifest))
 
@@ -133,7 +122,6 @@ class TestBuildPromptMap:
         assert result["src/prompts.py::PLAN"] == "You are a planner."
         assert result["src/prompts.py::VIS"] == "Make charts."
         assert result["src/prompts.py::VIS_SUBS"] == {"chart": "Chart sub-prompt"}
-        assert result["src/prompts.py::SCHEMA"] == "CREATE TABLE records ..."
 
     def test_missing_manifest_returns_original(self, tmp_path):
         """If manifest can't be read, return original prompts dict."""
@@ -148,7 +136,7 @@ class TestBuildPromptMap:
 
 # helpers.py does `_bootstrap_api.register_and_start(...)` where _bootstrap_api
 # is imported from `.api`. We patch the function on that module object.
-_PATCH_TARGET = "contextunity.core.sdk.bootstrap.helpers._bootstrap_api.register_and_start"
+_PATCH_TARGET = "contextunity.core.sdk.bootstrap.helpers.register_and_start"
 
 
 # ── bootstrap_standalone ──
@@ -168,3 +156,6 @@ class TestBootstrapStandalone:
             mock_reg.assert_called_once()
 
         helpers_mod._BOOTSTRAPPED = False
+
+
+pytestmark = pytest.mark.unit

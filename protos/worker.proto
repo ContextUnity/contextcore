@@ -9,11 +9,16 @@ import "contextunit.proto";
 // =====================================================
 // All methods use ContextUnit as input/output.
 // Workflow type and parameters are passed via payload.
+//
+// SPOT: Tenant identity is carried by ``ContextToken`` metadata — never
+// by in-band payload. Legacy ``tenant_id`` fields in payloads are
+// accepted for backward compatibility but MUST match the token's
+// ``allowed_tenants`` or the request is rejected with PERMISSION_DENIED.
 // =====================================================
 
 service WorkerService {
     // Start a durable workflow process via Temporal
-    // Request payload: {workflow_type, tenant_id, ...workflow-specific params}
+    // Request payload: {workflow_type, ...workflow-specific params}
     // Response payload: {workflow_id, run_id, status}
     rpc StartWorkflow(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
@@ -28,7 +33,7 @@ service WorkerService {
     rpc ExecuteCode(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Register project schedules into Temporal
-    // Request payload: {project_id, tenant_id, schedules: [...]}
+    // Request payload: {project_id, schedules: [...]}
     // Response payload: {status, registered_count}
     rpc RegisterSchedules(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 }

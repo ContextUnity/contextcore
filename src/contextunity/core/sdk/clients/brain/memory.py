@@ -1,39 +1,41 @@
 """Memory methods - episodic events, user facts.
 
-Supports both gRPC and local modes for flexibility in development.
+All operations are delegated to the Brain gRPC service.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+
+from contextunity.core.grpc_client_errors import wrap_client_error
+from contextunity.core.sdk.payload import copy_wire_payload, get_int, get_json_dict, get_json_value, get_str
+from contextunity.core.sdk.responses import EpisodeRecord
+from contextunity.core.types import ContextUnitPayload, JsonDict, JsonValue
 
 from ...contextunit import ContextUnit
-from .base import BrainClientBase, get_contextunit_pb2, logger
+from .base import logger
 
 if TYPE_CHECKING:
-    pass
+    from .base import BrainClientBase as _MixinBase
+else:
+    _MixinBase = object
 
 
-class MemoryMixin:
-    """Mixin with episodic and entity memory operations.
-
-    All methods support:
-    - gRPC mode: Network calls to Brain service
-    - local mode: Direct library calls (for development)
-    """
+class MemoryMixin(_MixinBase):
+    """Mixin with episodic and entity memory operations via gRPC."""
 
     # =========================================
     # Episodic Memory
     # =========================================
 
     async def add_episode(
-        self: BrainClientBase,
+        self,
         *,
         tenant_id: str,
-        user_id: str,
+        user_id: str | None = None,
         content: str,
         session_id: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        metadata: JsonDict | None = None,
     ) -> str:
         """Add a conversation episode to Brain's episodic memory.
 
@@ -58,51 +60,20 @@ class MemoryMixin:
             provenance=["sdk:brain_client:add_episode"],
         )
 
-        if self.mode == "grpc":
-            pb2 = get_contextunit_pb2()
-            req = unit.to_protobuf(pb2)
-            grpc_metadata = self._get_metadata()
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        with wrap_client_error("Brain", "AddEpisode"):
             response_pb = await self._stub.AddEpisode(req, metadata=grpc_metadata)
-            result = ContextUnit.from_protobuf(response_pb)
-            return str(result.unit_id)
-        else:
-            return await self._local_add_episode(
-                tenant_id=tenant_id,
-                user_id=user_id,
-                content=content,
-                session_id=session_id,
-                metadata=metadata,
-            )
-
-    async def _local_add_episode(
-        self: BrainClientBase,
-        tenant_id: str,
-        user_id: str,
-        content: str,
-        session_id: str | None,
-        metadata: dict | None,
-    ) -> str:
-        """Local mode implementation of add_episode."""
-        import uuid
-
-        episode_id = str(uuid.uuid4())
-        await self._service.storage.add_episode(
-            id=episode_id,
-            tenant_id=tenant_id,
-            user_id=user_id,
-            content=content,
-            session_id=session_id,
-            metadata=metadata or {},
-        )
-        return episode_id
+        result = ContextUnit.from_protobuf(response_pb)
+        return str(result.unit_id)
 
     async def get_recent_episodes(
-        self: BrainClientBase,
+        self,
         *,
         tenant_id: str,
         user_id: str,
         limit: int = 5,
-    ) -> list[dict]:
+    ) -> list[EpisodeRecord]:
         """Get recent episodes for a user from Brain's episodic memory.
 
         Args:
@@ -122,57 +93,38 @@ class MemoryMixin:
             provenance=["sdk:brain_client:get_recent_episodes"],
         )
 
-        if self.mode == "grpc":
-            pb2 = get_contextunit_pb2()
-            req = unit.to_protobuf(pb2)
-            grpc_metadata = self._get_metadata()
-            episodes = []
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        episodes: list[EpisodeRecord] = []
+        with wrap_client_error("Brain", "GetRecentEpisodes"):
             async for response_pb in self._stub.GetRecentEpisodes(req, metadata=grpc_metadata):
                 result = ContextUnit.from_protobuf(response_pb)
-                episodes.append(result.payload)
+                p = result.payload
+                episodes.append(
+                    EpisodeRecord(
+                        id=get_str(p, "id"),
+                        user_id=get_str(p, "user_id"),
+                        content=get_str(p, "content"),
+                        session_id=get_str(p, "session_id"),
+                        metadata=get_json_dict(p, "metadata"),
+                        created_at=get_str(p, "created_at"),
+                    )
+                )
                 if len(episodes) >= limit:
                     break
-            return episodes
-        else:
-            return await self._local_get_recent_episodes(
-                tenant_id=tenant_id,
-                user_id=user_id,
-                limit=limit,
-            )
-
-    async def _local_get_recent_episodes(
-        self: BrainClientBase,
-        tenant_id: str,
-        user_id: str,
-        limit: int,
-    ) -> list[dict]:
-        """Local mode implementation of get_recent_episodes."""
-        rows = await self._service.storage.get_recent_episodes(
-            user_id=user_id,
-            tenant_id=tenant_id,
-            limit=limit,
-        )
-        return [
-            {
-                "id": str(row.get("id", "")),
-                "content": row.get("content", ""),
-                "metadata": row.get("metadata", {}),
-                "created_at": str(row.get("created_at", "")),
-            }
-            for row in rows
-        ]
+        return episodes
 
     # =========================================
     # Entity Memory (User Facts)
     # =========================================
 
     async def upsert_fact(
-        self: BrainClientBase,
+        self,
         *,
         tenant_id: str,
         user_id: str,
         key: str,
-        value: Any,
+        value: object,
         confidence: float = 1.0,
         source_id: str | None = None,
     ) -> None:
@@ -198,46 +150,17 @@ class MemoryMixin:
             provenance=["sdk:brain_client:upsert_fact"],
         )
 
-        if self.mode == "grpc":
-            pb2 = get_contextunit_pb2()
-            req = unit.to_protobuf(pb2)
-            grpc_metadata = self._get_metadata()
-            await self._stub.UpsertFact(req, metadata=grpc_metadata)
-        else:
-            await self._local_upsert_fact(
-                tenant_id=tenant_id,
-                user_id=user_id,
-                key=key,
-                value=value,
-                confidence=confidence,
-                source_id=source_id,
-            )
-
-    async def _local_upsert_fact(
-        self: BrainClientBase,
-        tenant_id: str,
-        user_id: str,
-        key: str,
-        value: Any,
-        confidence: float,
-        source_id: str | None,
-    ) -> None:
-        """Local mode implementation of upsert_fact."""
-        await self._service.storage.upsert_fact(
-            user_id=user_id,
-            tenant_id=tenant_id,
-            key=key,
-            value=value,
-            confidence=confidence,
-            source_id=source_id,
-        )
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        with wrap_client_error("Brain", "UpsertFact"):
+            _ = await self._stub.UpsertFact(req, metadata=grpc_metadata)
 
     async def get_user_facts(
-        self: BrainClientBase,
+        self,
         *,
         tenant_id: str,
         user_id: str,
-    ) -> dict[str, Any]:
+    ) -> dict[str, JsonValue]:
         """Get all known facts about a user.
 
         Args:
@@ -245,7 +168,7 @@ class MemoryMixin:
             user_id: User identifier.
 
         Returns:
-            Dict mapping fact_key -> fact_value.
+            Dict mapping fact_key -> fact_value (JSON-serializable values).
         """
         unit = ContextUnit(
             payload={
@@ -255,42 +178,24 @@ class MemoryMixin:
             provenance=["sdk:brain_client:get_user_facts"],
         )
 
-        if self.mode == "grpc":
-            pb2 = get_contextunit_pb2()
-            req = unit.to_protobuf(pb2)
-            grpc_metadata = self._get_metadata()
-            facts = {}
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        facts: dict[str, JsonValue] = {}
+        with wrap_client_error("Brain", "GetUserFacts"):
             async for response_pb in self._stub.GetUserFacts(req, metadata=grpc_metadata):
                 result = ContextUnit.from_protobuf(response_pb)
-                fact_key = result.payload.get("fact_key", "")
-                fact_value = result.payload.get("fact_value", "")
+                fact_key = get_str(result.payload, "fact_key")
+                fact_value = get_json_value(result.payload, "fact_value")
                 if fact_key:
                     facts[fact_key] = fact_value
-            return facts
-        else:
-            return await self._local_get_user_facts(
-                tenant_id=tenant_id,
-                user_id=user_id,
-            )
-
-    async def _local_get_user_facts(
-        self: BrainClientBase,
-        tenant_id: str,
-        user_id: str,
-    ) -> dict[str, Any]:
-        """Local mode implementation of get_user_facts."""
-        rows = await self._service.storage.get_user_facts(
-            user_id=user_id,
-            tenant_id=tenant_id,
-        )
-        return {row["fact_key"]: row["fact_value"] for row in rows}
+        return facts
 
     # =========================================
     # Retention & Distillation
     # =========================================
 
     async def retention_cleanup(
-        self: BrainClientBase,
+        self,
         *,
         tenant_id: str = "default",
         older_than_days: int = 30,
@@ -315,27 +220,20 @@ class MemoryMixin:
             provenance=["sdk:brain_client:retention_cleanup"],
         )
 
-        if self.mode == "grpc":
-            pb2 = get_contextunit_pb2()
-            req = unit.to_protobuf(pb2)
-            grpc_metadata = self._get_metadata()
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        with wrap_client_error("Brain", "RetentionCleanup"):
             response_pb = await self._stub.RetentionCleanup(req, metadata=grpc_metadata)
-            result = ContextUnit.from_protobuf(response_pb)
-            return result.payload.get("deleted_count", 0)
-        else:
-            return await self._service.storage.delete_old_episodes(
-                tenant_id=tenant_id,
-                older_than_days=older_than_days,
-                episode_ids=episode_ids,
-            )
+        result = ContextUnit.from_protobuf(response_pb)
+        return get_int(result.payload, "deleted_count")
 
     async def get_old_episodes(
-        self: BrainClientBase,
+        self,
         *,
         tenant_id: str = "default",
         older_than_days: int = 30,
         limit: int = 100,
-    ) -> list[dict]:
+    ) -> list[EpisodeRecord]:
         """Get episodes older than N days (for distillation).
 
         Args:
@@ -346,53 +244,32 @@ class MemoryMixin:
         Returns:
             List of episode dicts with id, user_id, content, metadata, created_at.
         """
-        if self.mode == "local":
-            rows = await self._service.storage.get_old_episodes(
-                tenant_id=tenant_id,
-                older_than_days=older_than_days,
-                limit=limit,
-            )
-            return [
-                {
-                    "id": str(row.get("id", "")),
-                    "user_id": row.get("user_id", ""),
-                    "content": row.get("content", ""),
-                    "metadata": row.get("metadata", {}),
-                    "created_at": str(row.get("created_at", "")),
-                }
-                for row in rows
-            ]
-        # gRPC — use GetRecentEpisodes with older_than filter
-        # (for now, not yet a dedicated streaming RPC)
-        logger.warning("get_old_episodes via gRPC not yet implemented, returning empty")
+        # TODO: implement dedicated GetOldEpisodes streaming RPC
+        logger.warning(
+            "get_old_episodes via gRPC not yet implemented, returning empty (tenant_id=%s, older_than_days=%s, limit=%s)",
+            tenant_id,
+            older_than_days,
+            limit,
+        )
         return []
 
     async def get_episode_stats(
-        self: BrainClientBase,
+        self,
         *,
         tenant_id: str = "default",
-    ) -> dict:
-        """Get episode count and date range for a tenant.
-
-        Returns:
-            Dict with total, oldest, newest, tenant_id.
-        """
+    ) -> ContextUnitPayload:
+        """Get episode count and date range for a tenant."""
         unit = ContextUnit(
             payload={"tenant_id": tenant_id},
             provenance=["sdk:brain_client:get_episode_stats"],
         )
 
-        if self.mode == "grpc":
-            pb2 = get_contextunit_pb2()
-            req = unit.to_protobuf(pb2)
-            grpc_metadata = self._get_metadata()
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        with wrap_client_error("Brain", "GetEpisodeStats"):
             response_pb = await self._stub.GetEpisodeStats(req, metadata=grpc_metadata)
-            result = ContextUnit.from_protobuf(response_pb)
-            return result.payload
-        else:
-            return await self._service.storage.count_episodes(
-                tenant_id=tenant_id,
-            )
+        result = ContextUnit.from_protobuf(response_pb)
+        return copy_wire_payload(result.payload)
 
 
 __all__ = ["MemoryMixin"]

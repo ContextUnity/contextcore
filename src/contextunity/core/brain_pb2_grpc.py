@@ -32,6 +32,13 @@ class BrainServiceStub(object):
     =====================================================
     All methods use ContextUnit as input/output.
     Domain-specific data is passed via payload field.
+
+    SPOT: Tenant identity is carried by ``ContextToken`` metadata — never
+    by in-band payload. Legacy ``tenant_id`` fields in payloads are
+    accepted for backward compatibility but MUST be consistent with the
+    token's ``allowed_tenants`` or the request is rejected with
+    PERMISSION_DENIED. New callers SHOULD omit ``tenant_id`` from payload
+    and rely on the token.
     =====================================================
 
     =========================================
@@ -99,6 +106,18 @@ class BrainServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
+        self.GetEpisodeStats = channel.unary_unary(
+            "/contextunity.brain.BrainService/GetEpisodeStats",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.RetentionCleanup = channel.unary_unary(
+            "/contextunity.brain.BrainService/RetentionCleanup",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
         self.LogTrace = channel.unary_unary(
             "/contextunity.brain.BrainService/LogTrace",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
@@ -123,6 +142,18 @@ class BrainServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
+        self.WriteBlackboard = channel.unary_unary(
+            "/contextunity.brain.BrainService/WriteBlackboard",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.ReadBlackboard = channel.unary_unary(
+            "/contextunity.brain.BrainService/ReadBlackboard",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
         self.MatchDuckDB = channel.unary_unary(
             "/contextunity.brain.BrainService/MatchDuckDB",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
@@ -137,6 +168,13 @@ class BrainServiceServicer(object):
     =====================================================
     All methods use ContextUnit as input/output.
     Domain-specific data is passed via payload field.
+
+    SPOT: Tenant identity is carried by ``ContextToken`` metadata — never
+    by in-band payload. Legacy ``tenant_id`` fields in payloads are
+    accepted for backward compatibility but MUST be consistent with the
+    token's ``allowed_tenants`` or the request is rejected with
+    PERMISSION_DENIED. New callers SHOULD omit ``tenant_id`` from payload
+    and rely on the token.
     =====================================================
 
     =========================================
@@ -231,6 +269,24 @@ class BrainServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def GetEpisodeStats(self, request, context):
+        """Get episode count and date range for a tenant
+        Request payload: {tenant_id}
+        Response payload: {total, oldest, newest, tenant_id}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def RetentionCleanup(self, request, context):
+        """Delete old episodes for a tenant, optionally restricted to explicit IDs
+        Request payload: {tenant_id, older_than_days, episode_ids?}
+        Response payload: {deleted_count}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
     def LogTrace(self, request, context):
         """=========================================
         Agent Traces
@@ -276,6 +332,28 @@ class BrainServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def WriteBlackboard(self, request, context):
+        """=========================================
+        Blackboard Operations (Flat Memory)
+        =========================================
+
+        Write arbitrary data to the blackboard, return UUID
+        Request payload: {tenant_id, scope_path, content, metadata?, ttl_seconds?, created_by?}
+        Response payload: {id, scope_path, created_at}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ReadBlackboard(self, request, context):
+        """Read one or more records by UUID(s) — STRICTLY BATCHED
+        Request payload: {ids: [UUID, ...]}
+        Response payload: {records: [{id, content, metadata, scope_path, created_at}]}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
     def MatchDuckDB(self, request, context):
         """=========================================
         DuckDB Operations
@@ -283,7 +361,7 @@ class BrainServiceServicer(object):
 
         Execute high-speed DuckDB string/fuzzy matching on Parquet files
         Request payload: {tenant_id, unmatched_uri, canonical_uri}
-        Response payload: {duckdb_matches: [...], duckdb_leftovers: [...]}
+        Response payload: {duckdb_matches: [...], duckdb_leftovers_count: int}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -337,6 +415,16 @@ def add_BrainServiceServicer_to_server(servicer, server):
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
+        "GetEpisodeStats": grpc.unary_unary_rpc_method_handler(
+            servicer.GetEpisodeStats,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "RetentionCleanup": grpc.unary_unary_rpc_method_handler(
+            servicer.RetentionCleanup,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
         "LogTrace": grpc.unary_unary_rpc_method_handler(
             servicer.LogTrace,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
@@ -354,6 +442,16 @@ def add_BrainServiceServicer_to_server(servicer, server):
         ),
         "GetTaxonomy": grpc.unary_stream_rpc_method_handler(
             servicer.GetTaxonomy,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "WriteBlackboard": grpc.unary_unary_rpc_method_handler(
+            servicer.WriteBlackboard,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ReadBlackboard": grpc.unary_unary_rpc_method_handler(
+            servicer.ReadBlackboard,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -375,6 +473,13 @@ class BrainService(object):
     =====================================================
     All methods use ContextUnit as input/output.
     Domain-specific data is passed via payload field.
+
+    SPOT: Tenant identity is carried by ``ContextToken`` metadata — never
+    by in-band payload. Legacy ``tenant_id`` fields in payloads are
+    accepted for backward compatibility but MUST be consistent with the
+    token's ``allowed_tenants`` or the request is rejected with
+    PERMISSION_DENIED. New callers SHOULD omit ``tenant_id`` from payload
+    and rely on the token.
     =====================================================
 
     =========================================
@@ -653,6 +758,66 @@ class BrainService(object):
         )
 
     @staticmethod
+    def GetEpisodeStats(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/GetEpisodeStats",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def RetentionCleanup(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/RetentionCleanup",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
     def LogTrace(
         request,
         target,
@@ -759,6 +924,66 @@ class BrainService(object):
             request,
             target,
             "/contextunity.brain.BrainService/GetTaxonomy",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def WriteBlackboard(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/WriteBlackboard",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ReadBlackboard(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/ReadBlackboard",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,

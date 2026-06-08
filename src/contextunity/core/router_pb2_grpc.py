@@ -78,6 +78,18 @@ class RouterServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
+        self.ExecuteNode = channel.unary_unary(
+            "/contextunity.router.RouterService/ExecuteNode",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.IntrospectRegistrations = channel.unary_unary(
+            "/contextunity.router.RouterService/IntrospectRegistrations",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
 
 
 class RouterServiceServicer(object):
@@ -92,8 +104,9 @@ class RouterServiceServicer(object):
 
     def ExecuteAgent(self, request, context):
         """Execute a single turn of an agent
-        Request payload: {tenant_id, agent_id, input_text, context?: {...}}
-        Response payload: {output_text, tool_calls?: {...}, metadata?: {...}}
+        Request payload: {agent_id, input, config?}
+        Tenant/user identity is derived from ContextToken (SPOT).
+        Response payload: {output, wall_ms?, langfuse_trace_id?, langfuse_trace_url?}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -101,8 +114,9 @@ class RouterServiceServicer(object):
 
     def StreamAgent(self, request, context):
         """Stream agent execution (for UI with real-time output)
-        Request payload: {tenant_id, agent_id, input_text, context?: {...}}
-        Response payload: {output_text, tool_calls?: {...}, metadata?: {...}}
+        Request payload: {agent_id, input, config?}
+        Tenant/user identity is derived from ContextToken (SPOT).
+        Response payload: streaming ContextUnit events (progress/result/etc.)
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -114,7 +128,8 @@ class RouterServiceServicer(object):
         =========================================
 
         Execute dispatcher agent (always-active agent with all tools)
-        Request payload: {tenant_id, messages: [{role, content}], session_id?, platform?, max_iterations?}
+        Request payload: {messages: [{role, content}], session_id?, platform?, max_iterations?}
+        Tenant/user identity is derived from ContextToken (SPOT).
         Response payload: {messages: [...], session_id, metadata: {...}}
         Security: Uses SecurityScopes from ContextUnit for access control
         """
@@ -124,7 +139,8 @@ class RouterServiceServicer(object):
 
     def StreamDispatcher(self, request, context):
         """Stream dispatcher agent execution
-        Request payload: {tenant_id, messages: [{role, content}], session_id?, platform?, max_iterations?}
+        Request payload: {messages: [{role, content}], session_id?, platform?, max_iterations?}
+        Tenant/user identity is derived from ContextToken (SPOT).
         Response payload: {event_type, data: {...}} (streaming events)
         Security: Uses SecurityScopes from ContextUnit for access control
         """
@@ -181,7 +197,63 @@ class RouterServiceServicer(object):
         Project → Router: {"action": "error", "request_id": "abc",
         "error": "timeout"}
 
-        Security: Requires ContextToken with "tools:execute" permission.
+        Security: Requires ContextToken with "tools:register" permission.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ExecuteNode(self, request, context):
+        """=========================================
+        Graph Compiler — Node Execution (Phase 2)
+        =========================================
+
+        Execute a single compiled graph node by name.
+        Enables Worker workflows to invoke Router nodes directly
+        (e.g., synthesis workflow calling an LLM node for fact extraction).
+
+        Request payload: {
+        graph_name: string,         // Compiled graph identifier
+        node_name: string,          // Node to execute within the graph
+        state: {key: value, ...},   // Node input state
+        config_overrides?: {...}    // Optional per-call config
+        }
+        Tenant/user identity is derived from ContextToken (SPOT).
+
+        Response payload: {
+        output: {key: value, ...},  // Node execution output
+        node_name: string,
+        execution_ms: int
+        }
+
+        Security: Requires ContextToken with "router:execute_node" permission.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def IntrospectRegistrations(self, request, context):
+        """=========================================
+        Introspection — Registered Manifest Query
+        =========================================
+
+        Inspect registered project manifests (sanitized, read-only).
+        Used by TUI, admin dashboards, and observability tooling.
+
+        Request payload: {
+        project_id?: string  // Optional — omit to list all visible projects
+        }
+
+        Response payload: {
+        projects: [{
+        project_id, owner_tenant, security_mode,
+        services, tools, graphs, policy
+        }]
+        }
+
+        Secrets are NEVER included in the response (sanitized server-side).
+        Security: Requires "router:introspect" permission.
+        In CU_LOCAL_MODE, HMAC tokens are accepted even when Shield is primary.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -217,6 +289,16 @@ def add_RouterServiceServicer_to_server(servicer, server):
         ),
         "ToolExecutorStream": grpc.stream_stream_rpc_method_handler(
             servicer.ToolExecutorStream,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ExecuteNode": grpc.unary_unary_rpc_method_handler(
+            servicer.ExecuteNode,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "IntrospectRegistrations": grpc.unary_unary_rpc_method_handler(
+            servicer.IntrospectRegistrations,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -404,6 +486,66 @@ class RouterService(object):
             request_iterator,
             target,
             "/contextunity.router.RouterService/ToolExecutorStream",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ExecuteNode(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.router.RouterService/ExecuteNode",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def IntrospectRegistrations(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.router.RouterService/IntrospectRegistrations",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,

@@ -13,7 +13,7 @@ ContextUnity Core is the **Kernel** of the [ContextUnity](https://github.com/Con
 
 - **ContextUnit** — atomic data exchange format with provenance tracking
 - **ContextToken** — capability-based security tokens (HMAC or Shield Ed25519)
-- **gRPC Contracts** — protocol definitions for all 8 services
+- **gRPC Contracts** — 6 proto files (`brain`, `router`, `worker`, `shield`, `admin`, `contextunit`) consumed by 5 gRPC servers + Django Admin clients
 - **Service SDKs** — BrainClient, RouterClient, WorkerClient
 - **Authorization Engine** — unified `authorize()` with permission inheritance
 - **Centralized Logging** — structured logs with automatic secret redaction
@@ -66,6 +66,18 @@ client = BrainClient(host="localhost:50051")
 results = await client.search(tenant_id="my_app", query_text="How does PostgreSQL work?", limit=5)
 ```
 
+### Federated Toolkits
+
+```python
+from contextunity.core.sdk.toolkit import FederatedToolkit, tool
+
+class DatabaseToolkit(FederatedToolkit, stateful=True):
+    @tool(timeout=30, retries=2)
+    async def run_query(self, query: str):
+        # self.ctx is automatically injected by the BiDi stream executor!
+        return {"tenant": self.ctx.tenant_id, "query": query}
+```
+
 ---
 
 ## Architecture
@@ -115,7 +127,7 @@ Security is always enforced — no toggle needed. Backend auto-detected at boots
 
 ## Further Reading
 
-- **Full Documentation**: [ContextCore on Astro Site](../../docs/website/src/content/docs/core/)
+- **Full Documentation**: [ContextCore on Astro Site](../../website/src/content/docs/core/)
 - **Agent Boundaries & Golden Paths**: [AGENTS.md](AGENTS.md)
 
 ## License

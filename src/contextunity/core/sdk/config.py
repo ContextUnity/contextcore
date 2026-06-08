@@ -26,15 +26,15 @@ Usage:
 
 from __future__ import annotations
 
-import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
     from contextunity.core.manifest.models import ContextUnityProject
     from contextunity.core.signing import AuthBackend
 
+from contextunity.core.config import get_env
 from contextunity.core.logging import get_contextunit_logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = get_contextunit_logger(__name__)
 
@@ -42,12 +42,10 @@ logger = get_contextunit_logger(__name__)
 # Service → (canonical_env_var, default_url)
 # Canonical: CU_ROUTER_GRPC_URL, CU_BRAIN_GRPC_URL, etc. (uniform *_GRPC_URL suffix)
 _SERVICE_ENV: dict[str, tuple[str, str]] = {
-    "router": ("CU_ROUTER_GRPC_URL", "localhost:50051"),
-    "brain": ("CU_BRAIN_GRPC_URL", "localhost:50052"),
-    "worker": ("CU_WORKER_GRPC_URL", "localhost:50053"),
-    "shield": ("CU_SHIELD_GRPC_URL", "localhost:50054"),
-    "zero": ("CU_ZERO_GRPC_URL", "localhost:50055"),
-    "commerce": ("CU_COMMERCE_GRPC_URL", "localhost:50056"),
+    "router": ("CU_ROUTER_GRPC_URL", "localhost:50050"),
+    "brain": ("CU_BRAIN_GRPC_URL", "localhost:50051"),
+    "worker": ("CU_WORKER_GRPC_URL", "localhost:50052"),
+    "shield": ("CU_SHIELD_GRPC_URL", ""),
 }
 
 
@@ -61,7 +59,7 @@ class ProjectBootstrapConfig(BaseModel):
     Projects can subclass to add project-specific required env vars.
     """
 
-    model_config = {"extra": "ignore"}
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="ignore")
 
     # ── Project identity ──
     project_id: str = Field(
@@ -82,25 +80,30 @@ class ProjectBootstrapConfig(BaseModel):
     brain_url: str = Field(default="", description="contextunity.brain gRPC URL")
     worker_url: str = Field(default="", description="contextunity.worker gRPC URL")
     shield_url: str = Field(default="", description="contextunity.shield gRPC URL")
-    zero_url: str = Field(default="", description="contextunity.zero gRPC URL")
-    commerce_url: str = Field(default="", description="contextunity.commerce gRPC URL")
 
-    def get_auth_backend(self, shield_enabled: bool = True) -> AuthBackend:
+    def get_auth_backend(self, shield_enabled: bool = False) -> AuthBackend:
         """Get the authentication backend based on config.
 
-        Uses Shield if shield_url is set AND shield_enabled is True.
-        Otherwise falls back to HMAC.
-        project_id comes from manifest (via this config), CU_PROJECT_SECRET from env.
+        Enterprise mode (Shield Session Tokens) is activated ONLY when
+        shield_enabled=True — controlled by the project manifest.
+        Having CU_SHIELD_GRPC_URL in env is just a connection detail.
+
+        Args:
+            shield_enabled: Whether to enable Shield-based authentication.
+
+        Returns:
+            AuthBackend: The resolved authentication backend.
         """
         from contextunity.core.signing import get_signing_backend
 
         return get_signing_backend(
             project_id=self.project_id,
-            shield_url=self.shield_url if shield_enabled else "",
+            shield_url=self.shield_url,
+            shield_enabled=shield_enabled,
         )
 
     @classmethod
-    def from_env(cls, **overrides: Any) -> ProjectBootstrapConfig:
+    def from_env(cls, **overrides: str) -> ProjectBootstrapConfig:
         """Load config from os.environ with optional overrides.
 
         Reads standard ContextUnity env vars and fills in defaults.
@@ -110,19 +113,22 @@ class ProjectBootstrapConfig(BaseModel):
             **overrides: Explicit values that take precedence over env.
 
         Returns:
-            Validated ProjectBootstrapConfig instance.
+            ProjectBootstrapConfig: Validated ProjectBootstrapConfig instance.
+
+        Raises:
+            ConfigurationError: If the bootstrap configuration is invalid.
         """
-        env_values: dict[str, Any] = {}
+        env_values: dict[str, str] = {}
 
         # Manifest path
-        manifest = os.environ.get("CU_MANIFEST_PATH", "")
+        manifest = get_env("CU_MANIFEST_PATH", "")
         if manifest:
             env_values["manifest_path"] = manifest
 
         # Service URLs: env var → default
         for service, (env_var, default) in _SERVICE_ENV.items():
             field = f"{service}_url"
-            url = os.environ.get(env_var, "")
+            url = get_env(env_var, "")
             env_values[field] = url or default
 
         # Apply overrides last (explicit > env > defaults)
@@ -135,51 +141,108 @@ class ProjectBootstrapConfig(BaseModel):
 
             raise ConfigurationError(f"Bootstrap config invalid: {str(e)}") from e
 
-    def resolve_secrets(self, manifest: "ContextUnityProject") -> dict[str, str]:
+    def resolve_secrets(self, manifest: ContextUnityProject) -> dict[str, str]:
         """Resolve API key secrets from manifest into Shield path suffixes.
 
-        Returns ``{path_suffix: api_key}`` where path_suffix is appended to
-        ``{tenant}/api_keys/`` to form the full Shield storage path.
-
         Path convention:
-          - Per-node (has ``model_secret_ref``):  ``{node_name}/{env_var_name}``
-          - Default model (policy):               ``{provider}/{model}`` (= model key)
-          - Fallback models (policy):             ``{provider}/{model}`` (= model key)
-        """
-        if not manifest.router or not manifest.router.graph.nodes:
-            return {}
+          - Top-level (``manifest.secrets``):                         ``{env_var_name}``
+          - Policy Langfuse (``public_key_ref`` / etc.):              ``{env_var_name}``
+          - Per-node (``model_secret_ref``):                         ``{node_name}/model_secret_ref``
+          - Default model (policy):                                   ``{provider}/{model}``
+          - Fallback models (policy):                                 ``{provider}/{model}``
 
+        Bootstrap may sync listed values to Shield; runtime use is still gated by
+        ``ContextToken`` scopes and path attenuation.
+
+        Note:
+          Per-node secrets are keyed only by ``node_name`` today because Router's
+          secure-node runtime expects ``{tenant}/api_keys/{node_name}/model_secret_ref``.
+          If multiple graphs reuse the same node name, the later secret wins and we log it.
+
+        Args:
+            manifest: The loaded ContextUnityProject manifest.
+
+        Returns:
+            dict[str, str]: A dictionary mapping path suffixes (appended to
+                ``{tenant}/api_keys/`` to form the full Shield storage path)
+                to their resolved API key values.
+        """
         secrets: dict[str, str] = {}
         missing: list[str] = []
 
-        # 1. Per-node secrets: path = {node_name}/model_secret_ref
-        for node in manifest.router.graph.nodes:
-            if not node.model_secret_ref:
-                continue
-            value = os.environ.get(node.model_secret_ref, "")
-            if not value:
-                missing.append(f"{node.model_secret_ref} (node={node.name})")
-            else:
-                secrets[f"{node.name}/model_secret_ref"] = value
+        # 1. Top-level manifest secrets (env resolver) → Shield path suffix = env var name
+        if manifest.secrets:
+            for group in manifest.secrets:
+                if group.resolver != "env":
+                    continue
+                for key in group.keys:
+                    value = get_env(key, "")
+                    if not value:
+                        missing.append(f"{key} (group {group.owner})")
+                    else:
+                        secrets[key] = value
 
-        # 2. Default model secret: path = {provider}/{model} (= default_ai_model)
-        policy = manifest.router.policy
-        ai = policy.ai_model_policy if policy else None
-        if ai and ai.default_model_secret_ref:
-            value = os.environ.get(ai.default_model_secret_ref, "")
-            if not value:
-                missing.append(f"{ai.default_model_secret_ref} (policy default)")
-            else:
-                secrets[ai.default_ai_model] = value
+        if manifest.router:
+            # 2. Per-node secrets: path = {node_name}/model_secret_ref
+            #    router.graph is dict[str, RouterGraph] — iterate all graphs
+            if manifest.router.graph:
+                for graph_name, graph_def in manifest.router.graph.items():
+                    if not graph_def.nodes:
+                        continue
+                    for node in graph_def.nodes:
+                        secret_ref = getattr(node, "model_secret_ref", None)
+                        if not isinstance(secret_ref, str) or not secret_ref:
+                            continue
+                        value = get_env(secret_ref, "")
+                        if not value:
+                            missing.append(f"{secret_ref} (graph={graph_name}, node={node.name})")
+                        else:
+                            key = f"{node.name}/model_secret_ref"
+                            previous = secrets.get(key)
+                            if previous and previous != value:
+                                logger.warning(
+                                    "Per-node secret collision at %s; graph=%s node=%s overrides earlier value",
+                                    key,
+                                    graph_name,
+                                    node.name,
+                                )
+                            secrets[key] = value
 
-        # 3. Fallback model secrets: path = {provider}/{model} (= fallback_ai_models[i])
-        if ai and ai.fallback_ai_models and ai.fallback_model_secret_refs:
-            for model, ref in zip(ai.fallback_ai_models, ai.fallback_model_secret_refs):
-                value = os.environ.get(ref, "")
+            # 3. Default model secret: path = {provider}/{model} (= models.llm.default)
+            policy = manifest.router.policy
+            models_pol = policy.models if policy else None
+            llm = models_pol.llm if models_pol else None
+            if llm and llm.secret_ref:
+                value = get_env(llm.secret_ref, "")
                 if not value:
-                    missing.append(f"{ref} (fallback {model})")
+                    missing.append(f"{llm.secret_ref} (policy default)")
                 else:
-                    secrets[model] = value
+                    secrets[llm.default] = value
+
+            # 4. Fallback model secrets: path = {provider}/{model} (= models.llm.fallback[i])
+            if llm and llm.fallback and llm.fallback_secret_refs:
+                for model, ref in zip(llm.fallback, llm.fallback_secret_refs):
+                    value = get_env(ref, "")
+                    if not value:
+                        missing.append(f"{ref} (fallback {model})")
+                    else:
+                        secrets[model] = value
+
+            # 5. Langfuse (policy.langfuse): path suffix = env var name from each ref
+            lf_pol = policy.langfuse if policy else None
+            if lf_pol and lf_pol.tracing_enabled is not False:
+                for label, ref in (
+                    ("langfuse public_key_ref", lf_pol.public_key_ref),
+                    ("langfuse secret_key_ref", lf_pol.secret_key_ref),
+                    ("langfuse host_ref", lf_pol.host_ref),
+                ):
+                    if not ref:
+                        continue
+                    value = get_env(ref, "")
+                    if not value:
+                        missing.append(f"{ref} ({label})")
+                    else:
+                        secrets[ref] = value
 
         if missing:
             logger.warning(
@@ -190,13 +253,16 @@ class ProjectBootstrapConfig(BaseModel):
 
         return secrets
 
-    def validate_service_urls(self, manifest: "ContextUnityProject") -> None:
+    def validate_service_urls(self, manifest: ContextUnityProject) -> None:
         """Validate that URLs are set for all services enabled in manifest.
 
         Call this after loading the manifest to get actionable error messages.
 
+        Args:
+            manifest: The loaded ContextUnityProject manifest.
+
         Raises:
-            ValueError with list of missing URLs.
+            ConfigurationError: If any enabled service is missing its URL configuration.
         """
         if not manifest.services:
             return
@@ -209,18 +275,27 @@ class ProjectBootstrapConfig(BaseModel):
             "brain": self.brain_url,
             "worker": self.worker_url,
             "shield": self.shield_url,
-            "zero": self.zero_url,
-            "commerce": self.commerce_url,
+        }
+        service_flags = {
+            "router": services.router,
+            "brain": services.brain,
+            "worker": services.worker,
+            "shield": services.shield,
         }
 
         for service_name, url_value in url_map.items():
-            svc = getattr(services, service_name, None)
-            if svc and getattr(svc, "enabled", False) and not url_value:
+            svc = service_flags.get(service_name)
+            if svc is not None and svc.enabled and not url_value:
                 env_var = _SERVICE_ENV.get(service_name, ("", ""))[0]
                 missing.append(f"{service_name} (set {env_var})")
 
         if missing:
-            raise ValueError("Services enabled in manifest but missing URL config: " + ", ".join(missing))
+            from contextunity.core.exceptions import ConfigurationError
+
+            raise ConfigurationError(
+                message="Services enabled in manifest but missing URL config: " + ", ".join(missing),
+                code="MISSING_SERVICE_URL",
+            )
 
 
 __all__ = ["ProjectBootstrapConfig"]

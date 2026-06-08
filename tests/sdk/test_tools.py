@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from contextunity.core.exceptions import ConfigurationError, ContextUnityError
 from contextunity.core.sdk.streaming.bidi import FederatedToolCallContext
 from contextunity.core.sdk.tools import ToolRegistry, federated_tool
 
@@ -50,7 +51,7 @@ class TestFederatedToolDecorator:
         def tool_a() -> dict:
             return {}
 
-        with pytest.raises(ValueError, match="already registered"):
+        with pytest.raises(ConfigurationError, match="already registered"):
 
             @federated_tool("same_name")
             def tool_b() -> dict:
@@ -103,7 +104,7 @@ class TestToolRegistryHandler:
         handler = ToolRegistry.build_handler()
         ctx = _make_ctx("unknown_tool")
 
-        with pytest.raises(ValueError, match="Unknown federated tool.*'unknown_tool'"):
+        with pytest.raises(ContextUnityError, match="Unknown federated tool.*'unknown_tool'"):
             handler("unknown_tool", {}, ctx)
 
     def test_ctx_injection(self):
@@ -161,6 +162,34 @@ class TestToolRegistryHandler:
         assert handler("tool_b", {}, _make_ctx("tool_b")) == {"tool": "b"}
 
 
+class TestToolRegistryExecute:
+    """Test async-safe ToolRegistry.execute()."""
+
+    @pytest.mark.asyncio
+    async def test_executes_sync_tool_inside_event_loop(self):
+        @federated_tool("sync_tool")
+        def sync_tool(value: int, *, ctx: FederatedToolCallContext) -> dict:
+            return {"value": value, "tenant": ctx.caller_tenant}
+
+        result = await ToolRegistry.execute("sync_tool", {"value": 3}, _make_ctx("sync_tool"))
+        assert result == {"value": 3, "tenant": "test-tenant"}
+
+    @pytest.mark.asyncio
+    async def test_executes_async_tool_inside_event_loop(self):
+        @federated_tool("async_tool")
+        async def async_tool(value: int) -> dict:
+            await asyncio.sleep(0)
+            return {"value": value}
+
+        result = await ToolRegistry.execute("async_tool", {"value": 5}, _make_ctx("async_tool"))
+        assert result == {"value": 5}
+
+    @pytest.mark.asyncio
+    async def test_execute_unknown_tool_raises(self):
+        with pytest.raises(ContextUnityError, match="Unknown federated tool.*'missing_tool'"):
+            await ToolRegistry.execute("missing_tool", {}, _make_ctx("missing_tool"))
+
+
 class TestToolRegistryMeta:
     """Test registry metadata methods."""
 
@@ -185,3 +214,6 @@ class TestToolRegistryMeta:
 
         names = ToolRegistry.tool_names()
         assert set(names) == {"alpha", "beta"}
+
+
+pytestmark = pytest.mark.unit

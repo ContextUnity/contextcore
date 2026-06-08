@@ -1,82 +1,104 @@
-"""HTTP Token Utilities."""
+"""HTTP token utilities — serialize, parse, and verify ContextTokens for REST/webhook flows.
+
+Bridges the gRPC-native token model to HTTP ``Authorization`` headers
+for Django views and external webhook endpoints.
+"""
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING
 
+from ..exceptions import ConfigurationError
 from ..logging import get_contextunit_logger
 from ..signing import AuthBackend
 from ..tokens import ContextToken
+from .contracts import (
+    header_value,
+    is_token_session_dict,
+    request_headers,
+    request_meta,
+    request_session,
+)
 from .public_key import fetch_project_public_key_sync
-from .serialization import parse_token_string, serialize_token, verify_token_string
+from .serialization import (
+    LocalSigningBackend,
+    TokenVerifier,
+    parse_token_string,
+    serialize_token,
+    token_from_session_dict,
+    verify_token_string,
+)
+
+if TYPE_CHECKING:
+    from ..config import SharedConfig
 
 logger = get_contextunit_logger(__name__)
 
-# HTTP header keys
 HTTP_AUTH_HEADER = "HTTP_AUTHORIZATION"
 HTTP_TOKEN_HEADER = "X-Context-Token"  # nosec B105
+HTTP_TOKEN_META_KEY = f"HTTP_{HTTP_TOKEN_HEADER.upper().replace('-', '_')}"
 
 
-def extract_token_string_from_http_request(request) -> str:
+def _extract_bearer_from_auth_header(auth_header: str) -> str:
+    if auth_header.startswith("Bearer "):
+        token_str = auth_header[7:].strip()
+        if token_str:
+            return token_str
+    return ""
+
+
+def extract_token_string_from_http_request(request: object) -> str:
     """Extract serialized token string from HTTP request headers/session."""
-    if hasattr(request, "META"):
-        auth_header = request.META.get(HTTP_AUTH_HEADER, "")
-        if auth_header.startswith("Bearer "):
-            token_str = auth_header[7:].strip()
-            if token_str:
-                return token_str
+    meta = request_meta(request)
+    if meta is not None:
+        auth_header = header_value(meta, HTTP_AUTH_HEADER)
+        bearer = _extract_bearer_from_auth_header(auth_header)
+        if bearer:
+            return bearer
 
-        token_str = request.META.get(f"HTTP_{HTTP_TOKEN_HEADER.upper().replace('-', '_')}", "")
+        token_str = header_value(meta, HTTP_TOKEN_META_KEY).strip()
         if token_str:
-            return str(token_str).strip()
+            return token_str
 
-    if hasattr(request, "headers"):
-        auth_header = request.headers.get("authorization", "")
-        if auth_header.startswith("Bearer "):
-            token_str = auth_header[7:].strip()
-            if token_str:
-                return token_str
+    headers = request_headers(request)
+    if headers is not None:
+        auth_header = header_value(headers, "authorization")
+        bearer = _extract_bearer_from_auth_header(auth_header)
+        if bearer:
+            return bearer
 
-        token_str = request.headers.get(HTTP_TOKEN_HEADER.lower(), "")
+        token_str = header_value(headers, HTTP_TOKEN_HEADER.lower()).strip()
         if token_str:
-            return str(token_str).strip()
+            return token_str
 
-    if hasattr(request, "session"):
-        token_data = request.session.get("context_token")
+    session = request_session(request)
+    if session is not None:
+        token_data = session.get("context_token")
         if isinstance(token_data, str) and token_data.strip():
             return token_data.strip()
 
     return ""
 
 
-def extract_token_from_http_request(request) -> Optional[ContextToken]:
+def extract_token_from_http_request(request: object) -> ContextToken | None:
     """UNSAFE: Extract ContextToken from HTTP request without verification."""
     try:
         token_str = extract_token_string_from_http_request(request)
         if token_str:
             return parse_token_string(token_str)
 
-        if hasattr(request, "session"):
-            token_data = request.session.get("context_token")
-            if token_data:
-                if isinstance(token_data, dict):
-                    return ContextToken(
-                        token_id=token_data.get("token_id", ""),
-                        permissions=tuple(token_data.get("permissions", [])),
-                        allowed_tenants=tuple(token_data.get("allowed_tenants", [])),
-                        exp_unix=token_data.get("exp_unix"),
-                        user_id=token_data.get("user_id"),
-                        user_namespace=token_data.get("user_namespace"),
-                        agent_id=token_data.get("agent_id", ""),
-                        provenance=tuple(token_data.get("provenance", [])),
-                    )
-                elif isinstance(token_data, ContextToken):
+        session = request_session(request)
+        if session is not None:
+            token_data = session.get("context_token")
+            if token_data is not None:
+                if is_token_session_dict(token_data):
+                    return token_from_session_dict(token_data)
+                if isinstance(token_data, ContextToken):
                     return token_data
 
-        if hasattr(request, "context_token"):
-            token = request.context_token
-            if isinstance(token, ContextToken):
-                return token
+        token = getattr(request, "context_token", None)
+        if isinstance(token, ContextToken):
+            return token
 
     except Exception as e:
         logger.warning("Failed to extract token from HTTP request: %s", e)
@@ -89,7 +111,8 @@ def build_verifier_backend_from_token_string(
     *,
     shield_url: str = "",
     service_name: str = "service",
-):
+    config: SharedConfig | None = None,
+) -> TokenVerifier | None:
     """Build a verifier backend from a serialized token string."""
     parts = token_str.strip().rsplit(".", 2)
     if len(parts) != 3:
@@ -115,10 +138,11 @@ def build_verifier_backend_from_token_string(
                     kid,
                     shield_url,
                     provenance=f"{service_name.lower()}:http:fetch_public_key",
+                    config=config,
                 )
                 from ..discovery import update_project_public_key
 
-                update_project_public_key(project_id, public_key_b64, returned_kid)
+                _ = update_project_public_key(project_id, public_key_b64, returned_kid)
             except Exception as e:
                 logger.warning("Failed to fetch public key from Shield for %s: %s", kid, e)
                 return None
@@ -143,24 +167,27 @@ def build_verifier_backend_from_token_string(
 
 
 def extract_and_verify_token_from_http_request(
-    request,
+    request: object,
     verifier_backend: AuthBackend | None = None,
     *,
     shield_url: str = "",
     service_name: str = "service",
-) -> Optional[ContextToken]:
+    config: SharedConfig | None = None,
+) -> ContextToken | None:
     """Extract and securely verify ContextToken from HTTP request."""
     try:
         token_str = extract_token_string_from_http_request(request)
         if not token_str:
-            if hasattr(request, "context_token") and isinstance(request.context_token, ContextToken):
-                return request.context_token
+            context_token = getattr(request, "context_token", None)
+            if isinstance(context_token, ContextToken):
+                return context_token
             return None
 
         backend = verifier_backend or build_verifier_backend_from_token_string(
             token_str,
             shield_url=shield_url,
             service_name=service_name,
+            config=config,
         )
         if backend is None:
             logger.warning("No verifier backend available for HTTP token")
@@ -172,21 +199,23 @@ def extract_and_verify_token_from_http_request(
 
 
 def create_http_headers_with_token(
-    token: Optional[ContextToken] = None,
-    additional_headers: Optional[dict[str, str]] = None,
-    backend: Optional[AuthBackend] = None,
+    token: ContextToken | None = None,
+    additional_headers: dict[str, str] | None = None,
+    backend: AuthBackend | None = None,
 ) -> dict[str, str]:
     """Create HTTP headers dict with token metadata."""
-    headers = {}
+    headers: dict[str, str] = {}
 
     if backend is not None:
         if token is not None:
+            if not isinstance(backend, LocalSigningBackend):
+                raise ConfigurationError("create_http_headers_with_token backend does not support local signing")
             headers["Authorization"] = f"Bearer {serialize_token(token, backend=backend)}"
         else:
             for k, v in backend.get_auth_metadata():
-                headers[k.title()] = v
+                headers[k.title()] = v if isinstance(v, str) else v.decode(errors="ignore")
     elif token:
-        raise ValueError("create_http_headers_with_token requires a backend")
+        raise ConfigurationError("create_http_headers_with_token requires a backend")
 
     if additional_headers:
         headers.update(additional_headers)

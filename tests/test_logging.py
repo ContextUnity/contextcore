@@ -13,108 +13,77 @@ from contextunity.core import (
     SharedConfig,
     get_contextunit_logger,
     redact_secrets,
-    safe_log_value,
     safe_preview,
     setup_logging,
 )
 
 
 class TestSafePreview:
-    """Tests for safe_preview function."""
+    """Tests for safe_preview function.
 
-    def test_none_value(self) -> None:
-        """Test that None returns empty string."""
-        assert safe_preview(None) == ""
+    Score 3: +2 behavior (observability contract), +1 fast.
+    """
 
-    def test_string_value(self) -> None:
-        """Test string values are preserved."""
-        assert safe_preview("hello") == "hello"
-
-    def test_string_with_whitespace(self) -> None:
-        """Test that whitespace is normalized."""
-        assert safe_preview("hello\n\tworld  test") == "hello world test"
-
-    def test_string_truncation(self) -> None:
-        """Test that long strings are truncated."""
-        long_string = "a" * 300
-        result = safe_preview(long_string, limit=100)
-        assert len(result) == 100
-        assert result.endswith("…")
-
-    def test_dict_value(self) -> None:
-        """Test that dicts are converted to JSON."""
-        data = {"key": "value", "num": 42}
-        result = safe_preview(data)
-        assert "key" in result
-        assert "value" in result
-
-    def test_list_value(self) -> None:
-        """Test that lists are converted to JSON."""
-        data = [1, 2, 3, "test"]
-        result = safe_preview(data)
-        assert "test" in result
+    @pytest.mark.parametrize(
+        ("value", "limit", "check"),
+        [
+            (None, 200, lambda r: r == ""),
+            ("hello", 200, lambda r: r == "hello"),
+            ("hello\n\tworld  test", 200, lambda r: r == "hello world test"),
+            ("a" * 300, 100, lambda r: len(r) == 100 and r.endswith("\u2026")),
+            ({"key": "value"}, 200, lambda r: "key" in r and "value" in r),
+            ([1, 2, "test"], 200, lambda r: "test" in r),
+        ],
+        ids=["none", "string", "whitespace", "truncation", "dict", "list"],
+    )
+    def test_safe_preview(self, value, limit, check) -> None:
+        result = safe_preview(value, limit=limit)
+        assert check(result), f"Failed for {value!r}: got {result!r}"
 
 
 class TestRedactSecrets:
-    """Tests for redact_secrets function."""
+    """Tests for redact_secrets function.
 
-    def test_password_pattern(self) -> None:
-        """Test password redaction."""
-        text = 'password: "secret123"'
+    Score 4: +2 protects security (secret leakage prevention), +2 fails when broken.
+    """
+
+    @pytest.mark.parametrize(
+        ("text", "must_contain", "must_not_contain"),
+        [
+            ('password: "secret123"', "[REDACTED]", "secret123"),
+            ("api_key: sk-1234567890abcdef", "[REDACTED]", "sk-1234567890"),
+            ("Authorization: Bearer abc123def456", "[REDACTED]", "abc123def456"),
+        ],
+        ids=["password", "api-key", "bearer"],
+    )
+    def test_secrets_redacted(self, text, must_contain, must_not_contain) -> None:
         result = redact_secrets(text)
-        assert "[REDACTED]" in result
-        assert "secret123" not in result
+        assert must_contain in result
+        assert must_not_contain not in result
 
-    def test_api_key_pattern(self) -> None:
-        """Test API key redaction."""
-        text = "api_key: sk-1234567890abcdef"
-        result = redact_secrets(text)
-        assert "[REDACTED]" in result
-
-    def test_bearer_token(self) -> None:
-        """Test bearer token redaction."""
-        text = "Authorization: Bearer abc123def456"
-        result = redact_secrets(text)
-        assert "[REDACTED]" in result
-
-    def test_no_secrets(self) -> None:
-        """Test that normal text is not modified."""
+    def test_normal_text_unchanged(self) -> None:
+        """Normal text without secrets passes through unchanged."""
         text = "This is a normal message without secrets"
-        result = redact_secrets(text)
-        assert result == text
+        assert redact_secrets(text) == text
 
     def test_custom_replacement(self) -> None:
-        """Test custom replacement string."""
-        text = "password: secret123"
-        result = redact_secrets(text, replacement="[HIDDEN]")
+        """Custom replacement string is used."""
+        result = redact_secrets("password: secret123", replacement="[HIDDEN]")
         assert "[HIDDEN]" in result
-
-
-class TestSafeLogValue:
-    """Tests for safe_log_value function."""
-
-    def test_with_redaction(self) -> None:
-        """Test that secrets are redacted."""
-        text = "api_key: sk-1234567890"
-        result = safe_log_value(text, redact=True)
-        assert "[REDACTED]" in result
-
-    def test_without_redaction(self) -> None:
-        """Test that redaction can be disabled."""
-        text = "api_key: sk-1234567890"
-        result = safe_log_value(text, redact=False)
-        # Should still contain the key (though truncated)
-        assert "api_key" in result or "sk-" in result
-
-    def test_truncation(self) -> None:
-        """Test that long values are truncated."""
-        long_text = "a" * 500
-        result = safe_log_value(long_text, limit=100)
-        assert len(result) <= 100
 
 
 class TestSetupLogging:
     """Tests for setup_logging function."""
+
+    @pytest.fixture(autouse=True)
+    def _restore_log_level(self):
+        """Restore root logger state after each test to prevent contamination."""
+        root = logging.getLogger()
+        original_level = root.level
+        original_handlers = root.handlers[:]
+        yield
+        root.setLevel(original_level)
+        root.handlers = original_handlers
 
     def test_setup_with_config(self) -> None:
         """Test logging setup with SharedConfig."""
@@ -128,15 +97,17 @@ class TestSetupLogging:
         """Test logging setup loading from environment."""
         import os
 
+        from contextunity.core.config import reset_core_config
+
         os.environ["LOG_LEVEL"] = "WARNING"
-
-        setup_logging(json_format=False)
-
-        root_logger = logging.getLogger()
-        assert root_logger.level == logging.WARNING
-
-        # Cleanup
-        os.environ.pop("LOG_LEVEL", None)
+        reset_core_config()
+        try:
+            setup_logging(json_format=False)
+            root_logger = logging.getLogger()
+            assert root_logger.level == logging.WARNING
+        finally:
+            os.environ.pop("LOG_LEVEL", None)
+            reset_core_config()
 
     def test_json_format(self, capsys: pytest.CaptureFixture) -> None:
         """Test JSON format output."""
@@ -266,3 +237,6 @@ class TestContextUnitFormatter:
         assert "INFO" in result
         assert "Test message" in result
         assert "trace_id" in result
+
+
+pytestmark = pytest.mark.unit

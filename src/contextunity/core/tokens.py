@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import secrets
 import time
-from dataclasses import dataclass
-from typing import Any, Iterable, Literal
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 
+from .exceptions import ConfigurationError
 from .sdk import ContextUnit, SecurityScopes
+from .types import JsonValue
 
 
 @dataclass(frozen=True)
@@ -24,7 +26,8 @@ class ContextToken:
     ContextToken provides:
     - token_id: Unique identifier for audit trails
     - permissions: List of capability strings (e.g., "catalog:read", "product:write")
-    - allowed_tenants: Tenant IDs this token can access. Empty = admin (all tenants).
+    - allowed_tenants: Tenant IDs this token can access. Empty grants no tenant
+      access unless the token has ``admin:all``.
     - exp_unix: Expiration timestamp (None = no expiration)
     - user_id: Identity of the human user (None = system/anonymous)
     - agent_id: Identity of the executing agent (None = unspecified)
@@ -36,7 +39,7 @@ class ContextToken:
 
     token_id: str
     permissions: tuple[str, ...] = ()
-    allowed_tenants: tuple[str, ...] = ()  # Empty = admin (all tenants)
+    allowed_tenants: tuple[str, ...] = ()
     exp_unix: float | None = None
     revocation_id: str | None = None  # For instant revocation via RevocationStore
 
@@ -47,6 +50,9 @@ class ContextToken:
 
     # Traceability — cryptographically tied data lineage
     provenance: tuple[str, ...] = ()
+
+    # Pre-computed expanded permissions (set in __post_init__)
+    _effective_permissions: frozenset[str] = field(default=frozenset(), init=False, repr=False)
 
     def __post_init__(self) -> None:
         """Pre-compute expanded permissions for inheritance-aware access checks.
@@ -63,55 +69,78 @@ class ContextToken:
             frozenset(expand_permissions(self.permissions)),
         )
 
+    @property
+    def effective_permissions(self) -> frozenset[str]:
+        """Expanded permission set including inherited scopes."""
+        return self._effective_permissions
+
     def is_expired(self, *, now: float | None = None) -> bool:
-        """Check if token has expired."""
+        """Determine if the token has expired relative to a given timestamp.
+
+        Args:
+            now: Optional current Unix timestamp. Defaults to the current system time.
+
+        Returns:
+            bool: True if the token's expiration timestamp is set and has passed, False otherwise.
+        """
         if self.exp_unix is None:
             return False
         t = time.time() if now is None else now
         return t >= self.exp_unix
 
     def has_permission(self, permission: str) -> bool:
-        """Check if token has a specific permission (including inherited).
+        """Check if the token carries a specific permission scope.
 
-        Uses expanded permissions: ``admin:all`` implies ``brain:read``, etc.
-        See :data:`~contextunity.core.permissions.inheritance.PERMISSION_INHERITANCE`.
+        Performs a lookup within the pre-computed set of effective permissions,
+        honoring the hierarchical inheritance model.
+
+        Args:
+            permission: The target permission string to check (e.g., "brain:read").
+
+        Returns:
+            bool: True if the permission is present directly or via inheritance,
+            False otherwise.
         """
         return permission in self._effective_permissions
 
     def can_access_tenant(self, tenant_id: str) -> bool:
-        """Check if token is authorized to access a given tenant.
+        """Check if the token is authorized to access the given tenant.
 
-        Returns True if:
-        - allowed_tenants is empty (admin token — unrestricted), OR
-        - tenant_id is in allowed_tenants
+        Args:
+            tenant_id: The tenant identifier to evaluate.
 
-        Returns False if:
-        - tenant_id is empty/falsy (abuse prevention)
-        - tenant_id is not in allowed_tenants
+        Returns:
+            bool: True if the token has access to the tenant, False otherwise.
         """
         if not tenant_id:
             return False  # Empty tenant_id is never allowed
-        if not self.allowed_tenants:
-            return True  # Admin token — all tenants
+        if self.has_permission("admin:all"):
+            return True
         return tenant_id in self.allowed_tenants
 
     def can_read(self, scopes: SecurityScopes) -> bool:
-        """Check if token can read from the given security scopes.
+        """Verify if the token has the necessary permissions to read from the specified scopes.
 
-        Returns True if:
-        - Any effective (expanded) permission matches any read scope, OR
-        - Read scopes are empty (no restrictions)
+        Args:
+            scopes: The security scopes restricting read access.
+
+        Returns:
+            bool: True if the token is authorized (at least one permission intersects
+            the target read scopes, or the target has no read constraints), False otherwise.
         """
         if not scopes.read:
             return True  # No restrictions
         return bool(self._effective_permissions & set(scopes.read))
 
     def can_write(self, scopes: SecurityScopes) -> bool:
-        """Check if token can write to the given security scopes.
+        """Verify if the token has the necessary permissions to write to the specified scopes.
 
-        Returns True if:
-        - Any effective (expanded) permission matches any write scope, OR
-        - Write scopes are empty (no restrictions)
+        Args:
+            scopes: The security scopes restricting write access.
+
+        Returns:
+            bool: True if the token is authorized (at least one permission intersects
+            the target write scopes, or the target has no write constraints), False otherwise.
         """
         if not scopes.write:
             return True  # No restrictions
@@ -119,19 +148,27 @@ class ContextToken:
 
 
 class TokenBuilder:
-    """Token minting + attenuation + verification.
+    """Token Minting, Attenuation, and Security Verification Registry.
 
-    Part of the ContextUnit protocol. Creates and validates ContextToken instances
-    that integrate with ContextUnit.security for capability-based access control.
+    This class serves as the core token factory and validation engine in the ContextUnity
+    cryptographic security model. It generates, attenuates, and verifies `ContextToken` objects
+    which are attached to every operation context across services.
 
-    Security is always enforced — there is no opt-out.
-    Signing is handled by contextunity.core.signing backends (auto-detected).
+    Key Security Capabilities:
+        - Root Token Minting: Generating initial high-privilege tokens for human users or system processes.
+        - Token Attenuation: Generating lower-privilege tokens derived from parent tokens by narrowing
+          permissions, limiting TTL, or tracking delegation lineage.
+        - Verification & Auditing: Enforcing role-based access control, inheritance check, expiration
+          validity, and ContextUnit resource access gates.
+
+    Security Invariant:
+        Security verification is always active across the platform. There is no fallback or opt-out mechanism.
     """
 
     def mint_root(
         self,
         *,
-        user_ctx: dict[str, Any],
+        user_ctx: dict[str, JsonValue],
         permissions: Iterable[str],
         ttl_s: float,
         allowed_tenants: Iterable[str] | None = None,
@@ -139,27 +176,30 @@ class TokenBuilder:
         agent_id: str | None = None,
         user_namespace: str = "default",
     ) -> ContextToken:
-        """Create a new root token with specified permissions.
+        """Create a new root capability token with specified permissions and identity attributes.
+
+        This method is the initial entrypoint for producing high-privilege context tokens. It constructs
+        a new token identity with an expansion-restricted permission set, namespace tier, and optional
+        tenant boundaries.
 
         Args:
-            user_ctx: User context (reserved for future datalog facts)
-            permissions: Capability strings (e.g., ["catalog:read", "product:write"])
-            ttl_s: Time-to-live in seconds
-            allowed_tenants: Tenant IDs this token can access.
-                             None or empty = admin (all tenants).
-                             Example: ["tenant-a", "tenant-b"]
-            user_id: Identity of the human user making the request.
-                     This is the source of truth — agents cannot override it.
-            agent_id: Identity of the agent executing the request.
-            user_namespace: Access tier within tenant ("free", "pro", "admin", "system").
+            user_ctx: A dictionary containing user execution context details (reserved for future datalog facts).
+            permissions: Capability strings representing granted permissions (e.g., `["catalog:read", "product:write"]`).
+            ttl_s: Time-to-live duration in seconds.
+            allowed_tenants: Tenant identifiers this token is restricted to. Empty grants
+                no tenant access unless ``permissions`` includes ``admin:all``.
+            user_id: The unique identity of the human user initiating the request. This field is the immutable source
+                of truth and cannot be modified or overridden by downstream agents.
+            agent_id: The unique identity of the agent executing the request (e.g., "router-agent").
+            user_namespace: Access tier configuration determining resource access tier ("free", "pro", "admin", "system").
 
         Returns:
-            New ContextToken instance
+            ContextToken: A newly minted cryptographic token holding the defined capabilities.
         """
         _ = user_ctx  # reserved for future datalog facts
-        token_id = secrets.token_urlsafe(16)
-        revocation_id = f"rev-{secrets.token_urlsafe(12)}"
-        exp_unix = time.time() + float(ttl_s)
+        token_id = secrets.token_urlsafe(32)  # 256 bits
+        revocation_id = f"rev-{secrets.token_urlsafe(16)}"
+        exp_unix = time.time() + ttl_s
 
         identity = user_id or agent_id or "system"
 
@@ -180,24 +220,38 @@ class TokenBuilder:
         token: ContextToken,
         *,
         permissions: Iterable[str] | None = None,
+        allowed_tenants: Iterable[str] | None = None,
         ttl_s: float | None = None,
         agent_id: str | None = None,
     ) -> ContextToken:
-        """Create a new token with reduced permissions (attenuation).
+        """Derive a new, attenuated token with reduced capabilities and updated delegation lineage.
 
-        identity fields (user_id, user_namespace, allowed_tenants) are
-        inherited from the parent token and cannot be expanded.
-        agent_id CAN be changed — this is the normal delegation pattern
-        (dispatcher → rag_agent → tool_agent).
+        This method generates a lower-privilege token from an existing parent token. It strictly prevents
+        permission expansion (child permissions must be a subset of parent permissions) and tenant
+        expansion (child ``allowed_tenants`` must be a subset of the parent's, unless
+        the parent has ``admin:all``).
+
+        Lineage (Provenance) Tracking:
+            When delegating a token to a downstream agent (e.g., dispatcher delegating to a RAG agent, which
+            delegates to a tool agent), the transition is appended to the token's `provenance` tuple (e.g.,
+            `*user > dispatcher > rag_agent`), ensuring an auditable execution chain.
 
         Args:
-            token: Original token to attenuate
-            permissions: New permission set (None = keep original)
-            ttl_s: New TTL (None = keep original)
-            agent_id: Override agent_id for the child (None = keep original)
+            token: The parent `ContextToken` from which the attenuated token is derived.
+            permissions: A narrowed permission set. Must be a strict subset of the parent's permissions.
+                If `None`, the child inherits the parent's permission set verbatim.
+            allowed_tenants: A narrowed tenant scope. Must be a subset of the parent's
+                tenants unless the parent has ``admin:all``.
+            ttl_s: Optional time-to-live duration in seconds for the child token. The resulting absolute
+                expiration timestamp is capped by the parent's expiration timestamp.
+            agent_id: The identifier of the downstream agent to which execution is being delegated.
 
         Returns:
-            New ContextToken with attenuated permissions
+            ContextToken: The attenuated cryptographic token with updated delegation history and narrowed scopes.
+
+        Raises:
+            PermissionError: If the requested permissions are not a subset of the parent token's permissions.
+            SecurityError: If the requested tenants are not a subset of the parent token's tenants.
         """
         exp_unix = token.exp_unix
         if ttl_s is not None:
@@ -210,6 +264,17 @@ class TokenBuilder:
         else:
             perms = token.permissions
 
+        if allowed_tenants is not None:
+            from .permissions.validation import validate_attenuation_tenants
+
+            tenants = validate_attenuation_tenants(
+                token.allowed_tenants,
+                tuple(allowed_tenants),
+                parent_is_admin=token.has_permission("admin:all"),
+            )
+        else:
+            tenants = token.allowed_tenants
+
         # ── Update Provenance ──
         new_provenance = list(token.provenance)
 
@@ -221,7 +286,7 @@ class TokenBuilder:
         return ContextToken(
             token_id=token.token_id,
             permissions=perms,
-            allowed_tenants=token.allowed_tenants,
+            allowed_tenants=tenants,
             exp_unix=exp_unix,
             revocation_id=token.revocation_id,
             user_id=token.user_id,
@@ -230,13 +295,18 @@ class TokenBuilder:
             provenance=tuple(new_provenance),
         )
 
-    def verify(self, token: ContextToken, *, required_permission: str) -> None:
-        """Verify token has required permission (inheritance-aware).
+    def verify(self, token: object, *, required_permission: str) -> None:
+        """Verify that the given token has not expired and possesses the required capability.
 
-        Uses ``has_permission()`` which checks expanded permissions.
+        Checks the token validity status. It evaluates permission inheritance rules (e.g., checking if the
+        implied/expanded permissions resolve to the required capability target).
+
+        Args:
+            token: The `ContextToken` instance to inspect.
+            required_permission: The capability string required for the current execution context.
 
         Raises:
-            PermissionError: If token is missing, expired, or lacks permission
+            PermissionError: If the token is missing, expired, or does not carry the required capability.
         """
         if not isinstance(token, ContextToken):
             raise PermissionError("Missing token")
@@ -247,20 +317,24 @@ class TokenBuilder:
 
     def verify_unit_access(
         self,
-        token: ContextToken,
+        token: object,
         unit: ContextUnit,
         *,
-        operation: Literal["read", "write"] = "read",
+        operation: str = "read",
     ) -> None:
-        """Verify token can access ContextUnit based on its security scopes.
+        """Verify that the token is authorized to access a specific ContextUnit resource.
+
+        Evaluates the security scopes defined on the target `ContextUnit` against the token's expanded read/write
+        privileges.
 
         Args:
-            token: ContextToken to verify
-            unit: ContextUnit to check access for
-            operation: "read" or "write"
+            token: The `ContextToken` requesting access.
+            unit: The `ContextUnit` resource target.
+            operation: The type of access requested, either "read" or "write".
 
         Raises:
-            PermissionError: If token cannot access the unit
+            PermissionError: If the token is missing, expired, or fails to meet the target unit's read/write scopes.
+            ConfigurationError: If the specified operation is not "read" or "write".
         """
         # Security is always enforced — no opt-out.
 
@@ -277,17 +351,29 @@ class TokenBuilder:
             if not token.can_write(scopes):
                 raise PermissionError(f"Token lacks write permission for unit scopes: {scopes.write}")
         else:
-            raise ValueError(f"Invalid operation: {operation}")
+            raise ConfigurationError(f"Invalid operation: {operation}")
 
 
 # ── Service Token Factory ────────────────────────────────────────
 
 import threading  # noqa: E402
 
-_service_token_cache: dict[str, ContextToken] = {}
+_service_token_cache: dict[tuple[str, tuple[str, ...], tuple[str, ...]], ContextToken] = {}
 _service_token_lock = threading.Lock()
 
 _DEFAULT_SERVICE_TTL = 3600  # 1 hour
+
+
+def _tenant_scope_tuple(allowed_tenants: Iterable[str]) -> tuple[str, ...]:
+    """Normalize tenant scope for service token construction and cache keys."""
+    tenants: list[str] = []
+    seen: set[str] = set()
+    for tenant in allowed_tenants:
+        if not tenant or tenant in seen:
+            continue
+        tenants.append(tenant)
+        seen.add(tenant)
+    return tuple(tenants)
 
 
 def mint_service_token(
@@ -309,7 +395,8 @@ def mint_service_token(
         token_id: Stable identifier for audit (e.g. ``"worker-brain-service"``).
         permissions: Required permission strings.
         ttl_s: Token lifetime in seconds (default: 3600 = 1 hour).
-        allowed_tenants: Tenant restriction (empty = admin/all-tenant).
+        allowed_tenants: Tenant restriction. Empty grants no tenant access unless
+            ``permissions`` includes ``admin:all``.
 
     Returns:
         A valid, non-expired ContextToken.
@@ -325,19 +412,23 @@ def mint_service_token(
         )
         client = BrainClient(host=host, mode="grpc", token=token)
     """
+    tenants = _tenant_scope_tuple(allowed_tenants)
+    permission_tuple = tuple(permissions)
+    cache_key = (token_id, permission_tuple, tenants)
+
     with _service_token_lock:
-        cached = _service_token_cache.get(token_id)
+        cached = _service_token_cache.get(cache_key)
         if cached is not None and not cached.is_expired():
             return cached
 
         token = ContextToken(
             token_id=token_id,
-            permissions=tuple(permissions),
-            allowed_tenants=tuple(allowed_tenants),
-            exp_unix=time.time() + float(ttl_s),
+            permissions=permission_tuple,
+            allowed_tenants=tenants,
+            exp_unix=time.time() + ttl_s,
             provenance=(f"service:{token_id}",),
         )
-        _service_token_cache[token_id] = token
+        _service_token_cache[cache_key] = token
         return token
 
 
@@ -377,11 +468,14 @@ _BRAIN_PERMISSION_MAP: dict[str, tuple[str, ...]] = {
         Permissions.WORKER_EXECUTE,
         Permissions.ROUTER_EXECUTE,
     ),
-    "zero": (Permissions.TRACE_WRITE,),
 }
 
 
-def get_brain_service_token(caller: str) -> ContextToken:
+def get_brain_service_token(
+    caller: str,
+    *,
+    allowed_tenants: Iterable[str] = (),
+) -> ContextToken:
     """Return a cached service→Brain ContextToken with caller-appropriate permissions.
 
     Replaces per-service ``core/brain_token.py`` files. Each caller gets
@@ -389,7 +483,13 @@ def get_brain_service_token(caller: str) -> ContextToken:
 
     Args:
         caller: Service name (``"router"``, ``"worker"``, ``"view"``,
-                ``"commerce"``, ``"zero"``).
+                ``"commerce"``).
+        allowed_tenants: Explicit tenant scope for service-originated Brain
+            calls. Empty grants no tenant access unless the permission set has
+            ``admin:all``.
+
+    Raises:
+        ConfigurationError: If the `caller` service name is not recognized or not mapped to permissions.
 
     Example::
 
@@ -400,10 +500,13 @@ def get_brain_service_token(caller: str) -> ContextToken:
     """
     permissions = _BRAIN_PERMISSION_MAP.get(caller)
     if permissions is None:
-        raise ValueError(f"Unknown Brain service caller: {caller!r}. Known callers: {sorted(_BRAIN_PERMISSION_MAP)}")
+        raise ConfigurationError(
+            f"Unknown Brain service caller: {caller!r}. Known callers: {sorted(_BRAIN_PERMISSION_MAP)}"
+        )
     return mint_service_token(
         f"{caller}-brain-service",
         permissions=permissions,
+        allowed_tenants=allowed_tenants,
     )
 
 

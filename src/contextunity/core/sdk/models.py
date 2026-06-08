@@ -5,9 +5,9 @@ These are Pydantic models used for SDK operations.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
+from contextunity.core.types import JsonDict
 from pydantic import BaseModel, Field
 
 
@@ -17,7 +17,7 @@ class CotStep(BaseModel):
     agent: str
     action: str
     status: str = "pending"
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class SearchResult(BaseModel):
@@ -27,7 +27,7 @@ class SearchResult(BaseModel):
     content: str = ""
     score: float = 0.0
     source_type: str = ""
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: JsonDict = Field(default_factory=dict)
 
 
 class UnitMetrics(BaseModel):

@@ -1,38 +1,56 @@
 """ContextUnity Manifest — ArtifactGenerator.
-
 Projection Layer Builder: transforms a validated ContextUnityProject
 into runtime bundles for individual services (Router, Worker, etc.).
-
 Lives in Core because:
   - Zero Router dependencies (only uses contextunity.core.manifest models)
   - Project needs to compile bundles locally
   - Router receives ready bundles — doesn't need to compile
-
 Secret resolution is NOT done here — use ProjectBootstrapConfig.resolve_secrets()
 and pass the result via resolved_secrets parameter.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
 from contextunity.core.logging import get_contextunit_logger
+from contextunity.core.types import WireValue, is_object_dict, is_object_list
 
-from .models import ContextUnityProject
+from .helpers import parse_tool_ref
+from .models import ContextUnityProject, RouterRegistrationBundle, WorkerBindingsBundle
+from .tenants import apply_allowed_tenants_to_bundle, resolve_project_allowed_tenants, validate_tenant_subset
 
 logger = get_contextunit_logger(__name__)
+
+
+def _iter_bindings(value: str | list[str] | None):
+    """iter bindings.
+
+    Args:
+        value (str | list[str] | None): The value to store or update.
+    """
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, list):
+        for item in value:
+            yield item
 
 
 class ArtifactGenerator:
     """Compiles a ContextUnityProject manifest into service-specific bundles."""
 
+    manifest: ContextUnityProject
+
     def __init__(self, project_manifest: ContextUnityProject):
+        """Initialize the ArtifactGenerator with a validated ContextUnityProject manifest.
+
+        Args:
+            project_manifest (ContextUnityProject): The project manifest parameter.
+        """
         self.manifest = project_manifest
 
     def generate_router_registration_bundle(
         self,
         resolved_secrets: dict[str, str] | None = None,
-    ) -> dict[str, Any]:
+    ) -> RouterRegistrationBundle:
         """Create the Router registration bundle.
 
         Compiles declarative per-node manifest data (model, prompt_ref,
@@ -44,126 +62,155 @@ class ArtifactGenerator:
                 included in the bundle under "secrets" key.
 
         Returns:
-            dict with keys: project_id, tenant_id, graph, tools, policy[, secrets]
+            RouterRegistrationBundle: Compiled router registration payload.
         """
         router = self.manifest.router
         if not router:
-            return {}
+            return RouterRegistrationBundle()
 
-        # Start with any explicit config from the manifest
-        graph_config = dict(router.graph.config or {})
+        project_tenants = resolve_project_allowed_tenants(self.manifest.project)
 
-        if router.graph.nodes:
-            for node in router.graph.nodes:
-                node_name = node.name
+        graphs_dict: dict[str, WireValue] = {}
+        bundle_tools: dict[str, dict[str, WireValue]] = {}
+        for graph_key, graph_model in router.graph.items():
+            graph_config: dict[str, WireValue] = dict(graph_model.config or {})
+            graph_scope = project_tenants
+            if graph_model.allowed_tenants:
+                validate_tenant_subset(
+                    graph_model.allowed_tenants,
+                    project_scope=project_tenants,
+                    context=f"Graph '{graph_key}'",
+                )
+                graph_scope = graph_model.allowed_tenants
 
-                # PII masking — if ANY node enables it, graph gets pii_masking=True
-                if node.pii_masking:
-                    graph_config["pii_masking"] = True
+            node_tool_bindings: dict[str, dict[str, str]] = {}
+            graph_federated_tools: list[dict[str, WireValue]] = []
+            federated_tool_names: set[str] = set()
+            if graph_model.goal is not None:
+                graph_config["goal"] = graph_model.goal
+            if graph_model.persona is not None:
+                graph_config["persona"] = graph_model.persona
 
-                # Tool binding for tool nodes
-                if node.tool_binding:
-                    if "node_tool_bindings" not in graph_config:
-                        graph_config["node_tool_bindings"] = {}
-
-                    # Ensure node key exists
-                    if node_name not in graph_config["node_tool_bindings"]:
-                        graph_config["node_tool_bindings"][node_name] = {}
-
-                    bindings = node.tool_binding if isinstance(node.tool_binding, list) else [node.tool_binding]
-                    for binding in bindings:
-                        if ":" in binding:
-                            tool_name, mode = binding.split(":", 1)
-                        else:
-                            tool_name, mode = binding, "execute"  # default to execute if unspecified
-
-                        graph_config["node_tool_bindings"][node_name][tool_name] = mode
-
-        # If no model_key set explicitly, use default from policy
-        if "model_key" not in graph_config and router.policy and router.policy.ai_model_policy:
-            graph_config["model_key"] = router.policy.ai_model_policy.default_ai_model
-        if "fallback_keys" not in graph_config and router.policy and router.policy.ai_model_policy:
-            graph_config["fallback_keys"] = router.policy.ai_model_policy.fallback_ai_models or []
-
-        bundle: dict[str, Any] = {
-            "project_id": self.manifest.project.id,
-            "tenant_id": self.manifest.project.tenant,
-            "graph": {
-                "id": router.graph.id,
-                "template": router.graph.template,
-                "nodes": [n.model_dump(exclude_none=True) for n in router.graph.nodes] if router.graph.nodes else None,
-                "edges": [e.model_dump(by_alias=True, exclude_none=True) for e in router.graph.edges]
-                if router.graph.edges
-                else None,
-                "config_ref": router.graph.config_ref,
-                "config": graph_config,
-            },
-            "tools": [],
-            "policy": {
-                "allowed_tools": (router.policy.allowed_tools or [] if router.policy else []),
-                "ai_model_policy_ref": (router.policy.ai_model_policy_ref if router.policy else None),
-                "prompts_ref": (router.policy.prompts_ref if router.policy else None),
-                "langfuse_tracing_enabled": (
-                    router.policy.langfuse_tracing_enabled or False if router.policy else False
-                ),
-            },
-        }
-
-        # Pre-resolved secrets from config — caller decides Shield vs inline
-        if resolved_secrets:
-            bundle["secrets"] = dict(resolved_secrets)
-
-        # Resolve AiModelPolicy if defined inline
-        if router.policy and router.policy.ai_model_policy:
-            bundle["policy"]["ai_model_policy"] = router.policy.ai_model_policy.model_dump(exclude_none=True)
-
-        # Compile authorization policy from manifest
-        if router.policy and router.policy.authz:
-            bundle["policy"]["authz"] = router.policy.authz.model_dump(exclude_none=True)
-
-        # Flatten tools
-        if router.tools:
-            from contextunity.core.manifest.models import RouterTool, RouterToolGroup
-
-            for item in router.tools:
-                if isinstance(item, RouterToolGroup):
-                    for subtool in item.tools:
-                        bundle["tools"].append(
-                            self._dump_tool(
-                                subtool,
-                                group=item.group,
-                                source=item.source,
-                            )
+            if graph_model.nodes:
+                for node in graph_model.nodes:
+                    node_name = node.name
+                    if node.allowed_tenants:
+                        validate_tenant_subset(
+                            node.allowed_tenants,
+                            project_scope=graph_scope,
+                            context=f"Node '{node_name}' in graph '{graph_key}'",
                         )
-                elif isinstance(item, RouterTool):
-                    bundle["tools"].append(self._dump_tool(item))
 
-        return bundle
+                    # PII masking — if ANY node enables it, graph gets pii_masking=True
+                    if node.pii_masking:
+                        graph_config["pii_masking"] = True
 
-    def generate_worker_bindings(self) -> dict[str, Any]:
-        """Create Worker schedule/workflow bindings."""
-        worker = self.manifest.worker
-        if not worker or worker.mode == "disabled":
-            return {}
+                    # Tool binding for tool nodes. Bare bindings normalize to platform.
+                    # Only explicit federated:* bindings become project BiDi tools.
+                    if node.tool_binding:
+                        for binding in _iter_bindings(node.tool_binding):
+                            kind, tool_name = parse_tool_ref(binding)
+                            if kind == "federated" and tool_name:
+                                if node_name not in node_tool_bindings:
+                                    node_tool_bindings[node_name] = {}
+                                node_tool_bindings[node_name][tool_name] = "execute"
+                                federated_tool_names.add(tool_name)
 
-        return {
-            "mode": worker.mode,
-            "workflows": [wf.model_dump(exclude_none=True) for wf in (worker.workflows or [])],
-            "schedules": [sc.model_dump(exclude_none=True) for sc in (worker.schedules or [])],
-            "execution_policy": (
-                worker.execution_policy.model_dump(exclude_none=True) if worker.execution_policy else None
+                    if node.tools:
+                        for binding in node.tools:
+                            kind, tool_name = parse_tool_ref(binding)
+                            if kind == "federated" and tool_name:
+                                federated_tool_names.add(tool_name)
+
+            resolved_tools = graph_config.get("federated_tool_map")
+            if is_object_dict(resolved_tools):
+                for mapped_name in resolved_tools.values():
+                    if isinstance(mapped_name, str) and mapped_name:
+                        federated_tool_names.add(mapped_name)
+
+            for tool_name in sorted(federated_tool_names):
+                graph_federated_tools.append(
+                    {
+                        "name": tool_name,
+                        "type": "bidi",
+                        "description": f"Federated tool '{tool_name}' for graph '{graph_key}'",
+                        "config": {"graph_key": graph_key},
+                    }
+                )
+                existing = bundle_tools.get(tool_name)
+                graph_keys: list[str] = []
+                if existing is not None:
+                    cfg = existing.get("config")
+                    if is_object_dict(cfg):
+                        raw_keys = cfg.get("graph_keys")
+                        if is_object_list(raw_keys):
+                            for key_obj in raw_keys:
+                                if isinstance(key_obj, str):
+                                    graph_keys.append(key_obj)
+                if graph_key not in graph_keys:
+                    graph_keys.append(graph_key)
+                bundle_tools[tool_name] = {
+                    "name": tool_name,
+                    "type": "bidi",
+                    "description": f"Federated project tool: {tool_name}",
+                    "config": {"graph_keys": graph_keys},
+                }
+
+            # If no model_key set explicitly, use default from policy
+            if "model_key" not in graph_config and router.policy and router.policy.models:
+                graph_config["model_key"] = router.policy.models.llm.default
+            if "fallback_keys" not in graph_config and router.policy and router.policy.models:
+                graph_config["fallback_keys"] = router.policy.models.llm.fallback or []
+
+            if node_tool_bindings:
+                graph_config["node_tool_bindings"] = node_tool_bindings
+            if graph_federated_tools:
+                graph_config["federated_tools"] = graph_federated_tools
+
+            # Serialize via Pydantic — strict, no None leaks
+            entry = graph_model.model_dump(exclude_none=True, by_alias=True)
+            # Replace raw config with the enriched version (model_key, fallback, PII, bindings)
+            entry["config"] = graph_config
+
+            graphs_dict[graph_key] = entry
+
+        policy: dict[str, WireValue] = {
+            "allowed_tools": (router.policy.allowed_tools or [] if router.policy else []),
+            "models_ref": (router.policy.models_ref if router.policy else None),
+            "prompts_ref": (router.policy.prompts_ref if router.policy else None),
+            "langfuse": (
+                router.policy.langfuse.model_dump(exclude_none=True)
+                if router.policy and router.policy.langfuse
+                else None
             ),
         }
 
-    def _dump_tool(
-        self,
-        tool,
-        group: str | None = None,
-        source: str | None = None,
-    ) -> dict[str, Any]:
-        data = tool.model_dump(exclude_none=True)
-        if group:
-            data["group"] = group
-        if source:
-            data["source"] = source
-        return data
+        if router.policy and router.policy.models:
+            policy["models"] = router.policy.models.model_dump(exclude_none=True)
+
+        bundle = RouterRegistrationBundle(
+            project_id=self.manifest.project.id,
+            default_graph=router.default_graph,
+            graph=graphs_dict,
+            tools=sorted(bundle_tools.values(), key=lambda entry: str(entry.get("name", ""))),
+            services=self.manifest.services.model_dump(exclude_none=True),
+            policy=policy,
+            secrets=dict(resolved_secrets) if resolved_secrets else None,
+        )
+        apply_allowed_tenants_to_bundle(bundle, self.manifest.project)
+        return bundle
+
+    def generate_worker_bindings(self) -> WorkerBindingsBundle:
+        """Create Worker schedule/workflow bindings."""
+        worker = self.manifest.worker
+        if not worker or worker.mode == "disabled":
+            return WorkerBindingsBundle()
+
+        return WorkerBindingsBundle(
+            mode=worker.mode,
+            workflows=[wf.model_dump(exclude_none=True) for wf in (worker.workflows or [])],
+            schedules=[sc.model_dump(exclude_none=True) for sc in (worker.schedules or [])],
+            execution_policy=(
+                worker.execution_policy.model_dump(exclude_none=True) if worker.execution_policy else None
+            ),
+        )

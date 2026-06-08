@@ -1,18 +1,15 @@
 """Unified exception hierarchy for ContextUnity.
-
 All services inherit from ContextUnityError. This module provides:
 - Base exception hierarchy with stable error codes
 - ErrorRegistry for protocol mapping
-- gRPC error handler decorators (unary + streaming)
-
+gRPC error handler decorators live in ``grpc_errors.py`` (separate concern).
 Usage in services:
     from contextunity.core.exceptions import (
         ContextUnityError,
         ConfigurationError,
         SecurityError,
-        grpc_error_handler,
     )
-
+    from contextunity.core.grpc_errors import grpc_error_handler
 Services may define thin subclasses for service-specific errors:
     class ContextbrainError(ContextUnityError):
         pass
@@ -20,42 +17,50 @@ Services may define thin subclasses for service-specific errors:
 
 from __future__ import annotations
 
-import asyncio
-import functools
-from typing import Any, Callable, TypeVar, cast
+from typing import TypedDict, TypeVar
 
 from .logging import get_contextunit_logger
 
 __all__ = [
-    # Base hierarchy
+    # Base hierarchy (infrastructure — KEEP)
     "ContextUnityError",
+    "ErrorDetails",
     "ConfigurationError",
-    "RetrievalError",
-    "IntentDetectionError",
+    "ShieldDecryptionError",
     "ProviderError",
     "SecurityError",
     "TamperDetectedError",
-    "ConnectorError",
-    "ModelError",
-    "IngestionError",
-    "GraphBuilderError",
-    "TransformerError",
     "StorageError",
     "DatabaseConnectionError",
+    "PlatformServiceError",
+    # Infrastructure
+    "RedisNotAvailable",
+    "RedisConnectionError",
+    "ServiceStartupError",
     # Registry
     "ErrorRegistry",
     "error_registry",
     "register_error",
-    # gRPC helpers
-    "get_grpc_status_code",
-    "grpc_error_handler",
-    "grpc_stream_error_handler",
 ]
 
 logger = get_contextunit_logger(__name__)
 
-
 # ---- Exception Hierarchy ----------------------------------------------------
+
+
+class ErrorDetails(TypedDict, total=False):
+    """Well-known optional keys in ``ContextUnityError.details``.
+
+    ``details`` remains an open bag — callers may attach any diagnostic kwargs.
+    These names are documented for IDE hints and log/query conventions only.
+    """
+
+    path: str
+    service: str
+    tenant_id: str
+    rpc: str
+    project_id: str
+    cause: str
 
 
 class ContextUnityError(Exception):
@@ -64,13 +69,21 @@ class ContextUnityError(Exception):
     Attributes:
         code: Stable error code string for protocol mapping (e.g. "SECURITY_ERROR").
         message: Human-readable error description.
-        details: Additional context as keyword arguments.
+        details: Arbitrary diagnostic kwargs from ``**kwargs`` — not JSON-guaranteed.
     """
 
     code: str = "INTERNAL_ERROR"
     message: str = "An internal error occurred"
+    details: dict[str, object]  # arbitrary diagnostic kwargs — not JSON-guaranteed
 
-    def __init__(self, message: str | None = None, code: str | None = None, **kwargs: Any) -> None:
+    def __init__(self, message: str | None = None, code: str | None = None, **kwargs: object) -> None:
+        """Initialize a ContextUnity error.
+
+        Args:
+            message: Optional override for the default error message.
+            code: Optional override for the default error code.
+            **kwargs: Additional key-value pairs stored in `details` for context.
+        """
         self.message = message or self.message
         self.code = code or self.code
         self.details = kwargs
@@ -83,16 +96,10 @@ class ConfigurationError(ContextUnityError):
     code: str = "CONFIGURATION_ERROR"
 
 
-class RetrievalError(ContextUnityError):
-    """Retrieval pipeline failure."""
+class ShieldDecryptionError(ConfigurationError):
+    """Shield database decryption failed due to invalid master key or mismatched secrets."""
 
-    code: str = "RETRIEVAL_ERROR"
-
-
-class IntentDetectionError(ContextUnityError):
-    """Intent classification failure."""
-
-    code: str = "INTENT_ERROR"
+    code: str = "SHIELD_DECRYPTION_ERROR"
 
 
 class ProviderError(ContextUnityError):
@@ -113,36 +120,6 @@ class TamperDetectedError(SecurityError):
     code: str = "TAMPER_DETECTED"
 
 
-class ConnectorError(ContextUnityError):
-    """Data connector failure."""
-
-    code: str = "CONNECTOR_ERROR"
-
-
-class ModelError(ContextUnityError):
-    """LLM or Embedding model failure."""
-
-    code: str = "MODEL_ERROR"
-
-
-class IngestionError(ContextUnityError):
-    """Ingestion pipeline failure."""
-
-    code: str = "INGESTION_ERROR"
-
-
-class GraphBuilderError(ContextUnityError):
-    """Graph building failure."""
-
-    code: str = "GRAPH_BUILDER_ERROR"
-
-
-class TransformerError(ContextUnityError):
-    """Data transformation failure."""
-
-    code: str = "TRANSFORMER_ERROR"
-
-
 class StorageError(ProviderError):
     """Specific error for database or storage operations."""
 
@@ -155,240 +132,159 @@ class DatabaseConnectionError(StorageError):
     code: str = "DB_CONNECTION_ERROR"
 
 
+class PlatformServiceError(ContextUnityError):
+    """Platform service (Brain/Shield/Zero/Worker) call failure."""
+
+    code: str = "PLATFORM_SERVICE_ERROR"
+
+
+# ---- Infrastructure Exceptions ----------------------------------------------
+
+
+class RedisNotAvailable(ConfigurationError):
+    """Redis package is not installed in this environment.
+
+    Raised by discovery operations when ``redis`` is not importable.
+    Caught and degraded gracefully — never propagated to callers.
+    """
+
+    code: str = "REDIS_NOT_AVAILABLE"
+
+
+class RedisConnectionError(StorageError):
+    """Redis connection failure (timeout, TLS mismatch, auth error).
+
+    Raised by discovery and persistence layers when a Redis server
+    is configured but unreachable.  Includes the safe (masked) URL
+    and an automatic TLS hint when ``rediss://`` is used against
+    a non-TLS server.
+    """
+
+    code: str = "REDIS_CONNECTION_ERROR"
+
+    def __init__(self, cause: Exception, url: str | None = None, **kwargs: object) -> None:
+        """Initialize the Redis connection error with context.
+
+        Args:
+            cause: The underlying exception raised by the Redis client.
+            url: The attempted connection URL (sensitive parts are masked automatically).
+            **kwargs: Additional error context.
+        """
+        hint = ""
+        safe_url = ""
+        if url is not None:
+            safe_url = url.split("@")[-1]
+            if url.startswith("rediss://"):
+                hint = " (Hint: URL uses rediss:// (TLS) but server may not support TLS — try redis:// instead)"
+        message = f"{cause} at {safe_url}{hint}" if safe_url else str(cause)
+        super().__init__(message=message, cause=str(cause), safe_url=safe_url)
+        self.details.update(kwargs)
+        self.__cause__: BaseException | None = cause
+
+
+class ServiceStartupError(ConfigurationError):
+    """A service failed to start during local platform bootstrap.
+
+    Raised by ``LocalSupervisor`` when a gRPC factory or background
+    process fails to initialize.
+    """
+
+    code: str = "SERVICE_STARTUP_ERROR"
+
+
 # ---- Error Registry for Protocol Mapping ------------------------------------
 
-_E = TypeVar("_E", bound=type[ContextUnityError])
+_E = TypeVar("_E", bound=ContextUnityError)
 
 
 class ErrorRegistry:
-    """Registry for mapping internal errors to external protocol codes."""
+    """Registry for mapping internal error codes to concrete exception classes."""
 
-    def __init__(self) -> None:
-        self._errors: dict[str, type[ContextUnityError]] = {}
+    _registry: dict[str, type[ContextUnityError]] = {}
 
-    def register(self, code: str, error_cls: type[ContextUnityError]) -> None:
-        self._errors[code] = error_cls
+    @classmethod
+    def register(cls, code: str, error_class: type[ContextUnityError]) -> None:
+        """Register an error code mapping to an exception class.
 
-    def get(self, code: str) -> type[ContextUnityError] | None:
-        return self._errors.get(code)
+        Args:
+            code: The stable string error code identifier.
+            error_class: The exception class corresponding to the error code.
+        """
+        cls._registry[code] = error_class
 
-    def all(self) -> dict[str, type[ContextUnityError]]:
-        return dict(self._errors)
+    @classmethod
+    def get(cls, code: str) -> type[ContextUnityError] | None:
+        """Retrieve the exception class mapped to the given error code.
+
+        Args:
+            code: The string error code to look up.
+
+        Returns:
+            type[ContextUnityError] | None: The exception class, or None if the
+                code is not registered.
+        """
+        return cls._registry.get(code)
+
+    @classmethod
+    def from_code(cls, code: str, message: str = "", **details: object) -> ContextUnityError:
+        """Instantiate a ContextUnityError subclass using its registered error code.
+
+        Args:
+            code: The string error code identifying the target exception subclass.
+            message: The human-readable message for the exception instance.
+            **details: Additional keyword arguments stored in the exception's
+                details dictionary.
+
+        Returns:
+            ContextUnityError: An instance of the mapped exception class. If the
+                code is unregistered, defaults to a base ContextUnityError.
+        """
+        exc_class = cls._registry.get(code, ContextUnityError)
+        return exc_class(message=message, code=code, **details)
+
+    @classmethod
+    def all_codes(cls) -> list[str]:
+        """Get all registered error codes.
+
+        Returns:
+            list[str]: A list of all registered stable error code strings.
+        """
+        return list(cls._registry.keys())
 
 
-error_registry = ErrorRegistry()
+# Singleton for convenience
+error_registry = ErrorRegistry
 
 
-def register_error(code: str) -> Callable[[_E], _E]:
-    """Decorator to register a custom error type.
+class register_error:
+    """Class decorator that registers an exception subclass under a stable code.
 
-    Usage:
-        @register_error("MY_CUSTOM_ERROR")
-        class MyCustomError(ContextUnityError):
-            code = "MY_CUSTOM_ERROR"
+    Implements :class:`~contextunity.core.types.ErrorClassDecorator`.
     """
 
-    def decorator(cls: _E) -> _E:
-        error_registry.register(code, cls)
+    _code: str
+
+    def __init__(self, code: str) -> None:
+        """Bind the stable error code used for registry lookup."""
+        self._code = code
+
+    def __call__(self, cls: type[_E]) -> type[_E]:
+        """Register the decorated exception class with the ErrorRegistry."""
+        ErrorRegistry.register(self._code, cls)
         return cls
 
-    return cast(Callable[[_E], _E], decorator)
 
+# ---- Default Registrations --------------------------------------------------
 
-# Register base errors
-error_registry.register("INTERNAL_ERROR", ContextUnityError)
-error_registry.register("CONFIGURATION_ERROR", ConfigurationError)
-error_registry.register("RETRIEVAL_ERROR", RetrievalError)
-error_registry.register("INTENT_ERROR", IntentDetectionError)
-error_registry.register("PROVIDER_ERROR", ProviderError)
-error_registry.register("SECURITY_ERROR", SecurityError)
-error_registry.register("TAMPER_DETECTED", TamperDetectedError)
-error_registry.register("CONNECTOR_ERROR", ConnectorError)
-error_registry.register("MODEL_ERROR", ModelError)
-error_registry.register("INGESTION_ERROR", IngestionError)
-error_registry.register("GRAPH_BUILDER_ERROR", GraphBuilderError)
-error_registry.register("TRANSFORMER_ERROR", TransformerError)
-error_registry.register("STORAGE_ERROR", StorageError)
-error_registry.register("DB_CONNECTION_ERROR", DatabaseConnectionError)
-
-
-# ---- gRPC Error Handling Utilities ------------------------------------------
-
-
-def get_grpc_status_code(error: ContextUnityError) -> int:
-    """Map ContextUnityError to gRPC status code.
-
-    Returns grpc.StatusCode value for the given error type.
-    Import grpc locally to avoid hard dependency at module level.
-    """
-    import grpc
-
-    error_to_status = {
-        "UNAUTHENTICATED": grpc.StatusCode.UNAUTHENTICATED,
-        "PERMISSION_DENIED": grpc.StatusCode.PERMISSION_DENIED,
-        "CONFIGURATION_ERROR": grpc.StatusCode.FAILED_PRECONDITION,
-        "SECURITY_ERROR": grpc.StatusCode.PERMISSION_DENIED,
-        "TAMPER_DETECTED": grpc.StatusCode.ABORTED,
-        "RETRIEVAL_ERROR": grpc.StatusCode.NOT_FOUND,
-        "PROVIDER_ERROR": grpc.StatusCode.UNAVAILABLE,
-        "STORAGE_ERROR": grpc.StatusCode.UNAVAILABLE,
-        "DB_CONNECTION_ERROR": grpc.StatusCode.UNAVAILABLE,
-        "CONNECTOR_ERROR": grpc.StatusCode.UNAVAILABLE,
-        "MODEL_ERROR": grpc.StatusCode.INTERNAL,
-        "INGESTION_ERROR": grpc.StatusCode.INVALID_ARGUMENT,
-        "TRANSFORMER_ERROR": grpc.StatusCode.INVALID_ARGUMENT,
-        "GRAPH_BUILDER_ERROR": grpc.StatusCode.INTERNAL,
-        "INTENT_ERROR": grpc.StatusCode.INTERNAL,
-    }
-    return error_to_status.get(error.code, grpc.StatusCode.INTERNAL)
-
-
-def grpc_error_handler(method=None, *, response_factory=None):
-    """Decorator for unary gRPC service methods with proper error handling.
-
-    Catches ContextUnityError and sets appropriate gRPC status codes.
-    Logs errors and ensures consistent error response format.
-
-    Usage:
-        @grpc_error_handler
-        async def MyMethod(self, request, context):
-            ...
-    """
-    if method is None:
-        return functools.partial(grpc_error_handler, response_factory=response_factory)
-
-    @functools.wraps(method)
-    async def wrapper(self, request, context):
-        try:
-            return await method(self, request, context)
-        except asyncio.CancelledError:
-            logger.info("Request %s cancelled (client disconnected or server shutting down)", method.__name__)
-            raise
-        except ContextUnityError as e:
-            import grpc
-
-            status_code = get_grpc_status_code(e)
-            error_message = f"[{e.code}] {e.message}"
-
-            logger.error(
-                "%s failed: %s",
-                method.__name__,
-                error_message,
-                extra={
-                    "error_code": e.code,
-                    "error_details": e.details,
-                },
-            )
-
-            context.set_trailing_metadata([("error-code", e.code)])
-
-            if response_factory:
-                context.set_code(status_code)
-                context.set_details(error_message)
-                return response_factory(request, context, e)
-
-            await context.abort(status_code, error_message)
-            # Raise CancelledError to prevent Cython from proceeding to serialize None
-            raise asyncio.CancelledError("Aborted via ContextUnityError")
-
-        except Exception as e:
-            import grpc
-
-            if isinstance(e, ValueError):
-                status_code = grpc.StatusCode.INVALID_ARGUMENT
-                err_msg = str(e) or "Validation error"
-            elif isinstance(e, PermissionError):
-                status_code = grpc.StatusCode.PERMISSION_DENIED
-                err_msg = str(e) or "Permission denied"
-            else:
-                status_code = grpc.StatusCode.INTERNAL
-                err_msg = f"Unexpected {type(e).__name__}: {e}"
-
-            logger.exception("%s unexpected error: %s", method.__name__, e)
-
-            if response_factory:
-                context.set_code(status_code)
-                context.set_details(err_msg)
-                return response_factory(request, context, e)
-
-            await context.abort(status_code, err_msg)
-            raise asyncio.CancelledError("Aborted via Exception")
-
-    return wrapper
-
-
-def grpc_stream_error_handler(method=None, *, response_factory=None):
-    """Decorator for streaming gRPC service methods with proper error handling.
-
-    Works with async generator methods that use 'yield'.
-    Catches ContextUnityError and sets appropriate gRPC status codes.
-
-    Usage:
-        @grpc_stream_error_handler
-        async def MyStreamingMethod(self, request, context):
-            yield item1
-            yield item2
-    """
-    if method is None:
-        return functools.partial(grpc_stream_error_handler, response_factory=response_factory)
-
-    @functools.wraps(method)
-    async def wrapper(self, request, context):
-        try:
-            async for item in method(self, request, context):
-                yield item
-        except asyncio.CancelledError:
-            logger.info("Stream %s cancelled (client disconnected or server shutting down)", method.__name__)
-            raise
-        except ContextUnityError as e:
-            import grpc
-
-            status_code = get_grpc_status_code(e)
-            error_message = f"[{e.code}] {e.message}"
-
-            logger.error(
-                "%s failed: %s",
-                method.__name__,
-                error_message,
-                extra={
-                    "error_code": e.code,
-                    "error_details": e.details,
-                },
-            )
-
-            context.set_trailing_metadata([("error-code", e.code)])
-
-            if response_factory:
-                context.set_code(status_code)
-                context.set_details(error_message)
-                yield response_factory(request, context, e)
-                return
-
-            await context.abort(status_code, error_message)
-            raise asyncio.CancelledError("Aborted via ContextUnityError")
-
-        except Exception as e:
-            import grpc
-
-            if isinstance(e, ValueError):
-                status_code = grpc.StatusCode.INVALID_ARGUMENT
-                err_msg = str(e) or "Validation error"
-            elif isinstance(e, PermissionError):
-                status_code = grpc.StatusCode.PERMISSION_DENIED
-                err_msg = str(e) or "Permission denied"
-            else:
-                status_code = grpc.StatusCode.INTERNAL
-                err_msg = f"Unexpected {type(e).__name__}: {e}"
-
-            logger.exception("%s unexpected error: %s", method.__name__, e)
-
-            if response_factory:
-                context.set_code(status_code)
-                context.set_details(err_msg)
-                yield response_factory(request, context, e)
-                return
-
-            await context.abort(status_code, err_msg)
-            raise asyncio.CancelledError("Aborted via Exception")
-
-    return wrapper
+ErrorRegistry.register("INTERNAL_ERROR", ContextUnityError)
+ErrorRegistry.register("CONFIGURATION_ERROR", ConfigurationError)
+ErrorRegistry.register("SHIELD_DECRYPTION_ERROR", ShieldDecryptionError)
+ErrorRegistry.register("PROVIDER_ERROR", ProviderError)
+ErrorRegistry.register("SECURITY_ERROR", SecurityError)
+ErrorRegistry.register("TAMPER_DETECTED", TamperDetectedError)
+ErrorRegistry.register("STORAGE_ERROR", StorageError)
+ErrorRegistry.register("DB_CONNECTION_ERROR", DatabaseConnectionError)
+ErrorRegistry.register("PLATFORM_SERVICE_ERROR", PlatformServiceError)
+ErrorRegistry.register("REDIS_NOT_AVAILABLE", RedisNotAvailable)
+ErrorRegistry.register("REDIS_CONNECTION_ERROR", RedisConnectionError)
+ErrorRegistry.register("SERVICE_STARTUP_ERROR", ServiceStartupError)

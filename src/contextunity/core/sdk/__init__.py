@@ -10,11 +10,12 @@ from __future__ import annotations
 
 # Re-export all public API
 from .bootstrap import bootstrap_django, bootstrap_standalone, register_and_start
-from .clients import RouterClient, WorkerClient
+from .clients import RouterClient, ShieldClient, WorkerClient
 from .clients.brain import BrainClient
 from .contextunit import ContextUnit
 from .models import CotStep, SearchResult, SecurityScopes, UnitMetrics
 from .streaming import FederatedToolCallContext
+from .toolkit import FederatedToolkit, ToolConfig, ToolkitResolutionError, tool
 from .tools import ToolRegistry, federated_tool
 
 __all__ = [
@@ -28,6 +29,7 @@ __all__ = [
     # Clients
     "BrainClient",
     "RouterClient",
+    "ShieldClient",
     "WorkerClient",
     # Bootstrap
     "register_and_start",
@@ -36,4 +38,9 @@ __all__ = [
     # Tool decorator
     "federated_tool",
     "ToolRegistry",
+    # Toolkits
+    "FederatedToolkit",
+    "tool",
+    "ToolConfig",
+    "ToolkitResolutionError",
 ]

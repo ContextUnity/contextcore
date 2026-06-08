@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import queue
+from unittest.mock import patch
 
-from contextunity.core.sdk.streaming.bidi import FederatedToolCallContext, _handle_execute
+import pytest
+from contextunity.core.sdk.streaming.bidi import (
+    FederatedToolCallContext,
+    _create_stream_metadata,
+    _handle_execute,
+)
+from contextunity.core.tokens import ContextToken
 from google.protobuf.json_format import MessageToDict
 
 
@@ -46,3 +53,45 @@ class TestFederatedToolStream:
         assert payload["action"] == "result"
         assert payload["request_id"] == "req-123"
         assert payload["row_count"] == 1
+
+    def test_stream_metadata_uses_session_token_only_in_shield_mode(self):
+        from contextunity.core.signing import HmacBackend, SessionTokenBackend
+
+        token = ContextToken(token_id="nszu-executor", allowed_tenants=("nszu",))
+        backend = SessionTokenBackend(
+            project_id="nszu",
+            session_token="shield-session",
+            kid="nszu:session-001",
+            expires_at=9999999999,
+            shield_url="localhost:50054",
+            hmac_backend=HmacBackend("nszu", "bootstrap-secret"),
+        )
+
+        with patch(
+            "contextunity.core.signing._request_session_token",
+            return_value=("shield-stream-token", "nszu:session-001", 9999999999),
+        ):
+            metadata = _create_stream_metadata(token, backend)
+
+        assert metadata == (("authorization", "Bearer shield-stream-token"),)
+
+    def test_stream_metadata_keeps_hmac_token_in_open_source_mode(self):
+        from contextunity.core.signing import HmacBackend
+        from contextunity.core.token_utils import verify_token_string
+
+        token = ContextToken(token_id="nszu-executor", allowed_tenants=("nszu",))
+        backend = HmacBackend("nszu", "open-source-secret")
+
+        metadata = _create_stream_metadata(token, backend)
+
+        assert len(metadata) == 1
+        assert metadata[0][0] == "authorization"
+        assert metadata[0][1].startswith("Bearer ")
+        token_str = metadata[0][1][7:]
+        verified = verify_token_string(token_str, backend)
+        assert verified is not None
+        assert verified.token_id == "nszu-executor"
+        assert verified.allowed_tenants == ("nszu",)
+
+
+pytestmark = pytest.mark.unit

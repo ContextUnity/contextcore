@@ -32,6 +32,11 @@ class WorkerServiceStub(object):
     =====================================================
     All methods use ContextUnit as input/output.
     Workflow type and parameters are passed via payload.
+
+    SPOT: Tenant identity is carried by ``ContextToken`` metadata — never
+    by in-band payload. Legacy ``tenant_id`` fields in payloads are
+    accepted for backward compatibility but MUST match the token's
+    ``allowed_tenants`` or the request is rejected with PERMISSION_DENIED.
     =====================================================
 
     """
@@ -74,13 +79,18 @@ class WorkerServiceServicer(object):
     =====================================================
     All methods use ContextUnit as input/output.
     Workflow type and parameters are passed via payload.
+
+    SPOT: Tenant identity is carried by ``ContextToken`` metadata — never
+    by in-band payload. Legacy ``tenant_id`` fields in payloads are
+    accepted for backward compatibility but MUST match the token's
+    ``allowed_tenants`` or the request is rejected with PERMISSION_DENIED.
     =====================================================
 
     """
 
     def StartWorkflow(self, request, context):
         """Start a durable workflow process via Temporal
-        Request payload: {workflow_type, tenant_id, ...workflow-specific params}
+        Request payload: {workflow_type, ...workflow-specific params}
         Response payload: {workflow_id, run_id, status}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -107,7 +117,7 @@ class WorkerServiceServicer(object):
 
     def RegisterSchedules(self, request, context):
         """Register project schedules into Temporal
-        Request payload: {project_id, tenant_id, schedules: [...]}
+        Request payload: {project_id, schedules: [...]}
         Response payload: {status, registered_count}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -150,6 +160,11 @@ class WorkerService(object):
     =====================================================
     All methods use ContextUnit as input/output.
     Workflow type and parameters are passed via payload.
+
+    SPOT: Tenant identity is carried by ``ContextToken`` metadata — never
+    by in-band payload. Legacy ``tenant_id`` fields in payloads are
+    accepted for backward compatibility but MUST match the token's
+    ``allowed_tenants`` or the request is rejected with PERMISSION_DENIED.
     =====================================================
 
     """

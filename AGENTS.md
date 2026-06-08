@@ -1,172 +1,57 @@
-# ContextUnity Core — Agent Instructions
+# ContextCore — Agent Instructions
 
-Kernel: shared types (`ContextUnit`, `ContextToken`), gRPC contracts (Protobufs), signing backends, authorization engine, service SDKs, and centralized exceptions.
+Kernel package of the platform containing shared types (`ContextUnit`, `ContextToken`), gRPC contracts, signing backends, authorization engine, service SDKs, and exceptions.
 
-## Entry & Execution
-- **Workspace**: `packages/core/`
-- **Proto compilation**: `uv run python scripts/build_protos.py` (from monorepo root). NEVER edit `*_pb2.py` files.
-- **Tests**: `uv run --package contextunity-core pytest`
-- **Lint**: `uv run ruff check .`
+**Types & payloads (canonical):** [docs/architecture/type-boundaries.md](../../docs/architecture/type-boundaries.md)
+**Code quality:** [docs/architecture/code-quality.md](../../docs/architecture/code-quality.md)
+**Monorepo agent rules:** [AGENTS.md](../../AGENTS.md)
 
-## Code Standards
-You MUST adhere to [Code Standards](../../.agent/skills/code_standards/SKILL.md): 400-line limit, Pydantic strictness, `mise` sync, Ruff compliance.
+## Entry & verification
 
-## Architecture
+Run from monorepo root (`contextunity/`).
 
-```
-src/contextunity/core/
-├── manifest/                    # Declarative Layer
-│   ├── models.py                # ContextUnityProject (Pydantic schema)
-│   ├── generators.py            # ArtifactGenerator (manifest → bundles)
-│   └── examples/                # Canonical manifest examples
-│
-├── sdk/                         # Runtime Layer (clients + bootstrap)
-│   ├── bootstrap/               # Project bootstrap (package)
-│   │   ├── api.py               # bootstrap_standalone(), bootstrap_django()
-│   │   ├── client.py            # Client factory
-│   │   ├── helpers.py           # Bootstrap utilities
-│   │   ├── loop.py              # Event loop management
-│   │   └── manifest.py          # Manifest-driven bootstrap
-│   ├── clients/                 # Service clients
-│   │   ├── brain/               # BrainClient (modular)
-│   │   │   ├── base.py          # Connection, channel
-│   │   │   ├── knowledge.py     # Search, Upsert, GraphSearch, KG
-│   │   │   ├── commerce.py      # Commerce operations
-│   │   │   ├── memory.py        # Episodic + entity memory
-│   │   │   └── traces.py        # Agent execution traces
-│   │   ├── router.py            # RouterClient (gRPC)
-│   │   └── worker.py            # WorkerClient (gRPC)
-│   ├── streaming/               # BiDi streaming
-│   │   ├── bidi.py              # ToolExecutorStream transport
-│   │   └── heartbeat.py         # Stream heartbeat
-│   ├── config.py                # ProjectBootstrapConfig (validated env)
-│   ├── identity.py              # get_project_id(), get_tenant_id()
-│   ├── contextunit.py           # ContextUnit (Pydantic model)
-│   ├── models.py                # SecurityScopes, UnitMetrics, CotStep
-│   ├── prompt_integrity.py      # HMAC prompt signing/verification
-│   └── tools.py                 # @federated_tool decorator
-│
-├── authz/                       # Unified Authorization Engine
-│   ├── engine.py                # authorize(), AuthzDecision, VerifiedAuthContext
-│   ├── access_manager.py        # AccessManager
-│   ├── context.py               # AuthContext
-│   └── __init__.py              # get_auth_context(), set_auth_context()
-│
-├── security/                    # Security Infrastructure
-│   ├── interceptors.py          # ServicePermissionInterceptor (base)
-│   └── utils.py                 # Security helpers
-│
-├── permissions/                 # Permission Registry
-│   ├── constants.py             # Permissions class, NAMESPACE_PROFILES
-│   ├── inheritance.py           # PERMISSION_INHERITANCE, expand_permissions
-│   ├── access.py                # has_tool_access, has_graph_access, etc.
-│   ├── policy.py                # Permission policies
-│   └── validation.py            # Permission validation
-│
-├── token_utils/                 # Token utilities (package)
-│   ├── serialization.py         # serialize_token, parse_token_string
-│   ├── grpc.py                  # gRPC metadata extraction
-│   ├── http.py                  # HTTP header extraction
-│   ├── sdk.py                   # SDK token helpers
-│   └── public_key.py            # Public key utilities
-│
-├── tokens.py                    # ContextToken, TokenBuilder
-├── signing.py                   # SigningBackend, HmacBackend, SessionTokenBackend
-├── ed25519.py                   # Ed25519Backend
-├── config.py                    # SharedConfig, SharedSecurityConfig
-├── logging.py                   # setup_logging, get_contextunit_logger
-├── exceptions.py                # ContextUnityError hierarchy, ErrorRegistry
-├── discovery.py                 # Redis-based service registration
-├── grpc_utils.py                # Channel creation, TLS
-├── interfaces.py                # BaseTransformer ABCs
-│
-├── cli/                         # CLI tools
-│   ├── main.py                  # CLI entrypoint
-│   ├── mint.py                  # Key generation (hmac, shield, redis, rotate)
-│   └── validate.py              # Manifest validation
-│
-├── *_pb2.py                     # Generated: gRPC stubs (8 protos)
-└── *_pb2_grpc.py                # Generated: gRPC stubs
+| Task | Command |
+|------|---------|
+| Tests | `uv run pytest packages/core/tests -q --tb=short` |
+| Lint | `uv run ruff check packages/core/src packages/core/tests` |
+| Types (core — strict) | `uv run basedpyright packages/core/src --warnings` |
+| Monorepo gate | `uv run basedpyright --project pyrightconfig.json --warnings` |
+| Architecture | `uv run pytest tests/test_architecture_conformance.py -q` |
+| Runtime guards (§8.1) | `uv run pytest packages/core/tests/test_contract_boundaries.py packages/core/tests/test_security.py -q` |
 
-protos/
-├── brain.proto                  # BrainService (17 RPCs)
-├── commerce.proto               # CommerceService (8 RPCs)
-├── worker.proto                 # WorkerService (3 RPCs)
-├── router.proto                 # RouterService
-├── admin.proto                  # AdminService
-├── shield.proto                 # ShieldService
-├── zero.proto                   # ZeroService
-└── contextunit.proto            # Base ContextUnit definition
-```
+Workspace: `packages/core/` (`src/contextunity/core/`).
 
-## Strict Boundaries
-- **ZERO Business Logic**: Core is purely infrastructure. No project names, tenant IDs, or domain terms.
-- **Minimal Dependencies**: Only `grpcio`, `protobuf`, `pydantic`. Heavy deps (`kms`, `cryptography`) via lazy imports.
-- **Proto Stability**: Proto fields MUST be appended, never deleted or renumbered.
-- **Config-First**: All env vars through `SharedConfig`/`SharedSecurityConfig`. No `os.getenv()` outside config modules.
-- **Exception Hierarchy**: All exceptions extend `ContextUnityError`. Use `ErrorRegistry` for gRPC mapping.
-- **Import Pattern**: Services import from `contextunity.core`, never copy protos locally.
+## Always-On Invariants
 
-## gRPC Envelope
-ALL gRPC RPCs use `ContextUnit` as the universal message type:
-```protobuf
-rpc Search(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
-```
-Domain-specific data goes in `payload` dict. This unifies the protocol across all 8 services.
+1. **Pure Infrastructure (Zero Business Logic)**: Core must remain completely generic. Never reference specific project domains (e.g. nszu, traverse), tenant IDs, or product-specific schemas in code.
+2. **Strict Dependency Bound**: Heavy dependencies (e.g., encryption backends, KMS clients) must be loaded lazily to keep the core package load times minimal.
+3. **Protobuf Evolution Policy**: If you modify any `.proto` file in `protos/`, you MUST immediately run:
+   ```bash
+   uv run python scripts/build_protos.py
+   ```
+   Never modify generated `*_pb2.py` or `*_pb2_grpc.py` files directly.
+4. **Exception Hierarchy**: All exceptions must inherit from `ContextUnityError`. Map all gRPC endpoints to standard codes using the centralized `ErrorRegistry`.
+5. **Config Isolation**: All environment variables and settings must be accessed via centralized configs (`SharedConfig` or `SharedSecurityConfig`). No bare `os.getenv()` in logic files.
+6. **Token & Crypto Utilities**: No inline HMAC, signing, or encryption. Use `contextunity.core.token_utils` and the centralized signing backends.
+7. **Universal Envelope**: All gRPC RPC handlers must use `ContextUnit` as the universal envelope message. Domain-specific data resides in the `payload` dictionary.
+8. **Type layers**: L0–L4 per [type-boundaries.md](../../docs/architecture/type-boundaries.md). Services import from `contextunity.core.types` / `contextunity.core.sdk.types` — never redefine `JsonValue`, `ContextUnitPayload`, or parallel trees. **Narrowing:** L2 guards → `types.is_json_*`; L3 payload keys → `sdk.payload.get_*`; bare `object` → `contextunity.core.narrowing` (§4.5). No `cast`, `Any`, or `# type: ignore` on boundary fixes.
 
-## Authorization Engine
-Single `authorize()` function in `authz/engine.py`:
-```python
-from contextunity.core.authz import authorize, get_auth_context
-auth_ctx = get_auth_context()
-decision = authorize(auth_ctx, permission="brain:write", tenant_id="my_project")
-if decision.denied:
-    context.abort(grpc.StatusCode.PERMISSION_DENIED, decision.reason)
-```
+## Primary Skill Routing
 
-## Signing Backends
-Auto-detected during bootstrap — no configuration toggles:
-- `SessionTokenBackend` (Enterprise): `services.shield.enabled=true` + `CU_SHIELD_GRPC_URL`
-- `HmacBackend` (Open Source): `CU_PROJECT_SECRET` set
-- **No UnsignedBackend. No SECURITY_ENFORCEMENT. Security is always on.**
+Choose at most **1 primary skill** based on the target task:
 
-## Configuration
+| Trigger | Skill |
+|---------|-------|
+| `types.py`, `parsing.py`, SDK payloads, JSON/gRPC seams, `basedpyright` | **`contract-boundaries`** (primary) → **`type-validation`** |
+| `.proto` changes | `proto-change` |
+| Exceptions, registry, config schemas | `core-contract-change` (also read **`contract-boundaries`** for type touches) |
+| Security interceptors / Authz | `security-implementation` |
+| File add/move/delete | `mempalace-files-changed` |
 
-| Variable | Description |
-|----------|-------------|
-| `LOG_LEVEL` | Logging level (INFO default) |
-| `REDIS_URL` | Redis connection for discovery |
-| `CU_PROJECT_SECRET` | HMAC secret (Open Source) |
-| `CU_SHIELD_GRPC_URL` | Shield endpoint (Enterprise) |
-| `REDIS_SECRET_KEY` | Redis encryption key (`false` for dev) |
-| `OTEL_ENABLED` | OpenTelemetry toggle |
+## Workflow Routing (Slash Commands)
 
-## Golden Paths
-
-### Adding a Proto Field
-1. Edit `.proto` in `protos/` — ALWAYS append, never renumber
-2. Run `uv run python scripts/build_protos.py`
-3. `uv sync` in consuming services
-4. Update conformance tests
-
-### Adding a New Exception
-1. Create class extending `ContextUnityError` in `exceptions.py`
-2. Register in `ErrorRegistry` with gRPC status mapping
-3. Add to `__init__.py` public exports
-
-### Adding a Permission
-1. Add constant to `permissions/constants.py`
-2. If inheritable, add to `PERMISSION_INHERITANCE` in `inheritance.py`
-3. Update service `RPC_PERMISSION_MAP` where consumed
-4. Update conformance tests
-
-### Adding a CLI Command
-1. Create function in `cli/` using existing patterns
-2. Register in CLI entrypoint
-3. Document in `mise` task runner
-
-## Further Reading
-- [Astro Docs: ContextCore](../../docs/website/src/content/docs/core/)
-- [Core Skill](../../.agent/skills/contextcore/SKILL.md)
-- [Namespace Vigilance Skill](../../.agent/skills/namespace_vigilance/SKILL.md)
-- [Service Contracts Skill](../../.agent/skills/service_contracts/SKILL.md)
+| Command | Workflow |
+|---------|----------|
+| Contract boundaries | [/contract-boundaries](../../.agents/workflows/contract-boundaries.md) |
+| Documentation standards | [/documentation-standard](../../.agents/workflows/documentation-standard.md) |
+| gRPC Brain Client SDK | [/brain-sdk](../../.agents/workflows/brain-sdk.md) |

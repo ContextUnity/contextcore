@@ -26,27 +26,43 @@ def compute_prompt_version(prompt_text: str) -> str:
     Any change to the prompt text (even one character) produces a different
     version string, enabling zero-config automatic versioning in traces.
 
-    >>> compute_prompt_version("You are a helpful analyst.")
-    'e3b0c442'  # (example — actual hash will differ)
+    Args:
+        prompt_text: The prompt text to version.
+
+    Returns:
+        str: The content-addressable version (first 8 hex chars of SHA-256).
+
+    Example:
+        >>> compute_prompt_version("You are a helpful analyst.")
+        'e3b0c442'  # (example — actual hash will differ)
     """
     digest = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
     return digest[:8]
 
 
 def sign_prompt(prompt_text: str, backend: HmacBackend) -> str:
-    """Sign prompt text with the project's HMAC backend.
+    """Sign a SHA-256 digest of the prompt text with the project's HMAC backend.
+
+    Signs ``SHA-256(prompt)`` instead of the raw text to keep the serialized
+    signature compact (~120 bytes) regardless of prompt length.
+
+    Args:
+        prompt_text: The prompt text to sign.
+        backend: The HmacBackend used for signing.
 
     Returns:
-        Serialized SignedPayload string (``kid.payload_b64.signature_b64``).
+        str: Serialized SignedPayload string (``kid.hash_b64.signature_b64``).
     """
-    signed = backend.sign(prompt_text.encode("utf-8"))
+    digest = hashlib.sha256(prompt_text.encode("utf-8")).digest()
+    signed = backend.sign(digest)
     return signed.serialize()
 
 
 def verify_prompt(prompt_text: str, signature_str: str, backend: HmacBackend) -> bool:
     """Verify prompt integrity against a stored signature.
 
-    Performs constant-time HMAC comparison.
+    Hashes the prompt text with SHA-256, then performs constant-time HMAC
+    comparison against the stored digest.
 
     Args:
         prompt_text: The current prompt text to verify.
@@ -59,7 +75,8 @@ def verify_prompt(prompt_text: str, signature_str: str, backend: HmacBackend) ->
     payload_bytes = backend.verify(signature_str)
     if payload_bytes is None:
         return False
-    return payload_bytes == prompt_text.encode("utf-8")
+    digest = hashlib.sha256(prompt_text.encode("utf-8")).digest()
+    return payload_bytes == digest
 
 
 __all__ = [

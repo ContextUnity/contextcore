@@ -18,7 +18,7 @@ _sym_db = _symbol_database.Default()
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b"\n\x0crouter.proto\x12\x13\x63ontextunity.router\x1a\x11\x63ontextunit.proto2\x89\x04\n\rRouterService\x12N\n\x0c\x45xecuteAgent\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12O\n\x0bStreamAgent\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit0\x01\x12S\n\x11\x45xecuteDispatcher\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12T\n\x10StreamDispatcher\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit0\x01\x12R\n\x10RegisterManifest\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12X\n\x12ToolExecutorStream\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit(\x01\x30\x01\x62\x06proto3"
+    b"\n\x0crouter.proto\x12\x13\x63ontextunity.router\x1a\x11\x63ontextunit.proto2\xb3\x05\n\rRouterService\x12N\n\x0c\x45xecuteAgent\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12O\n\x0bStreamAgent\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit0\x01\x12S\n\x11\x45xecuteDispatcher\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12T\n\x10StreamDispatcher\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit0\x01\x12R\n\x10RegisterManifest\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12X\n\x12ToolExecutorStream\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit(\x01\x30\x01\x12M\n\x0b\x45xecuteNode\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12Y\n\x17IntrospectRegistrations\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnitb\x06proto3"
 )
 
 _globals = globals()
@@ -27,5 +27,5 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "router_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
     DESCRIPTOR._loaded_options = None
     _globals["_ROUTERSERVICE"]._serialized_start = 57
-    _globals["_ROUTERSERVICE"]._serialized_end = 578
+    _globals["_ROUTERSERVICE"]._serialized_end = 748
 # @@protoc_insertion_point(module_scope)

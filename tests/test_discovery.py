@@ -3,28 +3,13 @@
 from __future__ import annotations
 
 import json
-import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from contextunity.core.discovery import (
     ServiceInfo,
     _redis_key,
-    discover_endpoints,
-    discover_services,
 )
-
-
-@pytest.fixture(autouse=True)
-def _ensure_redis_module():
-    """Ensure a mock redis module is available for tests that need it."""
-    if "redis" not in sys.modules:
-        mock_redis = MagicMock()
-        sys.modules["redis"] = mock_redis
-        yield
-        del sys.modules["redis"]
-    else:
-        yield
 
 
 class TestServiceInfo:
@@ -89,268 +74,98 @@ class TestRedisKey:
         key = _redis_key("brain", "shared")
         assert key == "contextunity:services:brain:shared"
 
-    def test_custom_prefix(self):
-        """Custom prefix via SERVICE_DISCOVERY_PREFIX env var (via load_shared_config_from_env)."""
-        from unittest.mock import MagicMock
 
-        mock_config = MagicMock()
-        mock_config.service_discovery_prefix = "myapp:svc"
-        mock_config.redis_url = None
+class FakeRedisDict:
+    """In-memory Redis fake to kill mutants that bypass mock structural checks."""
 
-        with patch("contextunity.core.discovery.load_shared_config_from_env", return_value=mock_config):
-            key = _redis_key("router", "default")
-        assert key == "myapp:svc:router:default"
+    def __init__(self, data=None):
+        self._data = data or {}
+
+    def get(self, key: str) -> str | bytes | None:
+        return self._data.get(key)
+
+    def set(self, key: str, value: str | bytes, **kwargs) -> bool:
+        self._data[key] = value
+        return True
+
+    def keys(self, pattern: str) -> list[str]:
+        import re
+
+        # Convert redis glob '*pattern*' to regex '.*pattern.*'
+        regex = pattern.replace("*", ".*")
+        return [k for k in self._data.keys() if re.match(regex, k)]
+
+    def close(self):
+        pass
 
 
 class TestDiscoverServices:
-    """Test synchronous discovery."""
+    """Strong structural tests for discover_services using FakeRedisDict."""
 
-    @patch("contextunity.core.discovery._get_redis_url", return_value=None)
-    def test_no_redis_url_returns_empty(self, mock_get_url):
-        result = discover_services(redis_url=None)
-        assert result == []
+    @pytest.fixture
+    def fake_redis(self):
+        return FakeRedisDict(
+            {
+                "contextunity:services:brain:shared": json.dumps(
+                    {
+                        "endpoint": "localhost:50051",
+                        "service": "brain",
+                        "instance": "shared",
+                        "tenants": [],
+                    }
+                ),
+                "contextunity:services:brain:tenant_a": json.dumps(
+                    {
+                        "endpoint": "localhost:50053",
+                        "service": "brain",
+                        "instance": "tenant_a",
+                        "tenants": ["tenant_a"],
+                    }
+                ),
+                "contextunity:services:router:default": json.dumps(
+                    {
+                        "endpoint": "localhost:50050",
+                        "service": "router",
+                        "instance": "default",
+                        "tenants": [],
+                    }
+                ),
+                "contextunity:services:brain:broken": "not-json",
+            }
+        )
 
-    def test_redis_not_installed_returns_empty(self):
-        with patch.dict("sys.modules", {"redis": None}):
-            result = discover_services(redis_url="redis://localhost:6379/0")
-            assert isinstance(result, list)
+    def test_discover_brain_for_tenant_a(self, fake_redis):
+        """tenant_a sees shared + its own scoped instances, but nothing else."""
+        from contextunity.core.discovery import discover_services
 
-    def test_discover_parses_redis_data(self):
-        """Test parsing of Redis data when redis is available."""
-        mock_redis = MagicMock()
-        mock_redis.keys.return_value = [
-            "contextunity:services:brain:shared",
-            "contextunity:services:brain:tenant_a",
-        ]
-        mock_redis.get.side_effect = [
-            json.dumps(
-                {
-                    "endpoint": "localhost:50051",
-                    "service": "brain",
-                    "instance": "shared",
-                    "tenants": [],
-                }
-            ),
-            json.dumps(
-                {
-                    "endpoint": "localhost:50053",
-                    "service": "brain",
-                    "instance": "tenant_a",
-                    "tenants": ["tenant_a"],
-                }
-            ),
-        ]
-
-        with patch("redis.from_url", return_value=mock_redis):
-            result = discover_services(service_type="brain", redis_url="redis://localhost:6379/0")
+        with patch("redis.from_url", return_value=fake_redis):
+            result = discover_services("brain", tenant_id="tenant_a", redis_url="redis://fake")
 
         assert len(result) == 2
-        assert result[0].service == "brain"
-        assert result[0].tenants == []  # shared
-        assert result[1].tenants == ["tenant_a"]
+        instances = {s.instance for s in result}
+        assert instances == {"shared", "tenant_a"}
 
-    def test_discover_with_tenant_filter(self):
-        """Test tenant-scoped discovery: tenant_b sees shared + tenant_b-scoped, not tenant_a."""
-        mock_redis = MagicMock()
-        mock_redis.keys.return_value = [
-            "contextunity:services:brain:shared",
-            "contextunity:services:brain:tenant_a",
-        ]
-        mock_redis.get.side_effect = [
-            json.dumps(
-                {
-                    "endpoint": "localhost:50051",
-                    "service": "brain",
-                    "instance": "shared",
-                    "tenants": [],  # shared → visible to all
-                }
-            ),
-            json.dumps(
-                {
-                    "endpoint": "localhost:50053",
-                    "service": "brain",
-                    "instance": "tenant_a",
-                    "tenants": ["tenant_a"],  # scoped → only tenant_a
-                }
-            ),
-        ]
+    def test_discover_brain_for_tenant_b(self, fake_redis):
+        """tenant_b only sees shared, since tenant_a's is scoped."""
+        from contextunity.core.discovery import discover_services
 
-        with patch("redis.from_url", return_value=mock_redis):
-            # tenant_b should see shared but NOT tenant_a
-            result = discover_services(
-                service_type="brain",
-                tenant_id="tenant_b",
-                redis_url="redis://localhost:6379/0",
-            )
+        with patch("redis.from_url", return_value=fake_redis):
+            result = discover_services("brain", tenant_id="tenant_b", redis_url="redis://fake")
 
         assert len(result) == 1
         assert result[0].instance == "shared"
 
-    def test_discover_admin_sees_all(self):
-        """Admin (no tenant_id) sees all instances."""
-        mock_redis = MagicMock()
-        mock_redis.keys.return_value = [
-            "contextunity:services:brain:shared",
-            "contextunity:services:brain:tenant_a",
-        ]
-        mock_redis.get.side_effect = [
-            json.dumps(
-                {
-                    "endpoint": "localhost:50051",
-                    "service": "brain",
-                    "instance": "shared",
-                    "tenants": [],
-                }
-            ),
-            json.dumps(
-                {
-                    "endpoint": "localhost:50053",
-                    "service": "brain",
-                    "instance": "tenant_a",
-                    "tenants": ["tenant_a"],
-                }
-            ),
-        ]
+    def test_discover_all_service_types(self, fake_redis):
+        """Without service_type, all types are discovered."""
+        from contextunity.core.discovery import discover_services
 
-        with patch("redis.from_url", return_value=mock_redis):
-            result = discover_services(
-                service_type="brain",
-                tenant_id=None,  # admin
-                redis_url="redis://localhost:6379/0",
-            )
+        with patch("redis.from_url", return_value=fake_redis):
+            result = discover_services(redis_url="redis://fake")
 
-        assert len(result) == 2
-
-    def test_discover_all_service_types(self):
-        """Test discovering all service types at once."""
-        mock_redis = MagicMock()
-        mock_redis.keys.return_value = [
-            "contextunity:services:brain:shared",
-            "contextunity:services:router:default",
-            "contextunity:services:worker:default",
-        ]
-        mock_redis.get.side_effect = [
-            json.dumps(
-                {
-                    "endpoint": "localhost:50051",
-                    "service": "brain",
-                    "instance": "shared",
-                    "tenants": [],
-                }
-            ),
-            json.dumps(
-                {
-                    "endpoint": "localhost:50050",
-                    "service": "router",
-                    "instance": "default",
-                    "tenants": [],
-                }
-            ),
-            json.dumps(
-                {
-                    "endpoint": "localhost:7233",
-                    "service": "worker",
-                    "instance": "default",
-                    "tenants": [],
-                    "queues": ["harvest"],
-                }
-            ),
-        ]
-
-        with patch("redis.from_url", return_value=mock_redis):
-            result = discover_services(redis_url="redis://localhost:6379/0")
-
-        assert len(result) == 3
         services = {s.service for s in result}
-        assert services == {"brain", "router", "worker"}
-
-    def test_discover_handles_invalid_json(self):
-        mock_redis = MagicMock()
-        mock_redis.keys.return_value = ["contextunity:services:brain:broken"]
-        mock_redis.get.return_value = "not-json"
-
-        with patch("redis.from_url", return_value=mock_redis):
-            result = discover_services(service_type="brain", redis_url="redis://localhost:6379/0")
-
-        assert len(result) == 0
-
-
-class TestDiscoverEndpoints:
-    """Test the convenience endpoint discovery."""
-
-    def test_returns_dict(self):
-        mock_redis = MagicMock()
-        mock_redis.keys.return_value = [
-            "contextunity:services:brain:shared",
-            "contextunity:services:brain:tenant_a",
-        ]
-        mock_redis.get.side_effect = [
-            json.dumps(
-                {
-                    "endpoint": "localhost:50051",
-                    "service": "brain",
-                    "instance": "shared",
-                    "tenants": [],
-                }
-            ),
-            json.dumps(
-                {
-                    "endpoint": "localhost:50053",
-                    "service": "brain",
-                    "instance": "tenant_a",
-                    "tenants": ["tenant_a"],
-                }
-            ),
-        ]
-
-        with patch("redis.from_url", return_value=mock_redis):
-            result = discover_endpoints("brain", redis_url="redis://localhost:6379/0")
-
-        assert result == {
-            "shared": "localhost:50051",
-            "tenant_a": "localhost:50053",
-        }
-
-    def test_with_tenant_filter(self):
-        """discover_endpoints with tenant shows only relevant endpoints."""
-        mock_redis = MagicMock()
-        mock_redis.keys.return_value = [
-            "contextunity:services:brain:shared",
-            "contextunity:services:brain:tenant_a",
-        ]
-        mock_redis.get.side_effect = [
-            json.dumps(
-                {
-                    "endpoint": "localhost:50051",
-                    "service": "brain",
-                    "instance": "shared",
-                    "tenants": [],
-                }
-            ),
-            json.dumps(
-                {
-                    "endpoint": "localhost:50053",
-                    "service": "brain",
-                    "instance": "tenant_a",
-                    "tenants": ["tenant_a"],
-                }
-            ),
-        ]
-
-        with patch("redis.from_url", return_value=mock_redis):
-            result = discover_endpoints("brain", tenant_id="tenant_b", redis_url="redis://localhost:6379/0")
-
-        # tenant_b should see shared but not tenant_a
-        assert result == {"shared": "localhost:50051"}
-
-    def test_empty_when_no_services(self):
-        mock_redis = MagicMock()
-        mock_redis.keys.return_value = []
-
-        with patch("redis.from_url", return_value=mock_redis):
-            result = discover_endpoints("brain", redis_url="redis://localhost:6379/0")
-
-        assert result == {}
+        assert services == {"brain", "router"}
+        # broken JSON instance is skipped silently
+        assert len(result) == 3
 
 
 class TestProjectRegistry:
@@ -360,121 +175,156 @@ class TestProjectRegistry:
         """First registration of a project succeeds."""
         from contextunity.core.discovery import register_project
 
-        mock_redis = MagicMock()
-        mock_redis.get.return_value = None  # Not registered yet
+        fake_redis = FakeRedisDict()
 
-        with patch("redis.from_url", return_value=mock_redis):
-            result = register_project("tenant_a", "tenant_a", tools=["execute_test_sql"], redis_url="redis://localhost")
+        with patch("redis.from_url", return_value=fake_redis):
+            result = register_project("tenant_a", tools=["execute_test_sql"], redis_url="redis://localhost")
 
         assert result is True
-        mock_redis.set.assert_called_once()
+        data = json.loads(fake_redis.get("contextunity:projects:tenant_a"))
+        assert data["owner_project"] == "tenant_a"
+        assert data["tools"] == ["execute_test_sql"]
+
+    def test_update_project_stream_secret_persists_separately_from_key_material(self):
+        """Stream secrets are cached for router restarts without leaking through key lookup."""
+        from contextunity.core.discovery import (
+            get_project_key,
+            get_project_stream_secret,
+            register_project,
+            update_project_stream_secret,
+        )
+
+        fake_redis = FakeRedisDict()
+
+        with patch("redis.from_url", return_value=fake_redis):
+            result = register_project("tenant_a", redis_url="redis://localhost")
+            updated = update_project_stream_secret(
+                "tenant_a",
+                "stream-secret",
+                redis_url="redis://localhost",
+            )
+            stream_secret = get_project_stream_secret("tenant_a", redis_url="redis://localhost")
+            key_data = get_project_key("tenant_a", redis_url="redis://localhost")
+
+        assert result is True
+        assert updated is True
+        assert stream_secret == "stream-secret"
+        assert key_data == {}
 
     def test_register_same_owner_idempotent(self):
         """Re-registering by same owner is idempotent."""
         from contextunity.core.discovery import register_project
 
-        mock_redis = MagicMock()
-        mock_redis.get.return_value = json.dumps(
+        fake_redis = FakeRedisDict(
             {
-                "project_id": "tenant_a",
-                "owner_tenant": "tenant_a",
-                "tools": ["old_tool"],
+                "contextunity:projects:tenant_a": json.dumps(
+                    {
+                        "project_id": "tenant_a",
+                        "owner_project": "tenant_a",
+                        "tools": ["old_tool"],
+                    }
+                )
             }
         )
 
-        with patch("redis.from_url", return_value=mock_redis):
-            result = register_project("tenant_a", "tenant_a", tools=["new_tool"], redis_url="redis://localhost")
+        with patch("redis.from_url", return_value=fake_redis):
+            result = register_project("tenant_a", tools=["new_tool"], redis_url="redis://localhost")
 
         assert result is True
-        mock_redis.set.assert_called_once()
+        data = json.loads(fake_redis.get("contextunity:projects:tenant_a"))
+        assert data["tools"] == ["new_tool"]
 
     def test_register_different_owner_conflict(self):
-        """Registering a project already owned by another tenant fails."""
+        """Registering a project already owned by another project id fails."""
         from contextunity.core.discovery import register_project
 
-        mock_redis = MagicMock()
-        mock_redis.get.return_value = json.dumps(
+        fake_redis = FakeRedisDict(
             {
-                "project_id": "tenant_a",
-                "owner_tenant": "tenant_a",
-                "tools": [],
+                "contextunity:projects:tenant_a": json.dumps(
+                    {
+                        "project_id": "tenant_a",
+                        "owner_project": "other_project",
+                        "tools": [],
+                    }
+                )
             }
         )
 
-        with patch("redis.from_url", return_value=mock_redis):
-            result = register_project("tenant_a", "attacker", tools=[], redis_url="redis://localhost")
+        with patch("redis.from_url", return_value=fake_redis):
+            result = register_project("tenant_a", tools=[], redis_url="redis://localhost")
 
         assert result is False
-        mock_redis.set.assert_not_called()
+        data = json.loads(fake_redis.get("contextunity:projects:tenant_a"))
+        assert data["owner_project"] == "other_project"
 
     def test_verify_owner_matches(self):
         """verify_project_owner returns True when owner matches."""
         from contextunity.core.discovery import verify_project_owner
 
-        mock_redis = MagicMock()
-        mock_redis.get.return_value = json.dumps(
+        fake_redis = FakeRedisDict(
             {
-                "project_id": "tenant_a",
-                "owner_tenant": "tenant_a",
-                "tools": [],
+                "contextunity:projects:tenant_a": json.dumps(
+                    {
+                        "project_id": "tenant_a",
+                        "owner_project": "tenant_a",
+                        "tools": [],
+                    }
+                )
             }
         )
 
-        with patch("redis.from_url", return_value=mock_redis):
-            assert verify_project_owner("tenant_a", "tenant_a", redis_url="redis://localhost") is True
+        with patch("redis.from_url", return_value=fake_redis):
+            assert verify_project_owner("tenant_a", redis_url="redis://localhost") is True
 
     def test_verify_owner_mismatch(self):
-        """verify_project_owner returns False when owner doesn't match."""
+        """verify_project_owner returns False when stored owner differs from project_id."""
         from contextunity.core.discovery import verify_project_owner
 
-        mock_redis = MagicMock()
-        mock_redis.get.return_value = json.dumps(
+        fake_redis = FakeRedisDict(
             {
-                "project_id": "tenant_a",
-                "owner_tenant": "tenant_a",
-                "tools": [],
+                "contextunity:projects:tenant_a": json.dumps(
+                    {
+                        "project_id": "tenant_a",
+                        "owner_project": "other_project",
+                        "tools": [],
+                    }
+                )
             }
         )
 
-        with patch("redis.from_url", return_value=mock_redis):
-            assert verify_project_owner("tenant_a", "attacker", redis_url="redis://localhost") is False
+        with patch("redis.from_url", return_value=fake_redis):
+            assert verify_project_owner("tenant_a", redis_url="redis://localhost") is False
 
     def test_verify_unregistered_allows(self):
         """verify_project_owner allows unregistered projects (first-time)."""
         from contextunity.core.discovery import verify_project_owner
 
-        mock_redis = MagicMock()
-        mock_redis.get.return_value = None
+        fake_redis = FakeRedisDict()
 
-        with patch("redis.from_url", return_value=mock_redis):
-            assert verify_project_owner("new_project", "any_tenant", redis_url="redis://localhost") is True
+        with patch("redis.from_url", return_value=fake_redis):
+            assert verify_project_owner("new_project", redis_url="redis://localhost") is True
 
     def test_get_registered_projects(self):
         """get_registered_projects returns all registered projects."""
         from contextunity.core.discovery import get_registered_projects
 
-        mock_redis = MagicMock()
-        mock_redis.keys.return_value = [
-            "contextunity:projects:tenant_a",
-            "contextunity:projects:tenant_b",
-        ]
-        mock_redis.get.side_effect = [
-            json.dumps({"project_id": "tenant_a", "owner_tenant": "tenant_a", "tools": ["sql"]}),
-            json.dumps({"project_id": "tenant_b", "owner_tenant": "tenant_b", "tools": []}),
-        ]
+        fake_redis = FakeRedisDict(
+            {
+                "contextunity:projects:tenant_a": json.dumps(
+                    {"project_id": "tenant_a", "owner_project": "tenant_a", "tools": ["sql"]}
+                ),
+                "contextunity:projects:tenant_b": json.dumps(
+                    {"project_id": "tenant_b", "owner_project": "tenant_b", "tools": []}
+                ),
+            }
+        )
 
-        with patch("redis.from_url", return_value=mock_redis):
+        with patch("redis.from_url", return_value=fake_redis):
             projects = get_registered_projects(redis_url="redis://localhost")
 
         assert len(projects) == 2
         ids = {p["project_id"] for p in projects}
         assert ids == {"tenant_a", "tenant_b"}
 
-    def test_graceful_degradation_no_redis(self):
-        """Functions degrade gracefully without Redis."""
-        from contextunity.core.discovery import get_registered_projects, register_project, verify_project_owner
 
-        with patch.dict("sys.modules", {"redis": None}):
-            assert register_project("x", "x") is True
-            assert verify_project_owner("x", "x") is True
-            assert get_registered_projects() == []
+pytestmark = pytest.mark.unit

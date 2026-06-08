@@ -1,5 +1,4 @@
 """Tool scope and policy system for fine-grained tool access control.
-
 Provides:
 - ``ToolScope`` — operation granularity (read / write / admin).
 - ``ToolRisk`` — risk classification (safe / confirm / deny).
@@ -8,6 +7,8 @@ Provides:
 """
 
 from __future__ import annotations
+
+from typing import ClassVar, Final, override
 
 
 class ToolScope:
@@ -20,12 +21,11 @@ class ToolScope:
     Higher scope implies all lower scopes.
     """
 
-    READ = "read"  # Safe, no side effects (SELECT, ls, cat)
-    WRITE = "write"  # Modifications, reversible (INSERT/UPDATE, sed, mv)
-    ADMIN = "admin"  # Destructive, irreversible (DELETE/DROP, rm -rf, chmod)
+    READ: ClassVar[str] = "read"
+    WRITE: ClassVar[str] = "write"
+    ADMIN: ClassVar[str] = "admin"
 
-    # Hierarchy: higher scope implies lower scopes
-    HIERARCHY = ("read", "write", "admin")
+    HIERARCHY: ClassVar[tuple[str, ...]] = ("read", "write", "admin")
 
 
 class ToolRisk:
@@ -34,9 +34,9 @@ class ToolRisk:
     Determines what happens when an operation at a given scope is attempted.
     """
 
-    SAFE = "safe"  # Auto-execute without confirmation
-    CONFIRM = "confirm"  # Requires human-in-the-loop approval
-    DENY = "deny"  # Blocked entirely, even with permission
+    SAFE: ClassVar[str] = "safe"
+    CONFIRM: ClassVar[str] = "confirm"
+    DENY: ClassVar[str] = "deny"
 
 
 class ToolPolicy:
@@ -73,7 +73,11 @@ class ToolPolicy:
         )
     """
 
-    __slots__ = ("tool_name", "scope_risk", "denied_patterns")
+    __slots__: Final[tuple[str, ...]] = ("tool_name", "scope_risk", "denied_patterns")
+
+    tool_name: str
+    scope_risk: dict[str, str]
+    denied_patterns: tuple[str, ...]
 
     def __init__(
         self,
@@ -82,6 +86,15 @@ class ToolPolicy:
         scope_risk: dict[str, str] | None = None,
         denied_patterns: tuple[str, ...] = (),
     ) -> None:
+        """Initialize a new instance of ToolPolicy.
+
+        Args:
+            tool_name: Name of the tool this policy applies to.
+            scope_risk: Mapping of scope to risk level. Defaults to
+                read=safe, write=confirm, admin=deny.
+            denied_patterns: Optional tuple of regular expression patterns
+                that will trigger automatic denial.
+        """
         self.tool_name = tool_name
         self.scope_risk = scope_risk or {
             ToolScope.READ: ToolRisk.SAFE,
@@ -93,11 +106,21 @@ class ToolPolicy:
     def risk_for_scope(self, scope: str) -> str:
         """Get risk level for a given scope.
 
-        Returns :attr:`ToolRisk.DENY` if scope is unknown.
+        Args:
+            scope: The execution scope (e.g., "read", "write", "admin").
+
+        Returns:
+            str: The risk level (e.g., "safe", "confirm", "deny").
         """
         return self.scope_risk.get(scope, ToolRisk.DENY)
 
+    @override
     def __repr__(self) -> str:
+        """Return a string representation of the ToolPolicy instance.
+
+        Returns:
+            str: A string representing the ToolPolicy.
+        """
         return f"ToolPolicy(tool_name={self.tool_name!r}, scope_risk={self.scope_risk!r})"
 
 
@@ -131,7 +154,6 @@ DEFAULT_TOOL_POLICIES: dict[str, ToolPolicy] = {
         },
     ),
 }
-
 
 __all__ = [
     "DEFAULT_TOOL_POLICIES",

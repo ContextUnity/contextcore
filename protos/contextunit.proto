@@ -55,4 +55,5 @@ message ContextUnit {
     UnitMetrics metrics = 7;
     SecurityScopes security = 8;
     google.protobuf.Timestamp created_at = 9;
+    repeated string provenance = 10; // Data journey labels across services/tools
 }

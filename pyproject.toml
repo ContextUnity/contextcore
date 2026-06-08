@@ -1,6 +1,6 @@
 [project]
 name = "contextunity-core"
-version = "0.6.0"
+version = "0.8.0"
 description = "The Kernel of ContextUnity — shared type system, gRPC contracts, ContextUnit protocol, and security tokens for the entire service mesh"
 readme = "README.md"
 requires-python = "==3.13.*"
@@ -55,6 +55,13 @@ dev = [
     "ruff>=0.14.14",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.21.0",
+    "pytest-xdist>=3.8.0",
+    "pytest-testmon>=2.2.0",
+    "pytest-picked>=0.5.1",
+    "pytest-cov>=7.1.0",
+    "pytest-randomly>=4.1.0",
+    "pytest-timeout>=2.4.0",
+    "mypy-protobuf>=5.1.0",
 ]
 
 [tool.pytest.ini_options]
@@ -63,11 +70,17 @@ python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "-v",
+    "-q",
     "--strict-markers",
+    "--strict-config",
     "--tb=short",
 ]
 markers = [
-    "unit: Unit tests",
-    "integration: Integration tests",
+    "unit: fast isolated tests",
+    "integration: database/filesystem/network tests",
+    "e2e: full user/system flow tests",
+    "slow: slow tests",
+    "flaky: unstable tests that need investigation",
 ]
+
+

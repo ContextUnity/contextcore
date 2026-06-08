@@ -81,3 +81,24 @@ class TestSignAndVerify:
         text = "Ти — медичний аналітик для НСЗУ.\nАналізуй дані пацієнтів."
         sig = sign_prompt(text, backend)
         assert verify_prompt(text, sig, backend) is True
+
+    def test_signature_size_is_compact(self, backend):
+        """Signature size is fixed (~120 bytes) regardless of prompt length.
+
+        Signs SHA-256(prompt) instead of raw text, so a 5KB prompt doesn't
+        produce a 7KB base64 payload in the wire format.
+        """
+        short_prompt = "Short."
+        long_prompt = "x" * 10_000  # 10KB prompt
+
+        sig_short = sign_prompt(short_prompt, backend)
+        sig_long = sign_prompt(long_prompt, backend)
+
+        # Both should be approximately the same size (kid + hash_b64 + sig_b64)
+        assert abs(len(sig_short) - len(sig_long)) < 10
+        # And both should be compact (under 200 chars)
+        assert len(sig_short) < 200
+        assert len(sig_long) < 200
+
+
+pytestmark = pytest.mark.unit

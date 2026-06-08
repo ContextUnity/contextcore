@@ -1,165 +1,115 @@
 # ContextUnity Project Manifest — Golden Example
 #
-# This is the canonical reference for creating a new project manifest.
-# Copy this file and adapt it to your project.
+# Valid `contextunity/v1alpha6` reference. Copy to project root as `contextunity.project.yaml`.
 #
-# Minimal flow:
-#   1. Copy this file to your project root as `contextunity.project.yaml`
-#   2. Edit project.id, project.name, project.tenant
-#   3. Define your graph nodes (LLM + tool nodes)
-#   4. Implement your tools using @federated_tool (e.g. src/my_project/tools.py)
-#   5. Start your app — cu.core SDK handles everything via bootstrap_standalone() or bootstrap_django()
+# Flow:
+#   1. Set project.id / name / tenant
+#   2. Under router.graph.<graph_id>, define nodes + edges for inline topology,
+#      use template: yaml:<name> with overrides only, or builtin: dispatcher
+#   3. Register tools in Python with @federated_tool; reference them as federated:<tool_name>
+#   4. policy.models.llm + policy.langfuse declare model and observability secret *names* (env vars)
+#   5. bootstrap_standalone() / bootstrap_django() loads the manifest and registers with Router
 #
-# Docs: packages/core/cu.core-fulldoc.md
+# Validate locally:
+#   uv run python -c "import yaml; from contextunity.core.manifest import ContextUnityProject; ContextUnityProject.model_validate(yaml.safe_load(open('contextunity.project.yaml')))"
 
-apiVersion: "contextunity/v1alpha1"
+apiVersion: "contextunity/v1alpha6"
 kind: "ContextUnityProject"
 
 # ── Project Identity ─────────────────────────────────────────────
 project:
-  id: "my-project"            # Unique project ID (used as namespace in Router)
-  name: "My Project"          # Human-readable name
-  tenant: "my-project"        # Tenant ID for data isolation
+  id: "my-project"
+  name: "My Project"
+  tenant: "my-project"
 
-# ── Services Used ────────────────────────────────────────────────
-# Enable only the services your project needs.
-# Enabling a service means Router will integrate with it on your behalf.
-# No separate config section required — defaults are used unless overridden.
+# ── Services ─────────────────────────────────────────────────────
 services:
-  router: { enabled: true }   # Required: LLM orchestration
-  brain: { enabled: true }    # Traces, episodic memory, knowledge search
-  shield: { enabled: true }   # Secret management, compliance
-  zero: { enabled: true }     # PII anonymization (if pii_masking: true on any node)
+  router: { enabled: true }
+  brain: { enabled: true }
+  shield: { enabled: true }
 
-# ── Router Configuration ─────────────────────────────────────────
+# ── Router ─────────────────────────────────────────────────────
+# graph is a map: <graph_id> → RouterGraph. Inline graphs omit template/builtin.
 router:
+  default_graph: "my-project"
   graph:
-    id: "my-project"
-    mode: "template"           # Use a built-in graph template
-    template: "sql_analytics"  # Available: sql_analytics, gardener, dispatcher, rag_retrieval, news_engine
+    my-project:
+      nodes:
+        - name: "planner"
+          type: "llm"
+          model: "openai/gpt-5-mini"
+          model_secret_ref: "MY_PLANNER_API_KEY"
+          prompt_ref: "src/app/prompts.py::PLANNER_PROMPT"
+          pii_masking: true
 
-    # ── Graph Nodes ──────────────────────────────────────────────
-    # Each node is self-contained: model, prompt, PII — all declared here.
-    # The ArtifactGenerator compiles these into the flat config dict
-    # that the graph builder expects.
-    nodes:
-      - name: "planner"
-        type: "llm"
-        model: "openai/gpt-5-mini"                # Provider-qualified model ID
-        model_secret_ref: "MY_PLANNER_API_KEY"     # Env var with the API key
-        prompt_ref: "src/app/prompts.py::PLANNER_PROMPT"  # Python module::VARIABLE
-        pii_masking: true                          # Anonymize input, deanonymize output
+        - name: "tool_execution"
+          type: "tool"
+          tool_binding: "federated:my_sql_tool"
 
-      - name: "tool_execution"
-        type: "tool"
-        tool_binding: "my_sql_tool"                # Links to the tool defined below
+        - name: "research_agent"
+          type: "agent"
+          model: "openai/gpt-5-mini"
+          model_secret_ref: "MY_AGENT_API_KEY"
+          prompt_ref: "src/app/prompts.py::AGENT_PROMPT"
+          tools:
+            - "federated:my_sql_tool"
+          config:
+            tool_choice: "auto"
+            max_tool_calls: 5
 
-      - name: "verifier"
-        type: "llm"
-        model: "openai/gpt-5-mini"
-        model_secret_ref: "MY_VERIFIER_API_KEY"
-        prompt_ref: "src/app/prompts.py::VERIFIER_PROMPT"
-        pii_masking: true
+        - name: "verifier"
+          type: "llm"
+          model: "openai/gpt-5-mini"
+          model_secret_ref: "MY_VERIFIER_API_KEY"
+          prompt_ref: "src/app/prompts.py::VERIFIER_PROMPT"
+          pii_masking: true
 
-      - name: "visualizer"
-        type: "llm"
-        model: "openai/gpt-5-mini"
-        model_secret_ref: "MY_VISUALIZER_API_KEY"
-        prompt_ref: "src/app/prompts.py::VISUALIZER_PROMPT"
-        pii_masking: true
+        - name: "visualizer"
+          type: "llm"
+          model: "openai/gpt-5-mini"
+          model_secret_ref: "MY_VISUALIZER_API_KEY"
+          prompt_ref: "src/app/prompts.py::VISUALIZER_PROMPT"
+          pii_masking: true
 
-    # ── Graph Edges ──────────────────────────────────────────────
-    edges:
-      - from: "planner"
-        to: "tool_execution"
-      - from: "tool_execution"
-        to: "verifier"
-      - from: "verifier"
-        to: "visualizer"
-        condition: "success"
-      - from: "verifier"
-        to: "planner"
-        condition: "retry"
+      edges:
+        - from_node: "planner"
+          to_node: "tool_execution"
+        - from_node: "tool_execution"
+          to_node: "research_agent"
+        - from_node: "research_agent"
+          to_node: "verifier"
+        - from_node: "verifier"
+          condition_key: "status"
+          condition_map:
+            "success": "visualizer"
+            "retry": "planner"
 
-    # ── Graph Config (flat key-values) ───────────────────────────
-    config:
-      max_retries: 2
-
-  # ── Tools ────────────────────────────────────────────────────────
-  # Tools that the graph uses. Federated tools run on the PROJECT side
-  # (your code), not on Router. Router sends requests over BiDi gRPC stream.
-  tools:
-    - name: "my_sql_tool"
-      type: "sql"
-      execution: "federated"                       # Runs in your process
       config:
-        read_only: true
-        max_rows: 500
-        statement_timeout_ms: 5000
+        max_retries: 2
 
-  # ── Policy ───────────────────────────────────────────────────────
   policy:
-    ai_model_policy:
-      default_ai_model: "openai/gpt-5-mini"        # Fallback for nodes without explicit model
-      fallback_ai_models:                           # Retry chain on model failure
-        - "anthropic/claude-3-5-sonnet-20241022"
-    langfuse_tracing_enabled: true                           # Write traces to Brain
+    models:
+      llm:
+        default: "openai/gpt-5-mini"
+        secret_ref: "MY_DEFAULT_MODEL_KEY"
+    langfuse:
+      tracing_enabled: false
+      # When enabling Langfuse, set tracing_enabled: true and env var *names*:
+      # public_key_ref: LANGFUSE_PUBLIC_KEY
+      # secret_key_ref: LANGFUSE_SECRET_KEY
+      # host_ref: LANGFUSE_HOST
 
-# ── Secrets ──────────────────────────────────────────────────────
-# Declare env vars the project needs. Grouped by owner.
-# model_secret_ref keys are NOT listed here — they're already on nodes.
-secrets:
-  - owner: "project"         # Owned by this project
-    resolver: "env"          # Read from os.environ (populated from .env / gopass / CI secrets)
-    keys: ["DATABASE_URL"]
+# ── Secrets (optional) ───────────────────────────────────────────
+# Listed keys are read from os.environ during bootstrap and may be synced to Shield.
+# Runtime use still requires ContextToken scopes / path attenuation — listing alone does not grant access.
+# secrets:
+#   - owner: "contextunity"
+#     resolver: "env"
+#     keys: ["SOME_EXTRA_PLATFORM_KEY"]
 
 # ═══════════════════════════════════════════════════════════════════
-# API Key Secret Flow — Shield ON vs OFF
+# Shield: bootstrap resolves model_secret_ref, policy.langfuse refs,
+# and manifest.secrets from the project env and may PutSecret to Shield
+# when services.shield.enabled is true. Inline bundle secrets when Shield
+# is disabled (dev only). Runtime reads still require token scopes.
 # ═══════════════════════════════════════════════════════════════════
-#
-# model_secret_ref (e.g. MY_PLANNER_API_KEY) declares which env var
-# holds the LLM provider API key. The SDK bootstrap resolves these
-# from the PROJECT's os.environ and handles them based on Shield
-# status declared in the manifest (services.shield.enabled).
-#
-# ── Shield ON (production) ──────────────────────────────────────
-#   services:
-#     shield: { enabled: true }
-#
-#   Flow:
-#     1. SDK reads MY_PLANNER_API_KEY from project's os.environ
-#     2. ArtifactGenerator maps it to provider: "openai" → "sk-..."
-#     3. SDK calls Shield PutSecret: path = "{tenant}/api_keys/openai"
-#     4. Bundle sent to Router WITHOUT secrets (secure)
-#     5. At LLM call time: create_llm(tenant_id="my-project")
-#        → Shield GetSecret("my-project/api_keys/openai") → API key
-#
-#   ✅ Secrets stored securely in Shield vault
-#   ✅ Router never sees API keys
-#   ✅ Audit trail in Shield
-#   🚨 If Shield sync FAILS → CRITICAL error, bootstrap ABORTS
-#      (no silent fallback — secrets must reach Shield)
-#
-# ── Shield OFF (dev/staging/open-source) ────────────────────────
-#   services:
-#     shield: { enabled: false }
-#
-#   Flow:
-#     1. SDK reads MY_PLANNER_API_KEY from project's os.environ
-#     2. ArtifactGenerator maps it to provider: "openai" → "sk-..."
-#     3. Secrets included inline in registration bundle
-#     4. Bundle sent to Router WITH secrets (⚠️ WARNING emitted)
-#     5. Router stores per-tenant in memory: _project_secrets["my-project"]["openai"]
-#     6. At LLM call time: create_llm(tenant_id="my-project")
-#        → in-memory _project_secrets → API key
-#
-#   ⚠️ WARNING: secrets in Router memory (acceptable for dev/open-source)
-#   ⚠️ No audit trail
-#   ✅ Works without Shield infrastructure
-#
-# ── Single-Tenant (Router owns keys) ───────────────────────────
-#   If Router has API keys in its own .env (CU_ROUTER_OPENAI_KEY),
-#   model_secret_ref is not needed. Router uses its own config:
-#     config.openai.api_key directly.
-#   This is the simplest setup for single-project deployments.
-

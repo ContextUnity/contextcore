@@ -4,6 +4,7 @@ Unified CLI for administrative, security, and validation tasks.
 """
 
 import sys
+from typing import Annotated
 
 import typer
 
@@ -45,26 +46,49 @@ def mint_redis():
 
 
 @app.command("rotate")
-def mint_rotate(project_id: str, redis_url: str = typer.Option("", help="Redis connection URL")):
-    """Rotate the active key for a project in Redis (admin operation)."""
-    _mint_rotate(project_id, redis_url)
+def mint_rotate(
+    project_id: str,
+    redis_url: Annotated[str | None, typer.Option(help="Redis connection URL")] = None,
+):
+    """Rotate the active key for a project in Redis (admin operation).
+
+    Args:
+        project_id (str): The identifier of the project.
+        redis_url (str): The redis url parameter.
+    """
+    _mint_rotate(project_id, redis_url or "")
 
 
 @app.command("rotate-redis-key")
-def mint_rotate_redis_key(redis_url: str = typer.Option("", help="Redis connection URL")):
-    """Re-encrypt the Redis DB with a new REDIS_SECRET_KEY."""
-    _mint_rotate_redis_key(redis_url)
+def mint_rotate_redis_key(
+    redis_url: Annotated[str | None, typer.Option(help="Redis connection URL")] = None,
+):
+    """Re-encrypt the Redis DB with a new REDIS_SECRET_KEY.
+
+    Args:
+        redis_url (str): The redis url parameter.
+    """
+    _mint_rotate_redis_key(redis_url or "")
 
 
 @app.command("validate")
 def validate_manifest(manifest_path: str):
-    """Validate a contextunity.project.yaml File against the core Pydantic schemas."""
+    """Validate a contextunity.project.yaml File against the core Pydantic schemas.
+
+    Args:
+        manifest_path (str): The manifest path parameter.
+    """
     # validate.main takes sys.argv, so we'll just mock it
     sys.argv = ["contextcore validate", manifest_path]
     sys.exit(validate_main())
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Entry point for the contextunity-core CLI application.
+
+    Args:
+        argv (list[str] | None): The argv parameter.
+    """
     if argv is not None:
         sys.argv = [sys.argv[0]] + argv
     app()

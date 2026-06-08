@@ -18,36 +18,6 @@ service ShieldService {
     // Response payload: {allowed, blocked, threats: [...], risk_score, severity, latency_ms}
     rpc Scan(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
-    // Evaluate policy engine for authorization decision
-    // Request payload: {token_id, permissions, tenant_id, operation, resource, context?: {...}}
-    // Response payload: {allowed, reason, matched_policy, evaluation_ms}
-    rpc EvaluatePolicy(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
-
-    // Run compliance posture check
-    // Request payload: {standards?: ["soc2","gdpr","hipaa","pci_dss"]}
-    // Response payload: {passed, score, findings: [...], summary}
-    rpc CheckCompliance(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
-
-    // Record a security audit event
-    // Request payload: {event_type, description, actor?, tenant?, metadata?: {...}}
-    // Response payload: {recorded: true, event_id}
-    rpc RecordAudit(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
-
-    // Mint a new ContextToken
-    // Request payload: {permissions: [...], tenant_ids?: [...], ttl_s, user_ctx?: {...}}
-    // Response payload: {token_id, permissions, allowed_tenants, exp_unix, revocation_id}
-    rpc MintToken(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
-
-    // Verify a ContextToken has the required permission
-    // Request payload: {token_id, required_permission, tenant_id?}
-    // Response payload: {valid, reason?}
-    rpc VerifyToken(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
-
-    // Revoke a token immediately
-    // Request payload: {revocation_id}
-    // Response payload: {revoked: true}
-    rpc RevokeToken(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
-
     // Get service health and statistics
     // Request payload: {}
     // Response payload: {active_tokens, policies_loaded, audit_events_total, ...}

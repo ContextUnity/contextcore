@@ -27,59 +27,63 @@ class Permissions:
     """
 
     # ── Service Access ──────────────────────────────────
-    ROUTER_EXECUTE = "router:execute"
-    BRAIN_READ = "brain:read"
-    BRAIN_WRITE = "brain:write"
-    SHIELD_CHECK = "shield:check"
-    SHIELD_SESSION_TOKEN_ISSUE = "shield:session_token:issue"
-    SHIELD_PROJECT_KEY_READ = "shield:project_key:read"
-    SHIELD_PROJECT_KEY_ROTATE = "shield:project_key:rotate"
-    SHIELD_POLICY_WRITE = "shield:policy:write"
-    SHIELD_SECRETS_READ = "shield:secrets:read"
-    SHIELD_SECRETS_WRITE = "shield:secrets:write"
-    ZERO_ALL = "zero:*"  # Wildcard — access to all Zero operations
-    ZERO_ANONYMIZE = "zero:anonymize"
-    ZERO_DEANONYMIZE = "zero:deanonymize"
-    ZERO_CHECK_PII = "zero:check_pii"
-    ZERO_AUDIT = "zero:audit"
-    WORKER_SCHEDULE = "worker:schedule"
-    WORKER_EXECUTE = "worker:execute"
-    WORKER_READ = "worker:read"
+    ROUTER_EXECUTE: str = "router:execute"
+    ROUTER_EXECUTE_NODE: str = "router:execute_node"
+    ROUTER_INTROSPECT: str = "router:introspect"
+    BRAIN_READ: str = "brain:read"
+    BRAIN_WRITE: str = "brain:write"
+    SHIELD_CHECK: str = "shield:check"
+    SHIELD_SESSION_TOKEN_ISSUE: str = "shield:session_token:issue"
+    SHIELD_PROJECT_KEY_READ: str = "shield:project_key:read"
+    SHIELD_PROJECT_KEY_ROTATE: str = "shield:project_key:rotate"
+    SHIELD_POLICY_WRITE: str = "shield:policy:write"
+    SHIELD_SECRETS_READ: str = "shield:secrets:read"
+    SHIELD_SECRETS_WRITE: str = "shield:secrets:write"
+    # Privacy is in-Router. ``secure_node`` attenuates request tokens down to
+    # these scopes when manifest nodes enable PII masking.
+    PRIVACY_ALL: str = "privacy:*"
+    PRIVACY_ANONYMIZE: str = "privacy:anonymize"
+    PRIVACY_DEANONYMIZE: str = "privacy:deanonymize"
+    PRIVACY_CHECK_PII: str = "privacy:check_pii"
+    PRIVACY_AUDIT: str = "privacy:audit"
+    WORKER_SCHEDULE: str = "worker:schedule"
+    WORKER_EXECUTE: str = "worker:execute"
+    WORKER_READ: str = "worker:read"
 
     # ── Graph Access ────────────────────────────────────
-    GRAPH_RAG = "graph:rag"
-    GRAPH_COMMERCE = "graph:commerce"
-    GRAPH_NEWS = "graph:news"
-    GRAPH_MEDICAL = "graph:medical"
-    GRAPH_DISPATCHER = "graph:dispatcher"
-    GRAPH_ALL = "graph:*"  # Wildcard — access to all graphs
+    GRAPH_RAG: str = "graph:rag"
+    GRAPH_COMMERCE: str = "graph:commerce"
+    GRAPH_NEWS: str = "graph:news"
+    GRAPH_MEDICAL: str = "graph:medical"
+    GRAPH_DISPATCHER: str = "graph:dispatcher"
+    GRAPH_ALL: str = "graph:*"  # Wildcard — access to all graphs
 
     # ── Memory & Trace ──────────────────────────────────
-    MEMORY_READ = "memory:read"
-    MEMORY_WRITE = "memory:write"
-    TRACE_WRITE = "trace:write"
-    TRACE_READ = "trace:read"
+    MEMORY_READ: str = "memory:read"
+    MEMORY_WRITE: str = "memory:write"
+    TRACE_WRITE: str = "trace:write"
+    TRACE_READ: str = "trace:read"
 
     # ── Tool Access ─────────────────────────────────────
     # Common categories (shortcuts for well-known tools)
-    TOOL_BRAIN_SEARCH = "tool:brain_search"
-    TOOL_WEB_SEARCH = "tool:web_search"
-    TOOL_MEMORY = "tool:memory"
-    TOOL_SQL = "tool:sql"
-    TOOL_FILE = "tool:file"
-    TOOL_API = "tool:api"
-    TOOL_ALL = "tool:*"  # Wildcard — access to all tools
+    TOOL_BRAIN_SEARCH: str = "tool:brain_search"
+    TOOL_WEB_SEARCH: str = "tool:web_search"
+    TOOL_MEMORY: str = "tool:memory"
+    TOOL_SQL: str = "tool:sql"
+    TOOL_FILE: str = "tool:file"
+    TOOL_API: str = "tool:api"
+    TOOL_ALL: str = "tool:*"  # Wildcard — access to all tools
 
     # ── Registration ────────────────────────────────────
-    TOOLS_REGISTER = "tools:register"  # Generic — register for ANY project
+    TOOLS_REGISTER: str = "tools:register"  # Generic — register for ANY project
     # Use Permissions.register(project_id) for project-specific:
     #   "tools:register:nszu" — register only for 'nszu' project
 
     # ── Admin ───────────────────────────────────────────
-    ADMIN_READ = "admin:read"
-    ADMIN_WRITE = "admin:write"
-    ADMIN_TRACE = "admin:trace"
-    ADMIN_ALL = "admin:all"
+    ADMIN_READ: str = "admin:read"
+    ADMIN_WRITE: str = "admin:write"
+    ADMIN_TRACE: str = "admin:trace"
+    ADMIN_ALL: str = "admin:all"
 
     # ── Builders ────────────────────────────────────────
 
@@ -89,34 +93,23 @@ class Permissions:
 
         Args:
             name: Exact tool name as registered in discover_all_tools().
-                  Examples: "brain_search", "shield_scan", "execute_sql"
+                Examples: "brain_search", "shield_scan", "execute_sql"
             scope: Optional operation scope within the tool.
-                   Use :class:`ToolScope` constants: ``"read"``, ``"write"``, ``"admin"``.
-                   If None, grants full access to all scopes of that tool.
+                Use :class:`ToolScope` constants: ``"read"``, ``"write"``, ``"admin"``.
+                If None, grants full access to all scopes of that tool.
 
         Returns:
-            Permission string:
-            - ``"tool:sql"``        — full access (all scopes)
-            - ``"tool:sql:read"``   — read-only scope
-            - ``"tool:sql:write"``  — write scope (includes read)
-            - ``"tool:sql:admin"``  — admin scope (destructive ops)
+            str: Permission string:
+                - ``"tool:sql"``        — full access (all scopes)
+                - ``"tool:sql:read"``   — read-only scope
+                - ``"tool:sql:write"``  — write scope (includes read)
+                - ``"tool:sql:admin"``  — admin scope (destructive ops)
 
-        Example::
-
-            # Full access to a tool
-            Permissions.tool("sql")            # "tool:sql"
-
-            # Scoped access
-            Permissions.tool("sql", "read")    # "tool:sql:read"  — SELECT only
-            Permissions.tool("sql", "write")   # "tool:sql:write" — + INSERT/UPDATE
-            Permissions.tool("sql", "admin")   # "tool:sql:admin" — + DELETE/DROP
-
-            # In token minting
-            builder.mint_root(permissions=[
-                Permissions.tool("sql", "read"),      # SELECT only
-                Permissions.tool("brain_search"),      # full access
-                Permissions.tool("execute_cmd", "read"),# ls, cat only
-            ])
+        Examples:
+            >>> Permissions.tool("sql")
+            'tool:sql'
+            >>> Permissions.tool("sql", "read")
+            'tool:sql:read'
         """
         if scope:
             return f"tool:{name}:{scope}"
@@ -128,17 +121,14 @@ class Permissions:
 
         Args:
             name: Graph key as registered in graph_registry.
-                  Examples: "rag_retrieval", "commerce_search", "dispatcher_agent"
+                Examples: "rag_retrieval", "commerce_search", "dispatcher_agent"
 
         Returns:
-            Permission string like ``"graph:rag_retrieval"``
+            str: Permission string like ``"graph:rag_retrieval"``.
 
-        Example::
-
-            builder.mint_root(permissions=[
-                Permissions.graph("rag_retrieval"),
-                Permissions.graph("commerce_search"),
-            ])
+        Examples:
+            >>> Permissions.graph("rag_retrieval")
+            'graph:rag_retrieval'
         """
         return f"graph:{name}"
 
@@ -147,22 +137,28 @@ class Permissions:
         """Build a project-specific registration permission.
 
         Args:
-            project_id: Project identifier (e.g. "nszu")
+            project_id: Project identifier (e.g., "nszu").
 
         Returns:
-            Permission string like ``"tools:register:nszu"``
+            str: Permission string like ``"tools:register:nszu"``.
 
-        Example::
-
-            # Project-specific registration
-            Permissions.register("nszu")  # "tools:register:nszu"
-
-            # In token minting
-            builder.mint_root(permissions=[
-                Permissions.register("nszu"),  # Only nszu
-            ])
+        Examples:
+            >>> Permissions.register("nszu")
+            'tools:register:nszu'
         """
         return f"tools:register:{project_id}"
+
+    @staticmethod
+    def introspect(project_id: str) -> str:
+        """Build a project-specific manifest introspection permission.
+
+        Args:
+            project_id: Registered project identifier (e.g., ``"nszu"``).
+
+        Returns:
+            str: Permission string like ``"router:introspect:nszu"``.
+        """
+        return f"router:introspect:{project_id}"
 
     @staticmethod
     def service(domain: str, action: str) -> str:
@@ -185,13 +181,13 @@ class UserNamespace:
     of permissions via :data:`NAMESPACE_PROFILES`.
     """
 
-    DEFAULT = "default"
-    FREE = "free"
-    PRO = "pro"
-    ADMIN = "admin"
-    SYSTEM = "system"
+    DEFAULT: str = "default"
+    FREE: str = "free"
+    PRO: str = "pro"
+    ADMIN: str = "admin"
+    SYSTEM: str = "system"
 
-    ALL = frozenset({"default", "free", "pro", "admin", "system"})
+    ALL: frozenset[str] = frozenset({"default", "free", "pro", "admin", "system"})
 
 
 __all__ = [

@@ -1,17 +1,12 @@
 """Ed25519 asymmetric signing backend.
-
 Private key: only on signing service (Router / contextctl CLI).
 Public key: on all verifying services (Brain, Worker, Commerce).
-
 This achieves zero-knowledge verification — compromising a verifier
 does NOT allow minting new tokens.
-
 Wire format: kid.payload_b64.signature_b64 (3 parts)
-
 Key generation:
     from contextunity.shield.signing.ed25519 import Ed25519Backend
     Ed25519Backend.generate_keypair("keys/signing.key", "keys/signing.pub")
-
 Dependencies: cryptography (already in ecosystem).
 """
 
@@ -21,6 +16,7 @@ import base64
 from pathlib import Path
 
 from contextunity.core import get_contextunit_logger
+from contextunity.core.exceptions import ConfigurationError, SecurityError
 from contextunity.core.signing import SignedPayload
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -44,6 +40,10 @@ class Ed25519Backend:
         kid: Key identifier for rotation support.
     """
 
+    _kid: str
+    _private_key: Ed25519PrivateKey | None
+    _public_key: Ed25519PublicKey | None
+
     def __init__(
         self,
         *,
@@ -52,9 +52,20 @@ class Ed25519Backend:
         public_key_b64: str | None = None,
         kid: str = "ed25519-001",
     ) -> None:
+        """Initialize the Ed25519 signing/verification backend.
+
+        Args:
+            private_key_path: Path to the private key for signing (enables signer mode).
+            public_key_path: Path to the public key file for verification.
+            public_key_b64: Base64-encoded DER public key for verification.
+            kid: Key identifier for tracking active rotations.
+
+        Raises:
+            ValueError: If no valid key source is provided.
+        """
         self._kid = kid
-        self._private_key: Ed25519PrivateKey | None = None
-        self._public_key: Ed25519PublicKey | None = None
+        self._private_key = None
+        self._public_key = None
 
         if private_key_path:
             self._private_key = self._load_private_key(private_key_path)
@@ -66,24 +77,38 @@ class Ed25519Backend:
             logger.info("Ed25519Backend: loaded public key from file (VERIFIER mode), kid=%s", kid)
         elif public_key_b64:
             self._public_key = self._load_public_key_b64(public_key_b64)
-            logger.info("Ed25519Backend: loaded public key from b64 (VERIFIER mode), kid=%s", kid)
+            logger.debug("Ed25519Backend: loaded public key from b64 (VERIFIER mode), kid=%s", kid)
         else:
-            raise ValueError(
+            raise ConfigurationError(
                 "Ed25519Backend requires private_key_path (signer), "
-                "public_key_path (verifier from file), or public_key_b64 (verifier from b64)"
+                + "public_key_path (verifier from file), or public_key_b64 (verifier from b64)"
             )
 
     @property
     def algorithm(self) -> str:
+        """Get the cryptographic algorithm name used by this backend.
+
+        Returns:
+            str: The algorithm name ('ed25519').
+        """
         return "ed25519"
 
     @property
     def active_kid(self) -> str:
+        """Get the Key ID (kid) currently active for this backend.
+
+        Returns:
+            str: The active key identifier.
+        """
         return self._kid
 
     @property
     def can_sign(self) -> bool:
-        """True if this backend has a private key (signer mode)."""
+        """Check if this backend has a private key loaded and can sign payloads.
+
+        Returns:
+            bool: True if configured with a private key (signer mode), False otherwise.
+        """
         return self._private_key is not None
 
     def sign(self, payload: bytes) -> SignedPayload:
@@ -99,7 +124,7 @@ class Ed25519Backend:
             RuntimeError: If no private key is loaded (verifier-only mode).
         """
         if self._private_key is None:
-            raise RuntimeError(
+            raise SecurityError(
                 "Ed25519Backend: cannot sign — no private key loaded. This service is in verifier-only mode."
             )
 
@@ -137,7 +162,7 @@ class Ed25519Backend:
         if len(parts) != 3:
             return None
 
-        kid, payload_b64, sig_b64 = parts
+        _kid, payload_b64, sig_b64 = parts
 
         if not sig_b64:
             # Empty signature — unsigned token
@@ -190,11 +215,11 @@ class Ed25519Backend:
         )
 
         Path(private_key_path).parent.mkdir(parents=True, exist_ok=True)
-        Path(private_key_path).write_bytes(private_pem)
-        Path(private_key_path).chmod(0o600)  # Owner-only read/write
+        _ = Path(private_key_path).write_bytes(private_pem)
+        _ = Path(private_key_path).chmod(0o600)  # Owner-only read/write
 
         Path(public_key_path).parent.mkdir(parents=True, exist_ok=True)
-        Path(public_key_path).write_bytes(public_pem)
+        _ = Path(public_key_path).write_bytes(public_pem)
 
         logger.info(
             "Ed25519 keypair generated: private=%s, public=%s",
@@ -204,29 +229,59 @@ class Ed25519Backend:
 
     @staticmethod
     def _load_private_key(path: str) -> Ed25519PrivateKey:
-        """Load Ed25519 private key from PEM file."""
+        """Load Ed25519 private key from PEM file.
+
+        Args:
+            path: The filesystem path to the private key PEM file.
+
+        Returns:
+            Ed25519PrivateKey: The loaded Ed25519 private key object.
+
+        Raises:
+            ValueError: If the key file is not a valid Ed25519 private key.
+        """
         pem_data = Path(path).read_bytes()
         key = serialization.load_pem_private_key(pem_data, password=None)
         if not isinstance(key, Ed25519PrivateKey):
-            raise ValueError(f"Key at {path} is not Ed25519")
+            raise SecurityError(f"Key at {path} is not Ed25519")
         return key
 
     @staticmethod
     def _load_public_key(path: str) -> Ed25519PublicKey:
-        """Load Ed25519 public key from PEM file."""
+        """Load Ed25519 public key from PEM file.
+
+        Args:
+            path: The filesystem path to the public key PEM file.
+
+        Returns:
+            Ed25519PublicKey: The loaded Ed25519 public key object.
+
+        Raises:
+            ValueError: If the key file is not a valid Ed25519 public key.
+        """
         pem_data = Path(path).read_bytes()
         key = serialization.load_pem_public_key(pem_data)
         if not isinstance(key, Ed25519PublicKey):
-            raise ValueError(f"Key at {path} is not Ed25519")
+            raise SecurityError(f"Key at {path} is not Ed25519")
         return key
 
     @staticmethod
     def _load_public_key_b64(public_key_b64: str) -> Ed25519PublicKey:
-        """Load Ed25519 public key from base64-encoded DER bytes."""
+        """Load Ed25519 public key from base64-encoded DER bytes.
+
+        Args:
+            public_key_b64: Base64 encoded public key bytes in DER format.
+
+        Returns:
+            Ed25519PublicKey: The loaded Ed25519 public key object.
+
+        Raises:
+            ValueError: If the decoded key is not a valid Ed25519 public key.
+        """
         der_bytes = base64.b64decode(public_key_b64)
         key = serialization.load_der_public_key(der_bytes)
         if not isinstance(key, Ed25519PublicKey):
-            raise ValueError("Provided key is not Ed25519")
+            raise SecurityError("Provided key is not Ed25519")
         return key
 
 

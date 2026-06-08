@@ -13,13 +13,15 @@ import "contextunit.proto";
 
 service RouterService {
     // Execute a single turn of an agent
-    // Request payload: {tenant_id, agent_id, input_text, context?: {...}}
-    // Response payload: {output_text, tool_calls?: {...}, metadata?: {...}}
+    // Request payload: {agent_id, input, config?}
+    // Tenant/user identity is derived from ContextToken (SPOT).
+    // Response payload: {output, wall_ms?, langfuse_trace_id?, langfuse_trace_url?}
     rpc ExecuteAgent(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Stream agent execution (for UI with real-time output)
-    // Request payload: {tenant_id, agent_id, input_text, context?: {...}}
-    // Response payload: {output_text, tool_calls?: {...}, metadata?: {...}}
+    // Request payload: {agent_id, input, config?}
+    // Tenant/user identity is derived from ContextToken (SPOT).
+    // Response payload: streaming ContextUnit events (progress/result/etc.)
     rpc StreamAgent(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // =========================================
@@ -27,13 +29,15 @@ service RouterService {
     // =========================================
 
     // Execute dispatcher agent (always-active agent with all tools)
-    // Request payload: {tenant_id, messages: [{role, content}], session_id?, platform?, max_iterations?}
+    // Request payload: {messages: [{role, content}], session_id?, platform?, max_iterations?}
+    // Tenant/user identity is derived from ContextToken (SPOT).
     // Response payload: {messages: [...], session_id, metadata: {...}}
     // Security: Uses SecurityScopes from ContextUnit for access control
     rpc ExecuteDispatcher(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Stream dispatcher agent execution
-    // Request payload: {tenant_id, messages: [{role, content}], session_id?, platform?, max_iterations?}
+    // Request payload: {messages: [{role, content}], session_id?, platform?, max_iterations?}
+    // Tenant/user identity is derived from ContextToken (SPOT).
     // Response payload: {event_type, data: {...}} (streaming events)
     // Security: Uses SecurityScopes from ContextUnit for access control
     rpc StreamDispatcher(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
@@ -82,7 +86,55 @@ service RouterService {
     //    Project → Router: {"action": "error", "request_id": "abc",
     //                        "error": "timeout"}
     //
-    // Security: Requires ContextToken with "tools:execute" permission.
+    // Security: Requires ContextToken with "tools:register" permission.
     rpc ToolExecutorStream(stream contextunity.core.ContextUnit)
         returns (stream contextunity.core.ContextUnit);
+
+    // =========================================
+    // Graph Compiler — Node Execution (Phase 2)
+    // =========================================
+
+    // Execute a single compiled graph node by name.
+    // Enables Worker workflows to invoke Router nodes directly
+    // (e.g., synthesis workflow calling an LLM node for fact extraction).
+    //
+    // Request payload: {
+    //   graph_name: string,         // Compiled graph identifier
+    //   node_name: string,          // Node to execute within the graph
+    //   state: {key: value, ...},   // Node input state
+    //   config_overrides?: {...}    // Optional per-call config
+    // }
+    // Tenant/user identity is derived from ContextToken (SPOT).
+    //
+    // Response payload: {
+    //   output: {key: value, ...},  // Node execution output
+    //   node_name: string,
+    //   execution_ms: int
+    // }
+    //
+    // Security: Requires ContextToken with "router:execute_node" permission.
+    rpc ExecuteNode(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // =========================================
+    // Introspection — Registered Manifest Query
+    // =========================================
+
+    // Inspect registered project manifests (sanitized, read-only).
+    // Used by TUI, admin dashboards, and observability tooling.
+    //
+    // Request payload: {
+    //   project_id?: string  // Optional — omit to list all visible projects
+    // }
+    //
+    // Response payload: {
+    //   projects: [{
+    //     project_id, owner_tenant, security_mode,
+    //     services, tools, graphs, policy
+    //   }]
+    // }
+    //
+    // Secrets are NEVER included in the response (sanitized server-side).
+    // Security: Requires "router:introspect" permission.
+    // In CU_LOCAL_MODE, HMAC tokens are accepted even when Shield is primary.
+    rpc IntrospectRegistrations(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 }

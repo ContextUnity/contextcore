@@ -33,12 +33,21 @@ _auth_context_var: ContextVar[VerifiedAuthContext | None] = ContextVar("verified
 
 
 def set_auth_context(ctx: VerifiedAuthContext) -> None:
-    """Set the verified auth context for the current async task."""
-    _auth_context_var.set(ctx)
+    """Set the verified auth context for the current async task.
+
+    Args:
+        ctx: The VerifiedAuthContext instance to store.
+    """
+    _ = _auth_context_var.set(ctx)
 
 
 def get_auth_context() -> VerifiedAuthContext | None:
-    """Get the verified auth context for the current async task."""
+    """Get the verified auth context for the current async task.
+
+    Returns:
+        VerifiedAuthContext | None: The active VerifiedAuthContext, or None
+        if not set.
+    """
     return _auth_context_var.get()
 
 
@@ -46,6 +55,9 @@ def require_auth_context() -> VerifiedAuthContext:
     """Get the verified auth context or raise.
 
     Use in handlers that MUST have a verified caller.
+
+    Returns:
+        VerifiedAuthContext: The active VerifiedAuthContext.
 
     Raises:
         PermissionError: If no verified auth context is available.
@@ -58,7 +70,7 @@ def require_auth_context() -> VerifiedAuthContext:
 
 def reset_auth_context() -> None:
     """Reset the auth context (for testing)."""
-    _auth_context_var.set(None)
+    _ = _auth_context_var.set(None)
 
 
 # ── VerifiedAuthContext ──────────────────────────────────────────
@@ -77,7 +89,7 @@ class VerifiedAuthContext:
         project_id: Project extracted from the token's kid (e.g. ``"nszu"``).
         caller_kind: Classification of the caller.
         effective_permissions: Post-expansion permission set (inheritance resolved).
-        effective_tenants: Tenant IDs from the token (empty = admin/all).
+        effective_tenants: Tenant IDs from the token.
         active_tenant: Resolved target tenant for this request (None = not yet resolved).
     """
 
@@ -110,12 +122,12 @@ class VerifiedAuthContext:
             caller_kind: Override caller classification (auto-detected if None).
             active_tenant: Explicit target tenant (optional).
         """
-        effective_permissions = tuple(sorted(token._effective_permissions))
+        effective_permissions = tuple(sorted(token.effective_permissions))
         effective_tenants = token.allowed_tenants
 
         # Auto-detect caller kind
         if caller_kind is None:
-            if not effective_tenants:
+            if token.has_permission("admin:all"):
                 kind: Literal["project", "service", "user", "admin"] = "admin"
             elif token.agent_id and token.agent_id.startswith("project:"):
                 kind = "project"
@@ -137,11 +149,25 @@ class VerifiedAuthContext:
         )
 
     def can_access_tenant(self, tenant_id: str) -> bool:
-        """Check if this context authorizes access to a tenant."""
+        """Check if this context authorizes access to a tenant.
+
+        Args:
+            tenant_id: The target tenant ID.
+
+        Returns:
+            bool: True if authorized, False otherwise.
+        """
         return self.token.can_access_tenant(tenant_id)
 
     def has_permission(self, permission: str) -> bool:
-        """Check if this context has a permission (expansion-aware)."""
+        """Check if this context has a permission (expansion-aware).
+
+        Args:
+            permission: The permission string to check.
+
+        Returns:
+            bool: True if context has the permission, False otherwise.
+        """
         return self.token.has_permission(permission)
 
 

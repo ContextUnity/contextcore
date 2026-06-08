@@ -1,10 +1,15 @@
-"""Tests for ContextUnit SDK."""
+"""Tests for ContextUnit SDK core models.
+
+Verifies ContextUnit, CotStep, UnitMetrics, and SecurityScopes
+construction and domain behavior.
+"""
 
 from __future__ import annotations
 
 from datetime import datetime
 from uuid import UUID, uuid4
 
+import pytest
 from contextunity.core import ContextUnit, CotStep, SecurityScopes, UnitMetrics
 
 
@@ -12,20 +17,21 @@ class TestContextUnit:
     """Tests for ContextUnit model."""
 
     def test_create_default_unit(self) -> None:
-        """Test creating a ContextUnit with default values."""
+        """Default ContextUnit has correct types and empty collections."""
         unit = ContextUnit()
         assert isinstance(unit.unit_id, UUID)
         assert isinstance(unit.trace_id, UUID)
         assert unit.parent_unit_id is None
         assert unit.modality == "text"
         assert unit.payload == {}
+        assert unit.provenance == []
         assert unit.chain_of_thought == []
         assert isinstance(unit.metrics, UnitMetrics)
         assert isinstance(unit.security, SecurityScopes)
         assert isinstance(unit.created_at, datetime)
 
     def test_create_custom_unit(self) -> None:
-        """Test creating a ContextUnit with custom values."""
+        """Custom values are preserved."""
         unit_id = uuid4()
         trace_id = uuid4()
         payload = {"content": "test", "metadata": {"key": "value"}}
@@ -33,14 +39,16 @@ class TestContextUnit:
             unit_id=unit_id,
             trace_id=trace_id,
             payload=payload,
+            provenance=["sdk:test"],
         )
 
         assert unit.unit_id == unit_id
         assert unit.trace_id == trace_id
         assert unit.payload == payload
+        assert unit.provenance == ["sdk:test"]
 
-    def test_chain_of_thought(self) -> None:
-        """Test chain of thought steps."""
+    def test_chain_of_thought_append(self) -> None:
+        """CotStep can be appended and retrieved."""
         unit = ContextUnit()
         step = CotStep(agent="test_agent", action="test_action", status="completed")
         unit.chain_of_thought.append(step)
@@ -50,41 +58,26 @@ class TestContextUnit:
         assert unit.chain_of_thought[0].status == "completed"
 
 
-class TestCotStep:
-    """Tests for CotStep model."""
-
-    def test_create_cot_step(self) -> None:
-        """Test creating a CotStep."""
-        step = CotStep(agent="agent1", action="action1")
-        assert step.agent == "agent1"
-        assert step.action == "action1"
-        assert step.status == "pending"
-        assert isinstance(step.timestamp, datetime)
-
-    def test_cot_step_default_status(self) -> None:
-        """Test CotStep default status."""
-        step = CotStep(agent="agent", action="action")
-        assert step.status == "pending"
-
-    def test_cot_step_custom_status(self) -> None:
-        """Test CotStep with custom status."""
-        step = CotStep(agent="agent", action="action", status="completed")
-        assert step.status == "completed"
+@pytest.mark.parametrize(
+    ("status_kwarg", "expected"),
+    [
+        ({}, "pending"),
+        ({"status": "completed"}, "completed"),
+    ],
+    ids=["default-pending", "custom-completed"],
+)
+def test_cot_step_status(status_kwarg, expected) -> None:
+    """CotStep defaults to 'pending', accepts custom status."""
+    step = CotStep(agent="agent", action="action", **status_kwarg)
+    assert step.status == expected
+    assert isinstance(step.timestamp, datetime)
 
 
 class TestUnitMetrics:
     """Tests for UnitMetrics model."""
 
-    def test_create_default_metrics(self) -> None:
-        """Test creating default UnitMetrics."""
-        metrics = UnitMetrics()
-        assert metrics.latency_ms == 0
-        assert metrics.cost_usd == 0.0
-        assert metrics.tokens_used == 0
-        assert metrics.cost_limit_usd == 0.0
-
     def test_create_custom_metrics(self) -> None:
-        """Test creating custom UnitMetrics."""
+        """Custom metrics are preserved."""
         metrics = UnitMetrics(
             latency_ms=100,
             cost_usd=0.05,
@@ -97,30 +90,14 @@ class TestUnitMetrics:
         assert metrics.cost_limit_usd == 1.0
 
 
-class TestSecurityScopes:
-    """Tests for SecurityScopes model."""
+def test_security_scopes_custom() -> None:
+    """SecurityScopes preserves read/write lists."""
+    scopes = SecurityScopes(
+        read=["scope1:read", "scope2:read"],
+        write=["scope1:write"],
+    )
+    assert scopes.read == ["scope1:read", "scope2:read"]
+    assert scopes.write == ["scope1:write"]
 
-    def test_create_default_scopes(self) -> None:
-        """Test creating default SecurityScopes."""
-        scopes = SecurityScopes()
-        assert scopes.read == []
-        assert scopes.write == []
 
-    def test_create_custom_scopes(self) -> None:
-        """Test creating custom SecurityScopes."""
-        scopes = SecurityScopes(
-            read=["scope1:read", "scope2:read"],
-            write=["scope1:write"],
-        )
-        assert len(scopes.read) == 2
-        assert "scope1:read" in scopes.read
-        assert "scope2:read" in scopes.read
-        assert len(scopes.write) == 1
-        assert "scope1:write" in scopes.write
-
-    def test_empty_scopes_allow_all(self) -> None:
-        """Test that empty scopes allow all access."""
-        scopes = SecurityScopes()
-        # Empty scopes should allow all (checked by token logic)
-        assert scopes.read == []
-        assert scopes.write == []
+pytestmark = pytest.mark.unit

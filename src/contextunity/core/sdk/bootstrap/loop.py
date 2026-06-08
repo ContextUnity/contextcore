@@ -1,43 +1,115 @@
+"""Retry-resilient bootstrap orchestration loop.
+Sequences the four bootstrap phases with infinite retry on transient
+failures:
+1. Shield session-token acquisition (if Shield enabled)
+2. Shield secrets sync (API keys → Shield vault)
+3. Router manifest registration (``RegisterManifest`` RPC)
+4. Worker schedule registration (cron schedule sync)
+After all registrations succeed, opens the persistent
+``ToolExecutorStream`` for federated BiDi tool execution.
+"""
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING
 
 from contextunity.core.logging import get_contextunit_logger
 
-from .client import _do_register, _put_secrets_to_shield
+from ..types import ToolHandler, ToolPayload
+from .client import do_register, put_secrets_to_shield, register_schedules
 
 if TYPE_CHECKING:
-    from contextunity.core.sdk.streaming.bidi import FederatedToolCallContext
-    from contextunity.core.security.protocols import AuthBackend
+    from contextunity.core.signing import AuthBackend
 
 logger = get_contextunit_logger(__name__)
 
 
-def _bootstrap_loop(
+def bootstrap_loop(
     router_url: str,
     project_id: str,
-    payload: dict[str, Any],
+    payload: ToolPayload,
     tool_names: list[str],
-    tool_handler: Callable[[str, dict[str, Any], FederatedToolCallContext], dict[str, Any]] | None,
+    tool_handler: ToolHandler | None,
     resolved_secrets: dict[str, str] | None = None,
     shield_enabled: bool = False,
     shield_url: str = "",
     backend: AuthBackend | None = None,
 ) -> None:
-    """Main bootstrap: [Shield sync] → register → stream loop."""
-    from contextunity.core.sdk.streaming.bidi import format_grpc_error, run_stream_loop
+    """Main bootstrap loop: [Shield token] → [Shield sync] → register → stream loop.
+
+    Sequences the four bootstrap phases with infinite retry on transient
+    failures. After all registrations succeed, it opens the persistent
+    BiDi stream for federated tool execution.
+
+    Args:
+        router_url: The Router service gRPC URL.
+        project_id: The identifier of the project.
+        payload: The registration payload containing the manifest bundle.
+        tool_names: A list of registered tool names.
+        tool_handler: The tool execution handler callback.
+        resolved_secrets: The resolved secrets dict to sync to Shield.
+        shield_enabled: Whether Shield integration is enabled.
+        shield_url: The Shield service gRPC URL.
+        backend: The authentication backend.
+    """
+    import time
+
+    from contextunity.core.sdk.streaming.bidi import format_grpc_error
+
+    # ── Shield session token acquisition (with retry) ─────────
+    if shield_enabled and shield_url and backend is not None:
+        from contextunity.core.signing import (
+            HmacBackend,
+            SessionTokenBackend,
+            _request_session_token,
+            set_signing_backend,
+        )
+
+        if isinstance(backend, HmacBackend):
+            hmac_backend = backend
+            while True:
+                try:
+                    from contextunity.core.sdk.identity import get_required_services
+
+                    required_services = get_required_services()
+                    token, kid, expires_at = _request_session_token(
+                        project_id, shield_url, hmac_backend, required_services=required_services
+                    )
+                    backend = SessionTokenBackend(
+                        project_id=project_id,
+                        session_token=token,
+                        kid=kid,
+                        expires_at=expires_at,
+                        shield_url=shield_url,
+                        hmac_backend=hmac_backend,
+                    )
+                    set_signing_backend(backend)
+                    logger.info("Shield session token acquired for project '%s'", project_id)
+                    break
+                except Exception as e:
+                    logger.warning(
+                        "Shield unavailable for '%s': %s. Retrying in 15s...",
+                        project_id,
+                        format_grpc_error(e),
+                    )
+                    time.sleep(15)
+
+    # ── Shield secrets sync (with retry) ──────────────────────
+    from contextunity.core.sdk.streaming.bidi import run_stream_loop
 
     if resolved_secrets and shield_enabled:
         if not shield_url:
             logger.critical(
-                "Shield is enabled in manifest but shield_url is not configured. "
-                "Set CU_SHIELD_GRPC_URL in env or config. Aborting bootstrap."
+                (
+                    "Shield is enabled in manifest but shield_url is not configured. "
+                    "Set CU_SHIELD_GRPC_URL in env or config. Aborting bootstrap."
+                )
             )
             return
 
         while True:
             try:
-                synced = _put_secrets_to_shield(project_id, resolved_secrets, shield_url, backend)
+                synced = put_secrets_to_shield(project_id, resolved_secrets, shield_url, backend)
                 logger.info("Synced %d API key(s) to Shield: %s", len(synced), ", ".join(synced))
                 break
             except Exception as e:
@@ -46,17 +118,13 @@ def _bootstrap_loop(
                     project_id,
                     format_grpc_error(e),
                 )
-                import time
-
                 time.sleep(15)
-
-    import time
 
     logger.info("Registering with Router at %s...", router_url)
     stream_secret: str | None = None
     while True:
         try:
-            stream_secret, _ = _do_register(router_url, project_id, payload, backend)
+            stream_secret, _ = do_register(router_url, project_id, payload, backend)
             break
         except Exception as e:
             logger.error("Registration failed: %s. Retrying in 15 seconds...", format_grpc_error(e))
@@ -64,14 +132,12 @@ def _bootstrap_loop(
 
     from contextunity.core.sdk.identity import get_worker_bindings
 
-    schedules = get_worker_bindings().get("schedules", [])
+    schedules = get_worker_bindings().schedules
     if schedules:
         logger.info("Registering %s worker schedules...", len(schedules))
-        from .client import _register_schedules
-
         while True:
             try:
-                registered = _register_schedules(project_id, schedules, backend)
+                registered = register_schedules(project_id, schedules, backend)
                 logger.info("Successfully registered %s worker schedules", registered)
                 break
             except Exception as e:
@@ -89,8 +155,13 @@ def _bootstrap_loop(
         logger.warning("No tool_handler provided — stream executor has no tool to run.")
         return
 
-    def re_register():
-        return _do_register(router_url, project_id, payload, backend)
+    def re_register() -> tuple[str, str]:
+        """Re-register manifest on stream reconnect.
+
+        Returns:
+            tuple[str, str]: A tuple containing the (stream_secret, shield_url).
+        """
+        return do_register(router_url, project_id, payload, backend)
 
     run_stream_loop(
         router_url=router_url,
@@ -101,3 +172,6 @@ def _bootstrap_loop(
         stream_secret=stream_secret,
         backend=backend,
     )
+
+
+_bootstrap_loop = bootstrap_loop

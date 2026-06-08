@@ -2,66 +2,116 @@
 
 import argparse
 import sys
+from collections.abc import Mapping
 
 from contextunity.core.logging import get_contextunit_logger
 from contextunity.core.manifest import ArtifactGenerator, ContextUnityProject
-from contextunity.core.sdk.bootstrap.manifest import _load_manifest
+from contextunity.core.sdk.bootstrap.manifest import load_manifest
 from contextunity.core.sdk.config import ProjectBootstrapConfig
+from contextunity.core.types import JsonDict, is_json_dict, is_object_list
 
 logger = get_contextunit_logger(__name__)
 
 
-def _derive_permissions(manifest_dict: dict) -> list[str]:
+def _json_dict(value: object) -> JsonDict | None:
+    return value if is_json_dict(value) else None
+
+
+def _service_enabled(services: JsonDict, service: str) -> bool:
+    service_cfg = _json_dict(services.get(service))
+    return service_cfg is not None and service_cfg.get("enabled") is True
+
+
+def _tool_name_from_binding(tool_binding: object) -> str | None:
+    if isinstance(tool_binding, str):
+        return tool_binding.split(":")[0] if ":" in tool_binding else tool_binding
+    if is_object_list(tool_binding):
+        for item in tool_binding:
+            if isinstance(item, str):
+                return item.split(":")[0] if ":" in item else item
+    return None
+
+
+def _derive_permissions(manifest_dict: Mapping[str, object]) -> list[str]:
     """Derive Shield permissions from manifest dict. Returns sorted list."""
-    SERVICE_PERMISSIONS_MAP = {
+    if not is_json_dict(manifest_dict):
+        return []
+
+    service_permissions_map = {
         "brain": ["brain:read", "brain:write", "trace:read", "trace:write", "memory:read", "memory:write"],
-        "router": ["router:execute", "tools:register"],
+        "router": ["router:execute", "tools:register", "privacy:*"],
         "worker": ["worker:execute", "worker:schedule"],
-        "zero": ["zero:*"],
         "shield": ["shield:secrets:read", "shield:secrets:write"],
     }
 
-    permissions = set()
-    services_dict = manifest_dict.get("services", {})
+    permissions: set[str] = set()
+    services = _json_dict(manifest_dict.get("services")) or {}
 
-    for service, perms in SERVICE_PERMISSIONS_MAP.items():
+    for service, perms in service_permissions_map.items():
         if service == "shield":
             permissions.update(perms)
-        elif services_dict.get(service, {}).get("enabled"):
+        elif _service_enabled(services, service):
             permissions.update(perms)
 
-    router = manifest_dict.get("router", {})
-    graph = router.get("graph", {})
+    router = _json_dict(manifest_dict.get("router")) or {}
+    graph = _json_dict(router.get("graph")) or {}
     template = graph.get("template")
-    if template:
+    if isinstance(template, str):
         permissions.add(f"graph:{template}")
 
-    for tool_group in router.get("tools", []):
-        tools_list = tool_group.get("tools", [tool_group]) if "tools" in tool_group else [tool_group]
-        for tool in tools_list:
-            tool_name = tool.get("name")
-            if tool_name:
-                permissions.add(f"tool:{tool_name}")
-                permissions.add(f"tool:{tool_name}_validate")
+    tools_raw = router.get("tools")
+    if not is_object_list(tools_raw):
+        tool_groups: list[object] = []
+    else:
+        tool_groups = tools_raw
+    for tool_group_raw in tool_groups:
+        if not is_json_dict(tool_group_raw):
+            continue
+        tool_group = tool_group_raw
+        if "tools" in tool_group:
+            nested_tools = tool_group.get("tools")
+            if is_object_list(nested_tools):
+                tools_list: list[object] = nested_tools
+            else:
+                tools_list = [tool_group]
+        else:
+            tools_list = [tool_group]
 
-    for node in graph.get("nodes", []):
-        if node.get("type") == "tool":
-            tool_binding = node.get("tool_binding")
-            if tool_binding:
-                if isinstance(tool_binding, list):
-                    for tb in tool_binding:
-                        tool_name = tb.split(":")[0] if ":" in tb else tb
-                        permissions.add(f"tool:{tool_name}")
-                        permissions.add(f"tool:{tool_name}_validate")
-                else:
-                    tool_name = tool_binding.split(":")[0] if ":" in tool_binding else tool_binding
-                    permissions.add(f"tool:{tool_name}")
-                    permissions.add(f"tool:{tool_name}_validate")
+        for tool_raw in tools_list:
+            if not is_json_dict(tool_raw):
+                continue
+            tool_name_raw = tool_raw.get("name")
+            if isinstance(tool_name_raw, str) and tool_name_raw:
+                permissions.add(f"tool:{tool_name_raw}")
+                permissions.add(f"tool:{tool_name_raw}_validate")
+
+    nodes_raw = graph.get("nodes")
+    if not is_object_list(nodes_raw):
+        nodes: list[object] = []
+    else:
+        nodes = nodes_raw
+    for node_raw in nodes:
+        if not is_json_dict(node_raw):
+            continue
+        if node_raw.get("type") != "tool":
+            continue
+        tool_name = _tool_name_from_binding(node_raw.get("tool_binding"))
+        if tool_name:
+            permissions.add(f"tool:{tool_name}")
+            permissions.add(f"tool:{tool_name}_validate")
 
     return sorted(permissions)
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
+    """Execute the manifest validation routine.
+
+    Args:
+        args (argparse.Namespace): Positional arguments.
+
+    Returns:
+        int: The resulting integer value.
+    """
     manifest_path = getattr(args, "manifest_path", "contextunity.project.yaml")
     quiet = getattr(args, "quiet", False)
 
@@ -78,13 +128,13 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print(f"❌ Fail: Environment/config loading failed: {e}", file=sys.stderr)
         return 1
 
-    manifest_dict = _load_manifest(manifest_path)
+    manifest_dict = load_manifest(manifest_path)
     if not manifest_dict:
         print(f"❌ Fail: file not found or invalid YAML -> {manifest_path}", file=sys.stderr)
         return 1
 
-    project_section = manifest_dict.get("project")
-    if not project_section or not isinstance(project_section, dict) or "id" not in project_section:
+    project_section = _json_dict(manifest_dict.get("project"))
+    if project_section is None or "id" not in project_section:
         print("❌ Fail: missing required 'project.id' field", file=sys.stderr)
         return 1
 
@@ -103,27 +153,21 @@ def cmd_validate(args: argparse.Namespace) -> int:
         return 0
 
     try:
-        config.validate_service_urls(manifest)
-        print("✅ 2. Service URLs validation: PASS")
-    except ValueError as e:
-        print(f"⚠️ 2. Service URLs validation WARNING: {e}")
-
-    try:
         resolved_secrets = config.resolve_secrets(manifest)
-        print(f"✅ 3. Secrets resolver: PASS ({len(resolved_secrets)} resolved)")
+        print(f"✅ 2. Secrets resolver: PASS ({len(resolved_secrets)} resolved)")
     except Exception as e:
-        print(f"❌ 3. Secrets resolver: FAIL\n{e}", file=sys.stderr)
+        print(f"❌ 2. Secrets resolver: FAIL\n{e}", file=sys.stderr)
         return 1
 
     try:
         generator = ArtifactGenerator(manifest)
         bundle = generator.generate_router_registration_bundle(resolved_secrets=resolved_secrets)
-        print(f"✅ 4. Router Artifact Generator: PASS (Payload proxy size: {len(str(bundle))} bytes)")
+        print(f"✅ 3. Router Artifact Generator: PASS (Payload proxy size: {len(str(bundle))} bytes)")
 
         worker_bindings = generator.generate_worker_bindings()
-        print(f"✅ 5. Worker Bindings Generator: PASS ({len(worker_bindings)} bindings)")
+        print(f"✅ 4. Worker Bindings Generator: PASS ({len(worker_bindings.schedules)} schedules)")
     except Exception as e:
-        print(f"❌ 4. Artifact Generator compilation: FAIL\n{e}", file=sys.stderr)
+        print(f"❌ 3. Artifact Generator compilation: FAIL\n{e}", file=sys.stderr)
         return 1
 
     print("=" * 50)
@@ -141,19 +185,27 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Entry point for the manifest validation CLI script.
+
+    Args:
+        argv (list[str] | None): The argv parameter.
+
+    Returns:
+        int: The resulting integer value.
+    """
     parser = argparse.ArgumentParser(
         prog="contextunity-core validate",
         description="Validate a contextunity.project.yaml manifest strictly against v1alpha schema.",
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "manifest_path",
         nargs="?",
         default="contextunity.project.yaml",
         help="Path to the manifest file (default: contextunity.project.yaml)",
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--quiet",
         "-q",
         action="store_true",

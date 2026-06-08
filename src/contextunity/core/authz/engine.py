@@ -1,13 +1,9 @@
 """Unified authorization engine for ContextUnity.
-
 Single entry point for ALL authorization decisions across all services.
 Replaces scattered ``has_tool_access``, ``has_registration_access``,
 ``check_permission``, and service-local ``AccessManager`` checks.
-
 Usage::
-
     from contextunity.core.authz import authorize
-
     decision = authorize(
         auth_ctx,
         permission="brain:read",
@@ -37,7 +33,6 @@ if TYPE_CHECKING:
 
 logger = get_contextunit_logger(__name__)
 
-
 # ── Decision result ──────────────────────────────────────────────
 
 
@@ -63,10 +58,19 @@ class AuthzDecision:
 
     @property
     def denied(self) -> bool:
+        """Return True if the authorization was denied.
+
+        Returns:
+            bool: True if denied, False otherwise.
+        """
         return not self.allowed
 
     def require(self) -> None:
-        """Raise PermissionError if denied."""
+        """Raise PermissionError if authorization was denied.
+
+        Raises:
+            PermissionError: If the decision was not allowed.
+        """
         if not self.allowed:
             raise PermissionError(self.reason or "Authorization denied")
 
@@ -105,24 +109,17 @@ def authorize(
         rpc_name: RPC method name for audit tags.
 
     Returns:
-        AuthzDecision with allow/deny and reasoning.
+        AuthzDecision: An object containing whether the action is allowed,
+            the reasons for denial if any, risk level, effective permissions,
+            effective tenant, and audit tags.
 
-    Examples::
-
-        # Simple permission check
-        authorize(ctx, permission="brain:read")
-
-        # Tool with scope and policy
-        authorize(ctx, tool_name="sql", tool_scope="read",
-                  tool_policy=sql_policy, tenant_id="nszu")
-
-        # Registration check
-        authorize(ctx, registration_project_id="nszu")
-
-        # Graph access
-        authorize(ctx, graph_name="rag_retrieval")
+    Examples:
+        >>> authorize(ctx, permission="brain:read")
+        >>> authorize(ctx, tool_name="sql", tool_scope="read",
+        ...           tool_policy=sql_policy, tenant_id="nszu")
+        >>> authorize(ctx, registration_project_id="nszu")
+        >>> authorize(ctx, graph_name="rag_retrieval")
     """
-    from ..tokens import ContextToken
     from .context import VerifiedAuthContext
 
     # Resolve token and permissions
@@ -130,16 +127,10 @@ def authorize(
         token = auth.token
         effective_perms = auth.effective_permissions
         resolved_tenant = auth.active_tenant or tenant_id
-    elif isinstance(auth, ContextToken):
-        token = auth
-        effective_perms = tuple(sorted(token._effective_permissions))
-        resolved_tenant = tenant_id
     else:
-        return AuthzDecision(
-            allowed=False,
-            reason="Invalid auth object — expected VerifiedAuthContext or ContextToken",
-            effective_tenant=tenant_id,
-        )
+        token = auth
+        effective_perms = tuple(sorted(token.effective_permissions))
+        resolved_tenant = tenant_id
 
     audit = {
         "service": service,

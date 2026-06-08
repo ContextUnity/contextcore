@@ -9,6 +9,13 @@ import "contextunit.proto";
 // =====================================================
 // All methods use ContextUnit as input/output.
 // Domain-specific data is passed via payload field.
+//
+// SPOT: Tenant identity is carried by ``ContextToken`` metadata — never
+// by in-band payload. Legacy ``tenant_id`` fields in payloads are
+// accepted for backward compatibility but MUST be consistent with the
+// token's ``allowed_tenants`` or the request is rejected with
+// PERMISSION_DENIED. New callers SHOULD omit ``tenant_id`` from payload
+// and rely on the token.
 // =====================================================
 
 service BrainService {
@@ -68,6 +75,16 @@ service BrainService {
     // Response payload: {fact_key, fact_value, confidence, updated_at}
     rpc GetUserFacts(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
+    // Get episode count and date range for a tenant
+    // Request payload: {tenant_id}
+    // Response payload: {total, oldest, newest, tenant_id}
+    rpc GetEpisodeStats(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Delete old episodes for a tenant, optionally restricted to explicit IDs
+    // Request payload: {tenant_id, older_than_days, episode_ids?}
+    // Response payload: {deleted_count}
+    rpc RetentionCleanup(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
     // =========================================
     // Agent Traces
     // =========================================
@@ -98,11 +115,25 @@ service BrainService {
     rpc GetTaxonomy(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // =========================================
+    // Blackboard Operations (Flat Memory)
+    // =========================================
+
+    // Write arbitrary data to the blackboard, return UUID
+    // Request payload: {tenant_id, scope_path, content, metadata?, ttl_seconds?, created_by?}
+    // Response payload: {id, scope_path, created_at}
+    rpc WriteBlackboard(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Read one or more records by UUID(s) — STRICTLY BATCHED
+    // Request payload: {ids: [UUID, ...]}
+    // Response payload: {records: [{id, content, metadata, scope_path, created_at}]}
+    rpc ReadBlackboard(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // =========================================
     // DuckDB Operations
     // =========================================
 
     // Execute high-speed DuckDB string/fuzzy matching on Parquet files
     // Request payload: {tenant_id, unmatched_uri, canonical_uri}
-    // Response payload: {duckdb_matches: [...], duckdb_leftovers: [...]}
+    // Response payload: {duckdb_matches: [...], duckdb_leftovers_count: int}
     rpc MatchDuckDB(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 }

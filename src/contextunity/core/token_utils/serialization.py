@@ -3,23 +3,99 @@
 from __future__ import annotations
 
 import base64
-import json
-from typing import Optional
+from json import JSONDecodeError
+from typing import Protocol, runtime_checkable
+
+from contextunity.core.parsing import json_dumps, json_loads
+from contextunity.core.types import JsonValue, is_json_value
+from pydantic import ValidationError
 
 from ..logging import get_contextunit_logger
-from ..signing import AuthBackend
 from ..tokens import ContextToken
+from .contracts import TokenPayloadDict, TokenSessionDict, is_token_payload_dict
 
 logger = get_contextunit_logger(__name__)
+
+
+@runtime_checkable
+class _SerializedToken(Protocol):
+    """Represent and manage Serialized Token logic within the system."""
+
+    def serialize(self) -> str: ...
+
+
+@runtime_checkable
+class LocalSigningBackend(Protocol):
+    """Protocol for components capable of locally signing cryptographic payloads."""
+
+    def sign(self, payload: bytes) -> _SerializedToken: ...
+
+
+@runtime_checkable
+class TokenVerifier(Protocol):
+    """Protocol for components capable of verifying cryptographic token signatures."""
+
+    def verify(self, token_str: str) -> bytes | None: ...
+
+
+def _string_tuple(values: list[str] | None) -> tuple[str, ...]:
+    return tuple(values) if values is not None else ()
+
+
+def _parse_json(raw: bytes | str) -> JsonValue:
+    """Parse verified token bytes through the L1/L2 JSON boundary."""
+    loaded = json_loads(raw)
+    if is_json_value(loaded):
+        return loaded
+    return repr(loaded)
+
+
+def token_from_payload_dict(data: TokenPayloadDict) -> ContextToken:
+    """Build a ContextToken from a decoded payload mapping."""
+    token_id = data.get("token_id")
+    if not isinstance(token_id, str):
+        raise ValueError("token payload missing token_id")
+
+    provenance_raw = data.get("provenance")
+    if provenance_raw is None:
+        provenance_raw = data.get("trail")
+    if provenance_raw is None:
+        provenance_raw = data.get("delegation_chain")
+
+    return ContextToken(
+        token_id=token_id,
+        permissions=_string_tuple(data.get("permissions")),
+        allowed_tenants=_string_tuple(data.get("allowed_tenants")),
+        exp_unix=data.get("exp_unix"),
+        revocation_id=data.get("revocation_id"),
+        user_id=data.get("user_id"),
+        agent_id=data.get("agent_id"),
+        user_namespace=data.get("user_namespace", "default"),
+        provenance=_string_tuple(provenance_raw),
+    )
+
+
+def token_from_session_dict(data: TokenSessionDict) -> ContextToken:
+    """Build a ContextToken from session-stored token data."""
+    return ContextToken(
+        token_id=data.get("token_id", ""),
+        permissions=_string_tuple(data.get("permissions")),
+        allowed_tenants=_string_tuple(data.get("allowed_tenants")),
+        exp_unix=data.get("exp_unix"),
+        user_id=data.get("user_id"),
+        user_namespace=data.get("user_namespace") or "default",
+        agent_id=data.get("agent_id", ""),
+        provenance=_string_tuple(data.get("provenance")),
+    )
 
 
 def serialize_token(
     token: ContextToken,
     *,
-    backend: AuthBackend,
+    backend: LocalSigningBackend,
 ) -> str:
     """Serialize ContextToken to string for network transmission."""
-    data = {
+    data: dict[str, str | list[str] | float | None] = {
         "token_id": token.token_id,
         "permissions": list(token.permissions),
         "provenance": list(token.provenance),
@@ -37,17 +113,15 @@ def serialize_token(
     if token.user_namespace != "default":
         data["user_namespace"] = token.user_namespace
 
-    payload = json.dumps(data, sort_keys=True).encode()
-    if not hasattr(backend, "sign"):
-        raise RuntimeError(f"Backend {backend.__class__.__name__} does not support local signing")
+    payload = json_dumps(data, sort_keys=True).encode()
     signed = backend.sign(payload)
     return signed.serialize()
 
 
 def verify_token_string(
     token_str: str,
-    verifier_backend: AuthBackend,
-) -> Optional[ContextToken]:
+    verifier_backend: TokenVerifier,
+) -> ContextToken | None:
     """Securely verify token string and parse it."""
     if not token_str or not token_str.strip():
         return None
@@ -60,8 +134,6 @@ def verify_token_string(
     if verified_payload is None:
         token_preview = None
         try:
-            from .serialization import parse_token_string  # local import to avoid issues, though we are in it
-
             parsed = parse_token_string(token_str)
             if parsed:
                 token_preview = f"tenant={parsed.allowed_tenants}, id={parsed.token_id}"
@@ -71,28 +143,18 @@ def verify_token_string(
         return None
 
     try:
-        data = json.loads(verified_payload)
-        return ContextToken(
-            token_id=data["token_id"],
-            permissions=tuple(data.get("permissions", [])),
-            allowed_tenants=tuple(data.get("allowed_tenants", [])),
-            exp_unix=data.get("exp_unix"),
-            revocation_id=data.get("revocation_id"),
-            user_id=data.get("user_id"),
-            agent_id=data.get("agent_id"),
-            user_namespace=data.get("user_namespace", "default"),
-            provenance=tuple(data.get("provenance", data.get("trail", data.get("delegation_chain", [])))),
-        )
-    except (json.JSONDecodeError, KeyError, UnicodeDecodeError):
+        decoded = _parse_json(verified_payload)
+        if not is_token_payload_dict(decoded):
+            logger.warning("Failed to decode token payload after verification")
+            return None
+        return token_from_payload_dict(decoded)
+    except (JSONDecodeError, UnicodeDecodeError, ValidationError):
         logger.warning("Failed to decode token payload after verification")
         return None
 
 
-def parse_token_string(token_str: str) -> Optional[ContextToken]:
-    """UNSAFE: Parse serialized token string back to ContextToken WITHOUT VERIFICATION.
-
-    FOR LOGGING ONLY.
-    """
+def parse_token_string(token_str: str) -> ContextToken | None:
+    """UNSAFE: Parse serialized token string back to ContextToken WITHOUT VERIFICATION."""
     if not token_str or not token_str.strip():
         return None
 
@@ -101,25 +163,14 @@ def parse_token_string(token_str: str) -> Optional[ContextToken]:
         token_str = token_str[7:].strip()
 
     parts = token_str.rsplit(".", 2)
-    # if it's new signed format: kid.payload.signature
     if len(parts) >= 2:
         try:
             payload_idx = 1 if len(parts) == 3 else 0
             decoded = base64.b64decode(parts[payload_idx])
-            data = json.loads(decoded)
-            return ContextToken(
-                token_id=data["token_id"],
-                permissions=tuple(data.get("permissions", [])),
-                allowed_tenants=tuple(data.get("allowed_tenants", [])),
-                exp_unix=data.get("exp_unix"),
-                revocation_id=data.get("revocation_id"),
-                user_id=data.get("user_id"),
-                agent_id=data.get("agent_id"),
-                user_namespace=data.get("user_namespace", "default"),
-                provenance=tuple(data.get("provenance", data.get("trail", data.get("delegation_chain", [])))),
-            )
+            data_obj = _parse_json(decoded)
+            if is_token_payload_dict(data_obj):
+                return token_from_payload_dict(data_obj)
         except Exception:
             pass
 
-    # Fallback: plain token_id
-    return ContextToken(token_id=token_str, permissions=())
+    return None

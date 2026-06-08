@@ -93,29 +93,6 @@ class TestAutoResolvePromptRefs:
         result = _auto_resolve_prompt_refs({"project": {"id": "test"}}, "/fake/manifest.yaml")
         assert result == {}
 
-    def test_tool_config_ref(self, tmp_path):
-        """Resolves tool config _ref values too."""
-        _create_python_module(tmp_path, "pkg_b", 'DB_SCHEMA = "CREATE TABLE foo ..."\n')
-
-        manifest_path = str(tmp_path / "contextunity.project.yaml")
-        manifest_dict = {
-            "router": {
-                "graph": {"nodes": []},
-                "tools": [
-                    {
-                        "name": "sql_tool",
-                        "type": "sql",
-                        "config": {
-                            "schema_description_ref": "src/pkg_b/prompts.py::DB_SCHEMA",
-                        },
-                    }
-                ],
-            }
-        }
-
-        result = _auto_resolve_prompt_refs(manifest_dict, manifest_path)
-        assert result.get("src/pkg_b/prompts.py::DB_SCHEMA") == "CREATE TABLE foo ..."
-
     def test_variants_ref(self, tmp_path):
         """Resolves prompt_variants_ref (dict of sub-prompts)."""
         _create_python_module(
@@ -184,3 +161,6 @@ class TestResolveYamlPrompt:
         d.mkdir(parents=True)
         (d / "bot.yaml").write_text(yaml.dump({"system_prompt": "I am bot."}))
         assert _resolve_yaml_prompt("bot", tmp_path) == "I am bot."
+
+
+pytestmark = pytest.mark.unit

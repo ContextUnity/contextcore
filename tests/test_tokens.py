@@ -6,6 +6,7 @@ import time
 
 import pytest
 from contextunity.core import ContextToken, ContextUnit, SecurityScopes, TokenBuilder
+from contextunity.core.exceptions import ConfigurationError
 
 
 class TestContextToken:
@@ -60,102 +61,72 @@ class TestContextToken:
         assert token.has_permission("write:data")
         assert not token.has_permission("delete:data")
 
-    def test_can_read_empty_scopes(self) -> None:
-        """Test can_read with empty scopes (allows all)."""
-        token = ContextToken(
-            token_id="test",
-            permissions=("read:data",),
-        )
-        scopes = SecurityScopes(read=[], write=[])
-        assert token.can_read(scopes)  # Empty scopes = no restrictions
+    @pytest.mark.parametrize(
+        ("perms", "scope_read", "scope_write", "op", "expected"),
+        [
+            (("read:data",), [], [], "read", True),
+            (("read:data", "write:data"), ["read:data"], [], "read", True),
+            (("read:other",), ["read:data"], [], "read", False),
+            (("write:data",), [], [], "write", True),
+            (("write:data",), [], ["write:data"], "write", True),
+            (("write:other",), [], ["write:data"], "write", False),
+            ((), ["read:data"], [], "read", False),
+            ((), [], ["write:data"], "write", False),
+        ],
+        ids=[
+            "read-empty-scope",
+            "read-match",
+            "read-nomatch",
+            "write-empty-scope",
+            "write-match",
+            "write-nomatch",
+            "read-no-perms",
+            "write-no-perms",
+        ],
+    )
+    def test_scope_access(self, perms, scope_read, scope_write, op, expected) -> None:
+        """Token scope checks: can_read/can_write with various permission combinations."""
+        token = ContextToken(token_id="test", permissions=perms)
+        scopes = SecurityScopes(read=scope_read, write=scope_write)
+        result = token.can_read(scopes) if op == "read" else token.can_write(scopes)
+        assert result is expected
 
-    def test_can_read_with_matching_permission(self) -> None:
-        """Test can_read with matching permission."""
+    @pytest.mark.parametrize(
+        ("allowed_tenants", "tenant_id", "expected"),
+        [
+            ((), "tenant_b", False),
+            ((), "any_tenant", False),
+            (("tenant_b",), "tenant_b", True),
+            (("tenant_b",), "tenant_a", False),
+            (("tenant_b", "tenant_c"), "tenant_c", True),
+            (("tenant_b", "tenant_c"), "tenant_a", False),
+            ((), "", False),
+            ((), None, False),
+        ],
+        ids=[
+            "empty-scope",
+            "empty-scope2",
+            "scoped-match",
+            "scoped-nomatch",
+            "multi-match",
+            "multi-nomatch",
+            "empty-id",
+            "none-id",
+        ],
+    )
+    def test_can_access_tenant(self, allowed_tenants, tenant_id, expected) -> None:
+        """Tenant isolation requires explicit tenant scope or admin:all."""
         token = ContextToken(
-            token_id="test",
-            permissions=("read:data", "write:data"),
-        )
-        scopes = SecurityScopes(read=["read:data"], write=[])
-        assert token.can_read(scopes)
-
-    def test_can_read_without_matching_permission(self) -> None:
-        """Test can_read without matching permission."""
-        token = ContextToken(
-            token_id="test",
-            permissions=("read:other",),
-        )
-        scopes = SecurityScopes(read=["read:data"], write=[])
-        assert not token.can_read(scopes)
-
-    def test_can_write_empty_scopes(self) -> None:
-        """Test can_write with empty scopes (allows all)."""
-        token = ContextToken(
-            token_id="test",
-            permissions=("write:data",),
-        )
-        scopes = SecurityScopes(read=[], write=[])
-        assert token.can_write(scopes)  # Empty scopes = no restrictions
-
-    def test_can_write_with_matching_permission(self) -> None:
-        """Test can_write with matching permission."""
-        token = ContextToken(
-            token_id="test",
-            permissions=("write:data",),
-        )
-        scopes = SecurityScopes(read=[], write=["write:data"])
-        assert token.can_write(scopes)
-
-    def test_can_write_without_matching_permission(self) -> None:
-        """Test can_write without matching permission."""
-        token = ContextToken(
-            token_id="test",
-            permissions=("write:other",),
-        )
-        scopes = SecurityScopes(read=[], write=["write:data"])
-        assert not token.can_write(scopes)
-
-    def test_can_access_tenant_admin(self) -> None:
-        """Admin token (empty allowed_tenants) can access any tenant."""
-        token = ContextToken(
-            token_id="admin",
+            token_id="t",
             permissions=("router:execute",),
-            allowed_tenants=(),  # admin
+            allowed_tenants=allowed_tenants,
         )
-        assert token.can_access_tenant("tenant_b") is True
+        assert token.can_access_tenant(tenant_id) is expected
+
+    def test_admin_all_can_access_any_tenant(self) -> None:
+        token = ContextToken(token_id="admin", permissions=("admin:all",))
+
         assert token.can_access_tenant("tenant_a") is True
-        assert token.can_access_tenant("any_tenant") is True
-
-    def test_can_access_tenant_scoped(self) -> None:
-        """Scoped token can only access listed tenants."""
-        token = ContextToken(
-            token_id="traverse_token",
-            permissions=("router:execute",),
-            allowed_tenants=("tenant_b",),
-        )
-        assert token.can_access_tenant("tenant_b") is True
-        assert token.can_access_tenant("tenant_a") is False
-        assert token.can_access_tenant("tenant_c") is False
-
-    def test_can_access_tenant_multi(self) -> None:
-        """Token scoped to multiple tenants."""
-        token = ContextToken(
-            token_id="multi_token",
-            permissions=("router:execute",),
-            allowed_tenants=("tenant_b", "tenant_c"),
-        )
-        assert token.can_access_tenant("tenant_b") is True
-        assert token.can_access_tenant("tenant_c") is True
-        assert token.can_access_tenant("tenant_a") is False
-
-    def test_can_access_tenant_empty_id_rejected(self) -> None:
-        """Empty tenant_id is always rejected, even for admin tokens."""
-        admin_token = ContextToken(
-            token_id="admin",
-            permissions=("router:execute",),
-            allowed_tenants=(),
-        )
-        assert admin_token.can_access_tenant("") is False
-        assert admin_token.can_access_tenant(None) is False
 
 
 class TestTokenBuilder:
@@ -180,6 +151,15 @@ class TestTokenBuilder:
         assert "write:data" in token.permissions
         assert token.exp_unix is not None
         assert token.exp_unix > time.time()
+        assert token.revocation_id is not None
+        assert token.revocation_id.startswith("rev-")
+
+    def test_revocation_id_uniqueness(self) -> None:
+        """Each minted token gets a unique revocation ID."""
+        builder = TokenBuilder()
+        t1 = builder.mint_root(user_ctx={}, permissions=[], ttl_s=60)
+        t2 = builder.mint_root(user_ctx={}, permissions=[], ttl_s=60)
+        assert t1.revocation_id != t2.revocation_id
 
     def test_mint_root_token_with_tenants(self) -> None:
         """Test minting a root token with tenant restrictions."""
@@ -368,7 +348,7 @@ class TestTokenEdgeCases:
         from contextunity.core import ContextUnit, SecurityScopes
 
         unit = ContextUnit(security=SecurityScopes(read=["read:data"]))
-        with pytest.raises(ValueError, match="Invalid operation"):
+        with pytest.raises(ConfigurationError, match="Invalid operation"):
             builder.verify_unit_access(token, unit, operation="invalid")
 
     def test_can_read_with_no_permissions(self) -> None:
@@ -416,3 +396,132 @@ class TestTokenEdgeCases:
         delegated_token = builder.attenuate(root_token, permissions=["brain:write"], agent_id="tool_agent")
         assert delegated_token.provenance == ("*router_agent", ">tool_agent")
         assert delegated_token.agent_id == "tool_agent"
+
+
+class TestMintRootDefaults:
+    """Structural assertions for mint_root defaults."""
+
+    def test_defaults(self) -> None:
+        """Verify all default values from mint_root in one shot."""
+        builder = TokenBuilder()
+        token = builder.mint_root(user_ctx={}, permissions=["brain:read"], ttl_s=300)
+        assert token.user_namespace == "default"
+        assert token.revocation_id is not None
+        assert token.revocation_id.startswith("rev-")
+        assert token.user_id is None
+        assert token.agent_id is None
+        assert token.allowed_tenants == ()
+        assert len(token.token_id) == 43  # secrets.token_urlsafe(32)
+        assert token.provenance == ("*system",)
+
+    def test_provenance_uses_user_id_over_agent_id(self) -> None:
+        """Provenance uses user_id when both user_id and agent_id provided."""
+        builder = TokenBuilder()
+        token = builder.mint_root(
+            user_ctx={},
+            permissions=["brain:read"],
+            ttl_s=300,
+            user_id="alice",
+            agent_id="dispatcher",
+        )
+        assert token.provenance == ("*alice",)
+
+
+class TestServiceTokenTenants:
+    """Service token cache must preserve explicit tenant scopes."""
+
+    def test_service_token_allows_explicit_tenant_scope(self) -> None:
+        from contextunity.core.tokens import get_brain_service_token
+
+        token = get_brain_service_token("router", allowed_tenants=("tenant-a",))
+
+        assert token.allowed_tenants == ("tenant-a",)
+        assert token.can_access_tenant("tenant-a") is True
+        assert token.can_access_tenant("tenant-b") is False
+
+    def test_service_token_cache_isolated_by_tenant_scope(self) -> None:
+        from contextunity.core.tokens import get_brain_service_token
+
+        empty_scope = get_brain_service_token("router")
+        tenant_scope = get_brain_service_token("router", allowed_tenants=("tenant-a",))
+
+        assert empty_scope.allowed_tenants == ()
+        assert tenant_scope.allowed_tenants == ("tenant-a",)
+
+
+class TestVerifyEdgeCases:
+    """Edge cases for verify() and verify_unit_access()."""
+
+    @pytest.mark.parametrize(
+        ("bad_value",),
+        [("not_a_token",), (None,), (42,)],
+        ids=["string", "none", "int"],
+    )
+    def test_verify_rejects_non_token(self, bad_value) -> None:
+        """verify() raises PermissionError for non-ContextToken."""
+        builder = TokenBuilder()
+        with pytest.raises(PermissionError, match="Missing token"):
+            builder.verify(bad_value, required_permission="read:data")
+
+    def test_verify_error_contains_permission_name(self) -> None:
+        """verify() error message contains the missing permission name."""
+        builder = TokenBuilder()
+        token = builder.mint_root(user_ctx={}, permissions=["brain:read"], ttl_s=3600)
+        with pytest.raises(PermissionError, match="memory:write"):
+            builder.verify(token, required_permission="memory:write")
+
+    def test_verify_unit_access_rejects_non_token(self) -> None:
+        """verify_unit_access() rejects non-ContextToken."""
+        builder = TokenBuilder()
+        unit = ContextUnit(security=SecurityScopes(read=["read:data"]))
+        with pytest.raises(PermissionError, match="Missing token"):
+            builder.verify_unit_access("not_a_token", unit, operation="read")
+
+    def test_verify_unit_access_expired_token(self) -> None:
+        """verify_unit_access() rejects expired token."""
+        builder = TokenBuilder()
+        token = ContextToken(
+            token_id="expired",
+            permissions=("read:data",),
+            exp_unix=time.time() - 1,
+        )
+        unit = ContextUnit(security=SecurityScopes(read=["read:data"]))
+        with pytest.raises(PermissionError, match="Token expired"):
+            builder.verify_unit_access(token, unit, operation="read")
+
+    def test_verify_unit_access_write_denied(self) -> None:
+        """verify_unit_access() write denied includes scope info."""
+        builder = TokenBuilder()
+        token = builder.mint_root(user_ctx={}, permissions=["brain:read"], ttl_s=3600)
+        unit = ContextUnit(security=SecurityScopes(write=["write:data"]))
+        with pytest.raises(PermissionError, match="write permission"):
+            builder.verify_unit_access(token, unit, operation="write")
+
+
+class TestAttenuateEdgeCases:
+    """Edge cases for attenuate() — TTL clamping and permission validation."""
+
+    def test_attenuate_ttl_clamped_to_parent(self) -> None:
+        """Child TTL cannot exceed parent TTL."""
+        builder = TokenBuilder()
+        parent = builder.mint_root(user_ctx={}, permissions=["brain:read"], ttl_s=60)
+        # Request longer TTL than parent
+        child = builder.attenuate(parent, ttl_s=3600)
+        assert child.exp_unix <= parent.exp_unix
+
+    def test_attenuate_inherits_revocation_id(self) -> None:
+        """Attenuation preserves parent's revocation_id."""
+        builder = TokenBuilder()
+        parent = builder.mint_root(user_ctx={}, permissions=["brain:read"], ttl_s=300)
+        child = builder.attenuate(parent, permissions=["brain:read"])
+        assert child.revocation_id == parent.revocation_id
+
+    def test_attenuate_preserves_token_id(self) -> None:
+        """Child shares parent's token_id."""
+        builder = TokenBuilder()
+        parent = builder.mint_root(user_ctx={}, permissions=["brain:read"], ttl_s=300)
+        child = builder.attenuate(parent, permissions=["brain:read"])
+        assert child.token_id == parent.token_id
+
+
+pytestmark = pytest.mark.unit

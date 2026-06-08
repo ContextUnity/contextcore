@@ -2,124 +2,118 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar, override
 
+from contextunity.core.brain_pb2_grpc import BrainServiceStub
 from contextunity.core.logging import get_contextunit_logger
 
+from .._base import BaseServiceClient
+
 if TYPE_CHECKING:
+    from typing import TypeAlias
+
     from contextunity.core import ContextToken
+    from contextunity.core.brain_pb2_grpc import BrainServiceAsyncStub
+    from contextunity.core.sdk.types import GrpcMetadata, TokenProviderFactory
+
+    _BrainBase: TypeAlias = BaseServiceClient[BrainServiceAsyncStub]
+else:
+    _BrainBase = BaseServiceClient
 
 logger = get_contextunit_logger(__name__)
 
-# Proto imports (lazy, may not be available)
-contextunit_pb2 = None
-brain_pb2_grpc = None
-commerce_pb2_grpc = None
 
+class BrainClientBase(_BrainBase):
+    """Base class for BrainClient with gRPC connection management.
 
-def _ensure_protos():
-    """Lazy load proto modules."""
-    global contextunit_pb2, brain_pb2_grpc, commerce_pb2_grpc
-    if contextunit_pb2 is None:
-        try:
-            from .... import brain_pb2_grpc as brain_grpc
-            from .... import contextunit_pb2 as cu_pb2
+    Inherits connection lifecycle from ``BaseServiceClient``.
+    Overrides ``_get_metadata()`` with Brain-specific auth:
 
-            contextunit_pb2 = cu_pb2
-            brain_pb2_grpc = brain_grpc
+    1. **Forwarding** (Router → Brain): reuse the pre-serialized token
+       string from the current auth context — no re-signing needed.
+    2. **Local signing** (platform service → Brain): sign the
+       ContextToken via the local signing backend.
+    """
 
-            try:
-                from .... import commerce_pb2_grpc as commerce_grpc
+    _service_name: ClassVar[str] = "brain"
+    _default_port: ClassVar[str] = "50051"
+    _config_url_attr: ClassVar[str] = "brain_url"
+    _stub_class: ClassVar[type] = BrainServiceStub
 
-                commerce_pb2_grpc = commerce_grpc
-            except ImportError:
-                pass
-        except ImportError:
-            raise ImportError("Brain gRPC protos not available")
-
-
-def get_contextunit_pb2():
-    """Get contextunit_pb2 module."""
-    _ensure_protos()
-    return contextunit_pb2
-
-
-class BrainClientBase:
-    """Base class for BrainClient with connection management."""
+    token: ContextToken | None
 
     def __init__(
         self,
         host: str | None = None,
-        mode: str | None = None,
-        token: "ContextToken | None" = None,
+        token: ContextToken | TokenProviderFactory | None = None,
         tenant_id: str | None = None,
-    ):
-        """Initialize BrainClient.
+    ) -> None:
+        """Initialize the BrainClient base instance.
 
         Args:
-            host: Specific Brain gRPC endpoint (bypasses discovery)
-            mode: "grpc" or "local"
-            token: Optional ContextToken for authorization
-            tenant_id: Explicit tenant to discover Brain for
+            host: Optional explicit gRPC host address.
+            token: Authentication token or token factory.
+            tenant_id: Optional tenant identifier for identity scoping.
         """
+        super().__init__(host=host, token=token, tenant_id=tenant_id)
+        # Expose token directly for backward compatibility —
+        # some callers check ``client.token`` (legacy pattern).
+        self.token = self._token
 
-        from contextunity.core.config import get_core_config
-
-        config = get_core_config()
-        self.mode = mode or config.brain_mode
-        self.host = host
-        self.token = token
-        self._stub = None
-        self._commerce_stub = None
-        self._service = None
-        self.channel = None
-
-        if self.mode == "grpc":
-            from contextunity.core.discovery import resolve_service_endpoint
-            from contextunity.core.sdk.identity import get_tenant_id
-
-            t_id = tenant_id or get_tenant_id()
-            self.host = host or resolve_service_endpoint(
-                "brain", configured_host=config.brain_url, default_host="localhost:50051", tenant_id=t_id
-            )
-            _ensure_protos()
-            from contextunity.core.grpc_utils import create_channel
-
-            self.channel = create_channel(self.host)
-            self._stub = brain_pb2_grpc.BrainServiceStub(self.channel)
-            if commerce_pb2_grpc:
-                self._commerce_stub = commerce_pb2_grpc.CommerceServiceStub(self.channel)
-        else:
-            try:
-                from contextunity.brain import BrainService
-
-                self._service = BrainService()
-            except ImportError:
-                logger.error("Brain local mode requested but contextunity.brain not installed")
-                raise
-
-    def _get_metadata(self) -> list[tuple[str, str]]:
+    @override
+    def _get_metadata(self) -> GrpcMetadata:
         """Get gRPC metadata with token for requests.
+
+        BrainClient is intended for **platform service tools** (Router,
+        Worker, View, Workshop, Zero) — internal components that hold
+        their own service tokens.
+
+        Two paths:
+        1. **Forwarding** (Router → Brain): Use the pre-serialized token
+           string from the current auth context. No re-signing needed —
+           the token was already signed by the originating project.
+        2. **Local signing** (platform service → Brain): Sign the
+           ContextToken via the local signing backend. Used by Worker,
+           View, Workshop, and other platform services that originate
+           Brain calls with their own service tokens.
+
+        .. note::
+
+           Direct Project/Extension → Brain usage (e.g. Commerce
+           taxonomy_sync, brain_sync, matcher) is **legacy** from early
+           Commerce coupling. These should migrate to Router graph
+           pipelines (Gardener/Enricher/Writer) and Worker batch
+           offloading.
+
+        .. todo::
+
+           Reconsider direct extension→Brain path after Phase 3 of
+           development. Target: extensions call Router/Worker only;
+           BrainClient stays platform-internal.
 
         Returns:
             List of (key, value) tuples for gRPC metadata
+
+        Raises:
+            PermissionError: If no token is available.
         """
-        from contextunity.core import create_grpc_metadata_with_token
-        from contextunity.core.signing import get_signing_backend
+        if self._token is None and self._token_factory is None:
+            raise PermissionError("BrainClient: no ContextToken available — cannot create gRPC metadata.")
 
-        actual_token = self.token() if callable(self.token) else self.token
-        if isinstance(actual_token, str):
-            return [("authorization", f"Bearer {actual_token}")]
+        # Path 1: Forward the original pre-serialized token string
+        # (available when running inside a service with an active gRPC auth context)
+        try:
+            from contextunity.core.authz.context import get_auth_context
 
-        backend = get_signing_backend()
-        return create_grpc_metadata_with_token(actual_token, backend=backend)
+            auth_ctx = get_auth_context()
+            if auth_ctx and auth_ctx.token_string:
+                return (("authorization", f"Bearer {auth_ctx.token_string}"),)
+        except Exception:
+            pass
 
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.channel:
-            await self.channel.close()
+        # Path 2: Sign the token locally (platform service originator)
+        # Falls through to the base class implementation.
+        return super()._get_metadata()
 
 
-__all__ = ["BrainClientBase", "get_contextunit_pb2", "logger"]
+__all__ = ["BrainClientBase", "logger"]

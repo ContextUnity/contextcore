@@ -7,15 +7,15 @@ Composed of modular mixins for different domains.
 from __future__ import annotations
 
 from .base import BrainClientBase
-from .commerce import CommerceMixin
+from .commerce import CommerceCompatMixin
 from .knowledge import KnowledgeMixin
 from .memory import MemoryMixin
 from .traces import TraceMixin
 
 
 class BrainClient(
+    CommerceCompatMixin,
     KnowledgeMixin,
-    CommerceMixin,
     MemoryMixin,
     TraceMixin,
     BrainClientBase,

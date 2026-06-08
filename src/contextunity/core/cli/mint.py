@@ -11,6 +11,7 @@ import secrets
 import sys
 
 from contextunity.core.logging import get_contextunit_logger
+from contextunity.core.types import is_object_list
 
 logger = get_contextunit_logger(__name__)
 
@@ -81,12 +82,19 @@ def mint_rotate(project_id: str, redis_url: str = "") -> None:
         sys.exit(1)
 
     new_secret = generate_hmac_secret()
-    owner_tenant = target_p.get("owner_tenant", "")
-    tools = target_p.get("tools", [])
+    owner_project = target_p.get("owner_project", project_id)
+    if not isinstance(owner_project, str):
+        print(f"❌ Error: Invalid owner_project type for project '{project_id}'.", file=sys.stderr)
+        sys.exit(1)
+
+    raw_tools: object = target_p.get("tools", [])
+    tools: list[str] = []
+    if is_object_list(raw_tools):
+        for tool_raw in raw_tools:
+            tools.append(tool_raw if isinstance(tool_raw, str) else str(tool_raw))
 
     success = discovery.register_project(
         project_id=project_id,
-        owner_tenant=owner_tenant,
         tools=tools,
         redis_url=redis_url,
         project_secret=new_secret,
@@ -109,7 +117,9 @@ def mint_rotate_redis_key(redis_url: str = "") -> None:
     import getpass
     import os
 
-    current_env_key = os.getenv("REDIS_SECRET_KEY")  # nosec
+    from contextunity.core.config import get_core_config, reset_core_config
+
+    current_env_key = get_core_config().security.redis_secret_key
     prompt_text = (
         "Enter current OLD REDIS_SECRET_KEY (press Enter to use from .env): "
         if current_env_key
@@ -127,62 +137,60 @@ def mint_rotate_redis_key(redis_url: str = "") -> None:
         sys.exit(1)
 
     try:
-        import redis as redis_sync
-        from contextunity.core.discovery import PROJECTS_PREFIX, _get_redis_url
+        from contextunity.core.discovery import PROJECTS_PREFIX, SyncRedisClient, get_redis_url
+        from contextunity.core.discovery.crypto import decrypt, encrypt
     except ImportError:
         print("❌ Error: Redis required for this operation.", file=sys.stderr)
         sys.exit(1)
 
-    url = _get_redis_url(redis_url)
+    url = get_redis_url(redis_url)
     if not url:
         print("❌ Error: No REDIS_URL provided or found in environment.", file=sys.stderr)
         sys.exit(1)
 
-    r = redis_sync.from_url(url, decode_responses=True)
+    client = SyncRedisClient(url)
+    try:
+        cursor = 0
+        matches: list[str] = []
+        while True:
+            cursor, page_keys = client.scan(cursor=cursor, match=f"{PROJECTS_PREFIX}:*", count=100)
+            matches.extend(page_keys)
+            if cursor == 0:
+                break
 
-    # 1. Fetch all project keys
-    cursor = "0"
-    matches = []
-    while cursor != 0:
-        cursor, res = r.scan(cursor=cursor, match=f"{PROJECTS_PREFIX}:*", count=100)
-        matches.extend(res)
+        if not matches:
+            print("✅ No projects to re-encrypt. You can just start using the new REDIS_SECRET_KEY.")
+            sys.exit(0)
 
-    if not matches:
-        print("✅ No projects to re-encrypt. You can just start using the new REDIS_SECRET_KEY.")
-        sys.exit(0)
+        count = 0
+        for key in set(matches):
+            raw_val = client.get(key)
+            if not raw_val:
+                continue
 
-    import os
+            # Decrypt with OLD key
+            os.environ["REDIS_SECRET_KEY"] = old_key  # nosec
+            reset_core_config()
+            try:
+                decrypted = decrypt(raw_val)
+            except Exception as e:
+                print(f"⚠️ Failed to decrypt {key} with old key: {e}", file=sys.stderr)
+                continue
 
-    import contextunity.core.discovery as discovery
+            # Encrypt with NEW key
+            os.environ["REDIS_SECRET_KEY"] = new_key  # nosec
+            reset_core_config()
+            try:
+                new_encrypted = encrypt(decrypted)
+            except Exception as e:
+                print(f"❌ Failed to encrypt {key} with new key: {e}", file=sys.stderr)
+                sys.exit(1)
 
-    count = 0
-    for key in set(matches):
-        raw_val = r.get(key)
-        if not raw_val:
-            continue
+            client.set(key, new_encrypted)
+            count += 1
 
-        # Decrypt with OLD key
-        os.environ["REDIS_SECRET_KEY"] = old_key  # nosec
-        discovery._redis_secret_key = None  # Clear cache
-        try:
-            decrypted = discovery._decrypt(raw_val)
-        except Exception as e:
-            print(f"⚠️ Failed to decrypt {key} with old key: {e}", file=sys.stderr)
-            continue
-
-        # Encrypt with NEW key
-        os.environ["REDIS_SECRET_KEY"] = new_key  # nosec
-        discovery._redis_secret_key = None  # Clear cache
-        try:
-            new_encrypted = discovery._encrypt(decrypted)
-        except Exception as e:
-            print(f"❌ Failed to encrypt {key} with new key: {e}", file=sys.stderr)
-            sys.exit(1)
-
-        # Save back
-        r.set(key, new_encrypted)
-        count += 1
-
-    print(f"✅ Successfully re-encrypted {count} Redis records.")
-    print("=====================================================")
-    print("🔑 Update your infrastructure/ansible and restart ALL services with the NEW key!")
+        print(f"✅ Successfully re-encrypted {count} Redis records.")
+        print("=====================================================")
+        print("🔑 Update your infrastructure/ansible and restart ALL services with the NEW key!")
+    finally:
+        client.close()
