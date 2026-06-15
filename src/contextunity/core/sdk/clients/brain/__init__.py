@@ -6,6 +6,7 @@ Composed of modular mixins for different domains.
 
 from __future__ import annotations
 
+from .admin import BrainAdminMixin
 from .base import BrainClientBase
 from .commerce import CommerceCompatMixin
 from .knowledge import KnowledgeMixin
@@ -14,6 +15,7 @@ from .traces import TraceMixin
 
 
 class BrainClient(
+    BrainAdminMixin,
     CommerceCompatMixin,
     KnowledgeMixin,
     MemoryMixin,

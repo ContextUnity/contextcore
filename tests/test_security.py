@@ -450,6 +450,7 @@ class TestServicePermissionInterceptor:
 
         config = get_core_config()
         monkeypatch.setattr(config.redis, "url", "")
+        monkeypatch.setattr(config, "local_mode", False)
 
         token = ContextToken(
             token_id="revocable",
@@ -457,6 +458,27 @@ class TestServicePermissionInterceptor:
             revocation_id="rev-missing-redis",
         )
         assert await interceptor._is_token_revoked(token) is True
+
+    @pytest.mark.asyncio
+    async def test_revocation_skipped_in_local_mode_without_redis(self, monkeypatch):
+        """Local platform runs without Redis — do not treat HMAC tokens as revoked."""
+        interceptor = ServicePermissionInterceptor(
+            _TEST_RPC_MAP,
+            service_name="Test",
+        )
+
+        from contextunity.core.config import get_core_config
+
+        config = get_core_config()
+        monkeypatch.setattr(config.redis, "url", "")
+        monkeypatch.setattr(config, "local_mode", True)
+
+        token = ContextToken(
+            token_id="local-dev",
+            permissions=(Permissions.BRAIN_READ,),
+            revocation_id="rev-local-skip",
+        )
+        assert await interceptor._is_token_revoked(token) is False
 
     @pytest.mark.asyncio
     async def test_revocation_fails_closed_on_redis_error(self, monkeypatch):

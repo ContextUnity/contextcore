@@ -13,6 +13,7 @@ Resolution hierarchy (lowest → highest precedence):
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Generic, TypeVar
@@ -20,7 +21,7 @@ from typing import Generic, TypeVar
 from contextunity.core.types import ConfigFactory, ConfigMapping, JsonDict, is_json_dict, is_json_value
 from pydantic import BaseModel
 
-from .env import get_env, read_credential
+from .env import get_bool_env, get_env, read_credential
 from .loader import load_config_file, read_service_file
 from .models import SharedConfig
 
@@ -67,6 +68,7 @@ SHARED_ENV_MAPPINGS: dict[str, str] = {
     # Bootstrap
     "CU_MANIFEST_PATH": "manifest_path",
     "CU_LOCAL_MODE": "local_mode",
+    "DEV_MODE": "dev_mode",
     # Security (systemd-creds on prod, env fallback on dev)
     "REDIS_SECRET_KEY": "security.redis_secret_key",
     "CU_PROJECT_SECRET": "security.project_secret",
@@ -128,6 +130,21 @@ def _resolve_mappings(
             _set_path(kwargs, field_path, value)
 
 
+def _load_dotenv_chain(*, max_parents: int = 8) -> None:
+    """Load the nearest ``.env`` from cwd, then walk up (monorepo subdir runs)."""
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+
+    cwd = Path.cwd()
+    for directory in (cwd, *list(cwd.parents)[:max_parents]):
+        env_file = directory / ".env"
+        if env_file.is_file():
+            _ = load_dotenv(env_file, override=False)
+            return
+
+
 def load_service_config(
     cls: type[_T],
     service_name: str,
@@ -138,14 +155,11 @@ def load_service_config(
     fallback_dirs: list[Path] | None = None,
 ) -> _T:
     """Build a service config from YAML file + env/creds overrides."""
-    try:
-        from dotenv import load_dotenv
+    _load_dotenv_chain()
 
-        env_file = Path.cwd() / ".env"
-        if env_file.exists():
-            _ = load_dotenv(env_file, override=False)
-    except ImportError:
-        pass
+    # Legacy alias used in older local .env files.
+    if not os.environ.get("CU_CONFIG_DIR") and os.environ.get("CONTEXTUNITY_CONFIG_DIR"):
+        os.environ["CU_CONFIG_DIR"] = os.environ["CONTEXTUNITY_CONFIG_DIR"]
 
     kwargs: ConfigMapping = {}
 
@@ -158,6 +172,10 @@ def load_service_config(
         _ = _deep_merge(kwargs, file_data)
 
     _resolve_mappings(kwargs, SHARED_ENV_MAPPINGS)
+
+    dev_mode = get_bool_env("DEV_MODE")
+    if dev_mode is not None:
+        _set_path(kwargs, "dev_mode", dev_mode)
 
     from .models import ServiceConfig
 

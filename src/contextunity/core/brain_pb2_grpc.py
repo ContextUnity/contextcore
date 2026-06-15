@@ -160,6 +160,72 @@ class BrainServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
+        self.ListTenants = channel.unary_unary(
+            "/contextunity.brain.BrainService/ListTenants",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.AdminSearchTraces = channel.unary_unary(
+            "/contextunity.brain.BrainService/AdminSearchTraces",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.AdminGetTraceDetails = channel.unary_unary(
+            "/contextunity.brain.BrainService/AdminGetTraceDetails",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.AdminGetSystemAnalytics = channel.unary_unary(
+            "/contextunity.brain.BrainService/AdminGetSystemAnalytics",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.AdminGetMemoryLayerStats = channel.unary_unary(
+            "/contextunity.brain.BrainService/AdminGetMemoryLayerStats",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.AdminGetFilterOptions = channel.unary_unary(
+            "/contextunity.brain.BrainService/AdminGetFilterOptions",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.AdminGetSessionTraces = channel.unary_unary(
+            "/contextunity.brain.BrainService/AdminGetSessionTraces",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.AdminGetRelatedEpisodes = channel.unary_unary(
+            "/contextunity.brain.BrainService/AdminGetRelatedEpisodes",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.AdminSearchEpisodes = channel.unary_unary(
+            "/contextunity.brain.BrainService/AdminSearchEpisodes",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.AdminGetKnowledgeNodes = channel.unary_unary(
+            "/contextunity.brain.BrainService/AdminGetKnowledgeNodes",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.AdminGetAnalyticsSummary = channel.unary_unary(
+            "/contextunity.brain.BrainService/AdminGetAnalyticsSummary",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
 
 
 class BrainServiceServicer(object):
@@ -367,6 +433,132 @@ class BrainServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def ListTenants(self, request, context):
+        """=========================================
+        Admin RPCs (WS-8) — require admin:read
+        Cross-tenant observability owned by Brain.
+        Replaces View brain_db RLS bypass (S8).
+        =========================================
+
+        List all tenants the caller may administer.
+        Requires admin:read.
+        Token admin:all → all tenants; else intersection with allowed_tenants.
+        Request payload: {}
+        Response payload: {tenants: [{id, label?, trace_count?}]}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def AdminSearchTraces(self, request, context):
+        """Cross-tenant trace search.
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {tenant_id?, service?, agent_id?, status?, hours?, limit?, offset?}
+        Response payload: {traces: [...], total: int}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def AdminGetTraceDetails(self, request, context):
+        """Get full details for a single trace (cross-tenant, admin-only).
+        Requires admin:read.
+        Request payload: {trace_id}
+        Response payload: same shape as GetTraces row
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def AdminGetSystemAnalytics(self, request, context):
+        """Cross-tenant system analytics aggregates.
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {hours?, tenant_id?}
+        Response payload: {analytics: {...}}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def AdminGetMemoryLayerStats(self, request, context):
+        """Cross-tenant memory layer stats (episodes, knowledge node counts).
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {layer?, tenant_id?}
+        Response payload: {layer_stats: {...}}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def AdminGetFilterOptions(self, request, context):
+        """Distinct filter values from agent_traces (for admin UI dropdowns).
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {tenant_id?}
+        Response payload: {filter_options: {agent_ids, tenant_ids, graph_names, user_ids}}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def AdminGetSessionTraces(self, request, context):
+        """Fetch all traces for a given session_id (cross-tenant, admin-only).
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {session_id, tenant_id?}
+        Response payload: {traces: [...]}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def AdminGetRelatedEpisodes(self, request, context):
+        """Fetch episodic_events related to a trace by trace_id (cross-tenant).
+        Requires admin:read.
+        Tenant scope is resolved from the trace's own tenant_id (by-id lookup).
+        Request payload: {trace_id}
+        Response payload: {episodes: [...]}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def AdminSearchEpisodes(self, request, context):
+        """Cross-tenant episodic event search with pagination.
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {tenant_id?, user_id?, session_id?, hours?, limit?, offset?}
+        Response payload: {events: [...], total: int}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def AdminGetKnowledgeNodes(self, request, context):
+        """List knowledge_nodes with optional tenant/kind filter (cross-tenant).
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {tenant_id?, kind?, limit?}
+        Response payload: {nodes: [...]}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def AdminGetAnalyticsSummary(self, request, context):
+        """Rich analytics summary with per-hour breakdown, token costs, tool usage.
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {tenant_id?, hours?}
+        Response payload: {analytics: {...}}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
 
 def add_BrainServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -457,6 +649,61 @@ def add_BrainServiceServicer_to_server(servicer, server):
         ),
         "MatchDuckDB": grpc.unary_unary_rpc_method_handler(
             servicer.MatchDuckDB,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ListTenants": grpc.unary_unary_rpc_method_handler(
+            servicer.ListTenants,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "AdminSearchTraces": grpc.unary_unary_rpc_method_handler(
+            servicer.AdminSearchTraces,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "AdminGetTraceDetails": grpc.unary_unary_rpc_method_handler(
+            servicer.AdminGetTraceDetails,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "AdminGetSystemAnalytics": grpc.unary_unary_rpc_method_handler(
+            servicer.AdminGetSystemAnalytics,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "AdminGetMemoryLayerStats": grpc.unary_unary_rpc_method_handler(
+            servicer.AdminGetMemoryLayerStats,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "AdminGetFilterOptions": grpc.unary_unary_rpc_method_handler(
+            servicer.AdminGetFilterOptions,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "AdminGetSessionTraces": grpc.unary_unary_rpc_method_handler(
+            servicer.AdminGetSessionTraces,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "AdminGetRelatedEpisodes": grpc.unary_unary_rpc_method_handler(
+            servicer.AdminGetRelatedEpisodes,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "AdminSearchEpisodes": grpc.unary_unary_rpc_method_handler(
+            servicer.AdminSearchEpisodes,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "AdminGetKnowledgeNodes": grpc.unary_unary_rpc_method_handler(
+            servicer.AdminGetKnowledgeNodes,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "AdminGetAnalyticsSummary": grpc.unary_unary_rpc_method_handler(
+            servicer.AdminGetAnalyticsSummary,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -1014,6 +1261,336 @@ class BrainService(object):
             request,
             target,
             "/contextunity.brain.BrainService/MatchDuckDB",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ListTenants(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/ListTenants",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def AdminSearchTraces(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/AdminSearchTraces",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def AdminGetTraceDetails(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/AdminGetTraceDetails",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def AdminGetSystemAnalytics(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/AdminGetSystemAnalytics",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def AdminGetMemoryLayerStats(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/AdminGetMemoryLayerStats",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def AdminGetFilterOptions(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/AdminGetFilterOptions",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def AdminGetSessionTraces(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/AdminGetSessionTraces",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def AdminGetRelatedEpisodes(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/AdminGetRelatedEpisodes",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def AdminSearchEpisodes(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/AdminSearchEpisodes",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def AdminGetKnowledgeNodes(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/AdminGetKnowledgeNodes",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def AdminGetAnalyticsSummary(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/AdminGetAnalyticsSummary",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,

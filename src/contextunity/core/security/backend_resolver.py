@@ -55,6 +55,13 @@ async def is_token_revoked(
 
     redis_url = config.redis.url if config.redis.enabled else ""
     if not redis_url:
+        if config.local_mode:
+            logger.debug(
+                "%s: skipping revocation check for token '%s' in local_mode (no redis)",
+                service_name,
+                token.token_id,
+            )
+            return False
         logger.error(
             (
                 "%s: token '%s' has revocation_id=%s but redis_url is not "

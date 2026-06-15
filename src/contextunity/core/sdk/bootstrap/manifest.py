@@ -302,11 +302,6 @@ def sign_prompt_integrity(
     """
     from contextunity.core.config import get_core_config
 
-    project_secret = get_core_config().security.project_secret
-    if not project_secret:
-        logger.debug("CU_PROJECT_SECRET not set — skipping prompt signing")
-        return
-
     graph = _router_graph(manifest_dict)
     if graph is None:
         return
@@ -323,6 +318,36 @@ def sign_prompt_integrity(
                 graph_entries.append((entry_config, get_json_dict_list(entry_dict, "nodes")))
 
     if not graph_entries:
+        return
+
+    # Determine whether any node carries a prompt that must be signed (WS-9).
+    def _has_signable_prompts() -> bool:
+        for config, nodes in graph_entries:
+            for node in nodes:
+                node_name = get_str(node, "name")
+                if not node_name:
+                    continue
+                if get_str(config, f"{node_name}_prompt"):
+                    return True
+                if get_json_dict(config, f"{node_name}_sub_prompts"):
+                    return True
+        return False
+
+    project_secret = get_core_config().security.project_secret
+    if not project_secret:
+        # Fail closed: a manifest that ships LLM prompts MUST sign them. Silently
+        # skipping (the old behaviour) would register unsigned prompts that the
+        # runtime then cannot tamper-check — i.e. infra-level prompt injection.
+        if _has_signable_prompts():
+            from contextunity.core.exceptions import ConfigurationError
+
+            raise ConfigurationError(
+                f"Project '{project_id}' manifest defines LLM prompt(s) but CU_PROJECT_SECRET "
+                "is not set. Prompt-integrity signing is mandatory when prompts are present: "
+                "set CU_PROJECT_SECRET (OSS) or provision a Shield project HMAC (Enterprise). "
+                "Refusing to register unsigned prompts (fail-closed — WS-9)."
+            )
+        logger.debug("No CU_PROJECT_SECRET and no signable prompts — nothing to sign")
         return
 
     from contextunity.core.sdk.prompt_integrity import compute_prompt_version, sign_prompt

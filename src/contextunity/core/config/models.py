@@ -165,6 +165,10 @@ class SharedConfig(BaseModel):
 
     # Bootstrap / Environment state
     local_mode: bool = Field(default=False, description="Local development mode (SQLite, no external deps)")
+    dev_mode: bool = Field(
+        default=False,
+        description="Developer mode: hot-reload (CLI) and Forge auto-session when CU_PROJECT_SECRET is set",
+    )
     manifest_path: str = Field(default="", description="Path to contextunity.project.yaml")
 
     # Security — unified config, replaces per-service SecurityConfig

@@ -27,8 +27,6 @@ _EXCEPTION_MODULES = [
     "contextunity.brain.core.exceptions",
     "contextunity.shield.exceptions",
     "contextunity.worker.core.exceptions",
-    "contextunity.view.service.exceptions",
-    "contextunity.workshop.core.exceptions",
 ]
 
 _SERVICE_PREFIXES = {
@@ -36,8 +34,6 @@ _SERVICE_PREFIXES = {
     "contextunity.brain": "BRAIN_",
     "contextunity.shield": "SHIELD_",
     "contextunity.worker": "WORKER_",
-    "contextunity.view": "VIEW_",
-    "contextunity.workshop": "WORKSHOP_",
     "contextunity.core": "",  # core codes have no service prefix
 }
 

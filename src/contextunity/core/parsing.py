@@ -39,15 +39,27 @@ def json_dumps(
     *,
     sort_keys: bool = False,
     ensure_ascii: bool = True,
+    indent: int | None = None,
     default: Callable[[object], object] | None = None,
 ) -> str:
     """Serialize a Python object to a JSON string."""
-    if default is not None or sort_keys:
+    if default is not None or sort_keys or indent is not None:
         import json
 
         if default is not None:
-            return json.dumps(value, sort_keys=sort_keys, ensure_ascii=ensure_ascii, default=default)
-        return json.dumps(value, sort_keys=sort_keys, ensure_ascii=ensure_ascii)
+            return json.dumps(
+                value,
+                sort_keys=sort_keys,
+                ensure_ascii=ensure_ascii,
+                indent=indent,
+                default=default,
+            )
+        return json.dumps(
+            value,
+            sort_keys=sort_keys,
+            ensure_ascii=ensure_ascii,
+            indent=indent,
+        )
 
     from pydantic_core import to_json
 

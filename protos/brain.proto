@@ -136,4 +136,86 @@ service BrainService {
     // Request payload: {tenant_id, unmatched_uri, canonical_uri}
     // Response payload: {duckdb_matches: [...], duckdb_leftovers_count: int}
     rpc MatchDuckDB(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // =========================================
+    // Admin RPCs (WS-8) — require admin:read
+    // Cross-tenant observability owned by Brain.
+    // Replaces View brain_db RLS bypass (S8).
+    // =========================================
+
+    // List all tenants the caller may administer.
+    // Requires admin:read.
+    // Token admin:all → all tenants; else intersection with allowed_tenants.
+    // Request payload: {}
+    // Response payload: {tenants: [{id, label?, trace_count?}]}
+    rpc ListTenants(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Cross-tenant trace search.
+    // Requires admin:read.
+    // tenant_id is optional only when token has admin:all; otherwise required.
+    // Request payload: {tenant_id?, service?, agent_id?, status?, hours?, limit?, offset?}
+    // Response payload: {traces: [...], total: int}
+    rpc AdminSearchTraces(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Get full details for a single trace (cross-tenant, admin-only).
+    // Requires admin:read.
+    // Request payload: {trace_id}
+    // Response payload: same shape as GetTraces row
+    rpc AdminGetTraceDetails(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Cross-tenant system analytics aggregates.
+    // Requires admin:read.
+    // tenant_id is optional only when token has admin:all; otherwise required.
+    // Request payload: {hours?, tenant_id?}
+    // Response payload: {analytics: {...}}
+    rpc AdminGetSystemAnalytics(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Cross-tenant memory layer stats (episodes, knowledge node counts).
+    // Requires admin:read.
+    // tenant_id is optional only when token has admin:all; otherwise required.
+    // Request payload: {layer?, tenant_id?}
+    // Response payload: {layer_stats: {...}}
+    rpc AdminGetMemoryLayerStats(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Distinct filter values from agent_traces (for admin UI dropdowns).
+    // Requires admin:read.
+    // tenant_id is optional only when token has admin:all; otherwise required.
+    // Request payload: {tenant_id?}
+    // Response payload: {filter_options: {agent_ids, tenant_ids, graph_names, user_ids}}
+    rpc AdminGetFilterOptions(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Fetch all traces for a given session_id (cross-tenant, admin-only).
+    // Requires admin:read.
+    // tenant_id is optional only when token has admin:all; otherwise required.
+    // Request payload: {session_id, tenant_id?}
+    // Response payload: {traces: [...]}
+    rpc AdminGetSessionTraces(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Fetch episodic_events related to a trace by trace_id (cross-tenant).
+    // Requires admin:read.
+    // Tenant scope is resolved from the trace's own tenant_id (by-id lookup).
+    // Request payload: {trace_id}
+    // Response payload: {episodes: [...]}
+    rpc AdminGetRelatedEpisodes(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Cross-tenant episodic event search with pagination.
+    // Requires admin:read.
+    // tenant_id is optional only when token has admin:all; otherwise required.
+    // Request payload: {tenant_id?, user_id?, session_id?, hours?, limit?, offset?}
+    // Response payload: {events: [...], total: int}
+    rpc AdminSearchEpisodes(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // List knowledge_nodes with optional tenant/kind filter (cross-tenant).
+    // Requires admin:read.
+    // tenant_id is optional only when token has admin:all; otherwise required.
+    // Request payload: {tenant_id?, kind?, limit?}
+    // Response payload: {nodes: [...]}
+    rpc AdminGetKnowledgeNodes(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Rich analytics summary with per-hour breakdown, token costs, tool usage.
+    // Requires admin:read.
+    // tenant_id is optional only when token has admin:all; otherwise required.
+    // Request payload: {tenant_id?, hours?}
+    // Response payload: {analytics: {...}}
+    rpc AdminGetAnalyticsSummary(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 }

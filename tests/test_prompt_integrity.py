@@ -101,4 +101,62 @@ class TestSignAndVerify:
         assert len(sig_long) < 200
 
 
+class TestSignPromptIntegrityFailClosed:
+    """WS-9: a manifest that ships LLM prompts cannot register unsigned.
+
+    ``sign_prompt_integrity`` must refuse (fail closed) when prompts are present
+    but no project secret is configured — otherwise the runtime would receive
+    unsigned prompts it cannot tamper-check (infra-level prompt injection).
+    """
+
+    @staticmethod
+    def _manifest_with_prompt() -> dict:
+        return {
+            "router": {
+                "graph": {
+                    "nodes": [{"name": "planner"}],
+                    "config": {"planner_prompt": "You are a planner."},
+                }
+            }
+        }
+
+    @staticmethod
+    def _patch_secret(monkeypatch, secret: str) -> None:
+        from types import SimpleNamespace
+
+        import contextunity.core.config as cfg
+
+        monkeypatch.setattr(
+            cfg,
+            "get_core_config",
+            lambda: SimpleNamespace(security=SimpleNamespace(project_secret=secret)),
+        )
+
+    def test_prompts_without_secret_raise(self, monkeypatch):
+        from contextunity.core.exceptions import ConfigurationError
+        from contextunity.core.sdk.bootstrap.manifest import sign_prompt_integrity
+
+        self._patch_secret(monkeypatch, "")
+        with pytest.raises(ConfigurationError, match="CU_PROJECT_SECRET"):
+            sign_prompt_integrity(self._manifest_with_prompt(), "proj-1")
+
+    def test_no_prompts_without_secret_is_noop(self, monkeypatch):
+        from contextunity.core.sdk.bootstrap.manifest import sign_prompt_integrity
+
+        self._patch_secret(monkeypatch, "")
+        manifest = {"router": {"graph": {"nodes": [{"name": "planner"}], "config": {}}}}
+        # No signable prompt present → nothing to sign, must not raise.
+        sign_prompt_integrity(manifest, "proj-1")
+
+    def test_prompts_with_secret_are_signed(self, monkeypatch):
+        from contextunity.core.sdk.bootstrap.manifest import sign_prompt_integrity
+
+        self._patch_secret(monkeypatch, "test-secret-key-123")
+        manifest = self._manifest_with_prompt()
+        sign_prompt_integrity(manifest, "proj-1")
+        node = manifest["router"]["graph"]["nodes"][0]
+        assert node.get("prompt_signature"), "prompted node must be signed when secret is present"
+        assert node.get("prompt_version")
+
+
 pytestmark = pytest.mark.unit

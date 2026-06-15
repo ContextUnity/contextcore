@@ -23,6 +23,13 @@ from .factory import (
 )
 from .loader import SYSTEM_CONFIG_DIR, load_config_file, read_service_file
 from .models import LogLevel, ServiceConfig, SharedConfig, SharedSecurityConfig
+from .paths import (
+    DEFAULT_OPERATOR_FALLBACK_DIRS,
+    default_operator_fallback_dirs,
+    resolve_config_dir,
+    resolve_credentials_path,
+    resolve_operator_profile,
+)
 
 __all__ = [
     # Models
@@ -45,4 +52,10 @@ __all__ = [
     "read_service_file",
     "load_config_file",
     "SYSTEM_CONFIG_DIR",
+    # Operator paths
+    "DEFAULT_OPERATOR_FALLBACK_DIRS",
+    "default_operator_fallback_dirs",
+    "resolve_config_dir",
+    "resolve_credentials_path",
+    "resolve_operator_profile",
 ]

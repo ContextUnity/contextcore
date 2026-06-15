@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from contextunity.core.logging import get_contextunit_logger
 from contextunity.core.manifest.helpers import parse_tool_ref as _parse_tool_binding
-from contextunity.core.types import JsonDict, is_json_dict, is_object_dict
+from contextunity.core.types import JsonDict, is_json_dict
 
 from ..types import PromptMap, ToolHandler, ToolPayload
 from .loop import bootstrap_loop
@@ -212,13 +212,6 @@ def _register_and_start_impl(
         )
 
     payload: ToolPayload = {"bundle": bundle.model_dump(exclude_none=True)}
-
-    from contextunity.core.manifest.bundle_hash import compute_registration_bundle_hash
-
-    bundle_dict = payload["bundle"]
-    if is_object_dict(bundle_dict):
-        bundle_payload: dict[str, object] = {str(key): value for key, value in bundle_dict.items()}
-        payload["hash"] = compute_registration_bundle_hash(bundle_payload)
 
     tool_names = sorted(name for tool in bundle.tools for name in [tool.get("name")] if isinstance(name, str) and name)
 

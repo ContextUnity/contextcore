@@ -160,6 +160,88 @@ class BrainServiceStub:
     Request payload: {tenant_id, unmatched_uri, canonical_uri}
     Response payload: {duckdb_matches: [...], duckdb_leftovers_count: int}
     """
+    ListTenants: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """=========================================
+    Admin RPCs (WS-8) — require admin:read
+    Cross-tenant observability owned by Brain.
+    Replaces View brain_db RLS bypass (S8).
+    =========================================
+
+    List all tenants the caller may administer.
+    Requires admin:read.
+    Token admin:all → all tenants; else intersection with allowed_tenants.
+    Request payload: {}
+    Response payload: {tenants: [{id, label?, trace_count?}]}
+    """
+    AdminSearchTraces: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Cross-tenant trace search.
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {tenant_id?, service?, agent_id?, status?, hours?, limit?, offset?}
+    Response payload: {traces: [...], total: int}
+    """
+    AdminGetTraceDetails: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Get full details for a single trace (cross-tenant, admin-only).
+    Requires admin:read.
+    Request payload: {trace_id}
+    Response payload: same shape as GetTraces row
+    """
+    AdminGetSystemAnalytics: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Cross-tenant system analytics aggregates.
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {hours?, tenant_id?}
+    Response payload: {analytics: {...}}
+    """
+    AdminGetMemoryLayerStats: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Cross-tenant memory layer stats (episodes, knowledge node counts).
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {layer?, tenant_id?}
+    Response payload: {layer_stats: {...}}
+    """
+    AdminGetFilterOptions: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Distinct filter values from agent_traces (for admin UI dropdowns).
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {tenant_id?}
+    Response payload: {filter_options: {agent_ids, tenant_ids, graph_names, user_ids}}
+    """
+    AdminGetSessionTraces: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Fetch all traces for a given session_id (cross-tenant, admin-only).
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {session_id, tenant_id?}
+    Response payload: {traces: [...]}
+    """
+    AdminGetRelatedEpisodes: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Fetch episodic_events related to a trace by trace_id (cross-tenant).
+    Requires admin:read.
+    Tenant scope is resolved from the trace's own tenant_id (by-id lookup).
+    Request payload: {trace_id}
+    Response payload: {episodes: [...]}
+    """
+    AdminSearchEpisodes: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Cross-tenant episodic event search with pagination.
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {tenant_id?, user_id?, session_id?, hours?, limit?, offset?}
+    Response payload: {events: [...], total: int}
+    """
+    AdminGetKnowledgeNodes: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """List knowledge_nodes with optional tenant/kind filter (cross-tenant).
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {tenant_id?, kind?, limit?}
+    Response payload: {nodes: [...]}
+    """
+    AdminGetAnalyticsSummary: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Rich analytics summary with per-hour breakdown, token costs, tool usage.
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {tenant_id?, hours?}
+    Response payload: {analytics: {...}}
+    """
 
 @_typing.type_check_only
 class BrainServiceAsyncStub(BrainServiceStub):
@@ -291,6 +373,88 @@ class BrainServiceAsyncStub(BrainServiceStub):
     Execute high-speed DuckDB string/fuzzy matching on Parquet files
     Request payload: {tenant_id, unmatched_uri, canonical_uri}
     Response payload: {duckdb_matches: [...], duckdb_leftovers_count: int}
+    """
+    ListTenants: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """=========================================
+    Admin RPCs (WS-8) — require admin:read
+    Cross-tenant observability owned by Brain.
+    Replaces View brain_db RLS bypass (S8).
+    =========================================
+
+    List all tenants the caller may administer.
+    Requires admin:read.
+    Token admin:all → all tenants; else intersection with allowed_tenants.
+    Request payload: {}
+    Response payload: {tenants: [{id, label?, trace_count?}]}
+    """
+    AdminSearchTraces: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Cross-tenant trace search.
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {tenant_id?, service?, agent_id?, status?, hours?, limit?, offset?}
+    Response payload: {traces: [...], total: int}
+    """
+    AdminGetTraceDetails: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Get full details for a single trace (cross-tenant, admin-only).
+    Requires admin:read.
+    Request payload: {trace_id}
+    Response payload: same shape as GetTraces row
+    """
+    AdminGetSystemAnalytics: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Cross-tenant system analytics aggregates.
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {hours?, tenant_id?}
+    Response payload: {analytics: {...}}
+    """
+    AdminGetMemoryLayerStats: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Cross-tenant memory layer stats (episodes, knowledge node counts).
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {layer?, tenant_id?}
+    Response payload: {layer_stats: {...}}
+    """
+    AdminGetFilterOptions: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Distinct filter values from agent_traces (for admin UI dropdowns).
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {tenant_id?}
+    Response payload: {filter_options: {agent_ids, tenant_ids, graph_names, user_ids}}
+    """
+    AdminGetSessionTraces: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Fetch all traces for a given session_id (cross-tenant, admin-only).
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {session_id, tenant_id?}
+    Response payload: {traces: [...]}
+    """
+    AdminGetRelatedEpisodes: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Fetch episodic_events related to a trace by trace_id (cross-tenant).
+    Requires admin:read.
+    Tenant scope is resolved from the trace's own tenant_id (by-id lookup).
+    Request payload: {trace_id}
+    Response payload: {episodes: [...]}
+    """
+    AdminSearchEpisodes: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Cross-tenant episodic event search with pagination.
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {tenant_id?, user_id?, session_id?, hours?, limit?, offset?}
+    Response payload: {events: [...], total: int}
+    """
+    AdminGetKnowledgeNodes: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """List knowledge_nodes with optional tenant/kind filter (cross-tenant).
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {tenant_id?, kind?, limit?}
+    Response payload: {nodes: [...]}
+    """
+    AdminGetAnalyticsSummary: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Rich analytics summary with per-hour breakdown, token costs, tool usage.
+    Requires admin:read.
+    tenant_id is optional only when token has admin:all; otherwise required.
+    Request payload: {tenant_id?, hours?}
+    Response payload: {analytics: {...}}
     """
 
 class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
@@ -528,6 +692,154 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         Execute high-speed DuckDB string/fuzzy matching on Parquet files
         Request payload: {tenant_id, unmatched_uri, canonical_uri}
         Response payload: {duckdb_matches: [...], duckdb_leftovers_count: int}
+        """
+
+    @_abc_1.abstractmethod
+    def ListTenants(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """=========================================
+        Admin RPCs (WS-8) — require admin:read
+        Cross-tenant observability owned by Brain.
+        Replaces View brain_db RLS bypass (S8).
+        =========================================
+
+        List all tenants the caller may administer.
+        Requires admin:read.
+        Token admin:all → all tenants; else intersection with allowed_tenants.
+        Request payload: {}
+        Response payload: {tenants: [{id, label?, trace_count?}]}
+        """
+
+    @_abc_1.abstractmethod
+    def AdminSearchTraces(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Cross-tenant trace search.
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {tenant_id?, service?, agent_id?, status?, hours?, limit?, offset?}
+        Response payload: {traces: [...], total: int}
+        """
+
+    @_abc_1.abstractmethod
+    def AdminGetTraceDetails(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Get full details for a single trace (cross-tenant, admin-only).
+        Requires admin:read.
+        Request payload: {trace_id}
+        Response payload: same shape as GetTraces row
+        """
+
+    @_abc_1.abstractmethod
+    def AdminGetSystemAnalytics(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Cross-tenant system analytics aggregates.
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {hours?, tenant_id?}
+        Response payload: {analytics: {...}}
+        """
+
+    @_abc_1.abstractmethod
+    def AdminGetMemoryLayerStats(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Cross-tenant memory layer stats (episodes, knowledge node counts).
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {layer?, tenant_id?}
+        Response payload: {layer_stats: {...}}
+        """
+
+    @_abc_1.abstractmethod
+    def AdminGetFilterOptions(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Distinct filter values from agent_traces (for admin UI dropdowns).
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {tenant_id?}
+        Response payload: {filter_options: {agent_ids, tenant_ids, graph_names, user_ids}}
+        """
+
+    @_abc_1.abstractmethod
+    def AdminGetSessionTraces(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Fetch all traces for a given session_id (cross-tenant, admin-only).
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {session_id, tenant_id?}
+        Response payload: {traces: [...]}
+        """
+
+    @_abc_1.abstractmethod
+    def AdminGetRelatedEpisodes(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Fetch episodic_events related to a trace by trace_id (cross-tenant).
+        Requires admin:read.
+        Tenant scope is resolved from the trace's own tenant_id (by-id lookup).
+        Request payload: {trace_id}
+        Response payload: {episodes: [...]}
+        """
+
+    @_abc_1.abstractmethod
+    def AdminSearchEpisodes(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Cross-tenant episodic event search with pagination.
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {tenant_id?, user_id?, session_id?, hours?, limit?, offset?}
+        Response payload: {events: [...], total: int}
+        """
+
+    @_abc_1.abstractmethod
+    def AdminGetKnowledgeNodes(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """List knowledge_nodes with optional tenant/kind filter (cross-tenant).
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {tenant_id?, kind?, limit?}
+        Response payload: {nodes: [...]}
+        """
+
+    @_abc_1.abstractmethod
+    def AdminGetAnalyticsSummary(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Rich analytics summary with per-hour breakdown, token costs, tool usage.
+        Requires admin:read.
+        tenant_id is optional only when token has admin:all; otherwise required.
+        Request payload: {tenant_id?, hours?}
+        Response payload: {analytics: {...}}
         """
 
 def add_BrainServiceServicer_to_server(
