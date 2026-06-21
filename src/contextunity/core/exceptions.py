@@ -33,6 +33,7 @@ __all__ = [
     "StorageError",
     "DatabaseConnectionError",
     "PlatformServiceError",
+    "ResourceFetchError",
     # Infrastructure
     "RedisNotAvailable",
     "RedisConnectionError",
@@ -136,6 +137,18 @@ class PlatformServiceError(ContextUnityError):
     """Platform service (Brain/Shield/Zero/Worker) call failure."""
 
     code: str = "PLATFORM_SERVICE_ERROR"
+
+
+class ResourceFetchError(ContextUnityError):
+    """Failed to fetch an external resource (transport, timeout, or non-2xx status).
+
+    Distinct from :class:`SecurityError`, which signals that a URL was *refused*
+    by the SSRF policy. ``ResourceFetchError`` means the request was allowed but
+    the remote resource could not be retrieved. Messages must stay safe — never
+    echo the resolved internal address back to an untrusted caller.
+    """
+
+    code: str = "RESOURCE_FETCH_ERROR"
 
 
 # ---- Infrastructure Exceptions ----------------------------------------------
@@ -285,6 +298,7 @@ ErrorRegistry.register("TAMPER_DETECTED", TamperDetectedError)
 ErrorRegistry.register("STORAGE_ERROR", StorageError)
 ErrorRegistry.register("DB_CONNECTION_ERROR", DatabaseConnectionError)
 ErrorRegistry.register("PLATFORM_SERVICE_ERROR", PlatformServiceError)
+ErrorRegistry.register("RESOURCE_FETCH_ERROR", ResourceFetchError)
 ErrorRegistry.register("REDIS_NOT_AVAILABLE", RedisNotAvailable)
 ErrorRegistry.register("REDIS_CONNECTION_ERROR", RedisConnectionError)
 ErrorRegistry.register("SERVICE_STARTUP_ERROR", ServiceStartupError)

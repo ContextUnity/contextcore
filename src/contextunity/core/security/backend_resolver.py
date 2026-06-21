@@ -186,6 +186,11 @@ async def build_verifier_backend(
         if secret:
             from ..signing import HmacBackend
 
+            logger.warning(
+                "%s: using CU_PROJECT_SECRET fallback for project %s because ProjectStore has no key material",
+                service_name,
+                project_id,
+            )
             return HmacBackend(project_id, project_secret=secret)
         logger.warning("No key material found for project %s", project_id)
         return None

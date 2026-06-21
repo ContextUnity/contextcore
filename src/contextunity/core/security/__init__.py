@@ -13,6 +13,7 @@ Usage (in any service)::
 
 from __future__ import annotations
 
+from .fetch import fetch_safe_url, fetch_safe_url_sync
 from .interceptors import (
     ServicePermissionInterceptor,
     _extract_rpc_name,
@@ -30,4 +31,6 @@ __all__ = [
     "_should_skip",
     # Utils
     "validate_safe_url",
+    "fetch_safe_url",
+    "fetch_safe_url_sync",
 ]

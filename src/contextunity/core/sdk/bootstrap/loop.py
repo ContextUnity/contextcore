@@ -23,6 +23,45 @@ if TYPE_CHECKING:
 
 logger = get_contextunit_logger(__name__)
 
+_INITIAL_RETRY_DELAY_SECONDS = 15
+_MAX_RETRY_DELAY_SECONDS = 300
+
+
+def _next_retry_delay(delay_seconds: int) -> int:
+    """Return the next exponential retry delay, capped at 5 minutes."""
+    return min(delay_seconds * 2, _MAX_RETRY_DELAY_SECONDS)
+
+
+def _is_grpc_deadline_exceeded(e: Exception) -> bool:
+    try:
+        import grpc
+
+        code_fn = getattr(e, "code", None)
+        return isinstance(e, grpc.RpcError) and callable(code_fn) and code_fn() == grpc.StatusCode.DEADLINE_EXCEEDED
+    except ImportError:
+        return False
+
+
+def _format_bootstrap_error(e: Exception, operation: str) -> str:
+    from contextunity.core.sdk.streaming.bidi import format_grpc_error
+
+    formatted = format_grpc_error(e)
+    if _is_grpc_deadline_exceeded(e):
+        return (
+            f"{formatted}. Timeout while {operation}: the gRPC call reached its client deadline before "
+            "the service replied. Check service availability, network/TLS/DNS, and server-side latency."
+        )
+    return formatted
+
+
+def _log_retry(message: str, e: Exception, operation: str, delay_seconds: int, *args: object) -> None:
+    logger.error(
+        "%s: %s. Retrying in %d seconds...",
+        message % args if args else message,
+        _format_bootstrap_error(e, operation),
+        delay_seconds,
+    )
+
 
 def bootstrap_loop(
     router_url: str,
@@ -54,8 +93,6 @@ def bootstrap_loop(
     """
     import time
 
-    from contextunity.core.sdk.streaming.bidi import format_grpc_error
-
     # ── Shield session token acquisition (with retry) ─────────
     if shield_enabled and shield_url and backend is not None:
         from contextunity.core.signing import (
@@ -67,6 +104,7 @@ def bootstrap_loop(
 
         if isinstance(backend, HmacBackend):
             hmac_backend = backend
+            retry_delay = _INITIAL_RETRY_DELAY_SECONDS
             while True:
                 try:
                     from contextunity.core.sdk.identity import get_required_services
@@ -87,12 +125,15 @@ def bootstrap_loop(
                     logger.info("Shield session token acquired for project '%s'", project_id)
                     break
                 except Exception as e:
-                    logger.warning(
-                        "Shield unavailable for '%s': %s. Retrying in 15s...",
+                    _log_retry(
+                        "Shield unavailable for '%s'",
+                        e,
+                        "requesting a Shield session token",
+                        retry_delay,
                         project_id,
-                        format_grpc_error(e),
                     )
-                    time.sleep(15)
+                    time.sleep(retry_delay)
+                    retry_delay = _next_retry_delay(retry_delay)
 
     # ── Shield secrets sync (with retry) ──────────────────────
     from contextunity.core.sdk.streaming.bidi import run_stream_loop
@@ -107,42 +148,60 @@ def bootstrap_loop(
             )
             return
 
+        retry_delay = _INITIAL_RETRY_DELAY_SECONDS
         while True:
             try:
                 synced = put_secrets_to_shield(project_id, resolved_secrets, shield_url, backend)
                 logger.info("Synced %d API key(s) to Shield: %s", len(synced), ", ".join(synced))
                 break
             except Exception as e:
-                logger.error(
-                    "Shield sync FAILED for project '%s': %s. Retrying in 15 seconds...",
+                _log_retry(
+                    "Shield sync FAILED for project '%s'",
+                    e,
+                    "syncing secrets to Shield",
+                    retry_delay,
                     project_id,
-                    format_grpc_error(e),
                 )
-                time.sleep(15)
+                time.sleep(retry_delay)
+                retry_delay = _next_retry_delay(retry_delay)
 
     logger.info("Registering with Router at %s...", router_url)
     stream_secret: str | None = None
+    retry_delay = _INITIAL_RETRY_DELAY_SECONDS
     while True:
         try:
             stream_secret, _ = do_register(router_url, project_id, payload, backend)
             break
         except Exception as e:
-            logger.error("Registration failed: %s. Retrying in 15 seconds...", format_grpc_error(e))
-            time.sleep(15)
+            _log_retry(
+                "Registration failed",
+                e,
+                "registering manifest with Router",
+                retry_delay,
+            )
+            time.sleep(retry_delay)
+            retry_delay = _next_retry_delay(retry_delay)
 
     from contextunity.core.sdk.identity import get_worker_bindings
 
     schedules = get_worker_bindings().schedules
     if schedules:
         logger.info("Registering %s worker schedules...", len(schedules))
+        retry_delay = _INITIAL_RETRY_DELAY_SECONDS
         while True:
             try:
                 registered = register_schedules(project_id, schedules, backend)
                 logger.info("Successfully registered %s worker schedules", registered)
                 break
             except Exception as e:
-                logger.error("Failed to register schedules: %s. Retrying in 15 seconds...", format_grpc_error(e))
-                time.sleep(15)
+                _log_retry(
+                    "Failed to register schedules",
+                    e,
+                    "registering worker schedules with Router",
+                    retry_delay,
+                )
+                time.sleep(retry_delay)
+                retry_delay = _next_retry_delay(retry_delay)
 
     if not stream_secret:
         logger.warning("No stream_secret returned — stream auth may fail. Check Router security config.")

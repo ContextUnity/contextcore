@@ -95,13 +95,54 @@ def _require_tls_path(field: str, env_name: str, config: SharedConfig | None = N
         str: The configured file path value.
 
     Raises:
-        EnvironmentError: If the path is not configured.
+        ConfigurationError: If the path is not configured.
     """
     config_obj: object = _effective_config(config)
     value: object = getattr(config_obj, field, None)
     if not value or not isinstance(value, str):
-        raise OSError(f"TLS is enabled but {env_name} is not set")
+        from .exceptions import ConfigurationError
+
+        raise ConfigurationError(f"TLS is enabled but {env_name} is not set")
     return value
+
+
+def _client_tls_paths(config: SharedConfig) -> tuple[str, str] | None:
+    """Return client cert/key paths, enforcing mTLS config consistency."""
+    from .exceptions import ConfigurationError
+
+    client_cert_path = config.tls_client_cert
+    client_key_path = config.tls_client_key
+
+    if bool(client_cert_path) != bool(client_key_path):
+        raise ConfigurationError(
+            "Incomplete gRPC TLS client credentials: set both GRPC_TLS_CLIENT_CERT "
+            "and GRPC_TLS_CLIENT_KEY, or unset both for server-only TLS."
+        )
+
+    if client_cert_path and client_key_path:
+        return client_cert_path, client_key_path
+
+    if config.tls_require_client_auth:
+        raise ConfigurationError(
+            "gRPC mTLS is required by GRPC_TLS_REQUIRE_CLIENT_AUTH=true, but client "
+            "credentials are missing. Set GRPC_TLS_CLIENT_CERT and "
+            "GRPC_TLS_CLIENT_KEY, or set GRPC_TLS_REQUIRE_CLIENT_AUTH=false for "
+            "server-only TLS."
+        )
+
+    return None
+
+
+def _validate_mesh_tls_config(config: SharedConfig, *, service_name: str) -> None:
+    """Fail fast on partial TLS/mTLS mesh configuration before service startup."""
+    if not tls_enabled(config):
+        return
+
+    _ = _require_tls_path("tls_ca_cert", "GRPC_TLS_CA_CERT", config)
+    _ = _require_tls_path("tls_server_cert", "GRPC_TLS_SERVER_CERT", config)
+    _ = _require_tls_path("tls_server_key", "GRPC_TLS_SERVER_KEY", config)
+    _ = _client_tls_paths(config)
+    logger.debug("%s TLS mesh configuration validated", service_name)
 
 
 # ---------------------------------------------------------------------------
@@ -161,12 +202,10 @@ def create_channel(target: str, config: SharedConfig | None = None) -> grpc.aio.
         return grpc.aio.insecure_channel(target, options=_GRPC_OPTIONS)
 
     ca_cert = _read_file(_require_tls_path("tls_ca_cert", "GRPC_TLS_CA_CERT", config))
+    client_paths = _client_tls_paths(config)
 
-    # mTLS: provide client cert/key for mutual authentication
-    client_cert_path = config.tls_client_cert
-    client_key_path = config.tls_client_key
-
-    if client_cert_path and client_key_path:
+    if client_paths:
+        client_cert_path, client_key_path = client_paths
         client_cert = _read_file(client_cert_path)
         client_key = _read_file(client_key_path)
         credentials = grpc.ssl_channel_credentials(
@@ -180,7 +219,7 @@ def create_channel(target: str, config: SharedConfig | None = None) -> grpc.aio.
             root_certificates=ca_cert,
         )
 
-    logger.debug("Creating TLS channel to %s (mTLS=%s)", target, bool(client_cert_path))
+    logger.debug("Creating TLS channel to %s (mTLS=%s)", target, bool(client_paths))
     return grpc.aio.secure_channel(target, credentials, options=_GRPC_OPTIONS)
 
 
@@ -206,11 +245,10 @@ def create_channel_sync(target: str, config: SharedConfig | None = None) -> grpc
         return grpc.insecure_channel(target, options=_GRPC_OPTIONS)
 
     ca_cert = _read_file(_require_tls_path("tls_ca_cert", "GRPC_TLS_CA_CERT", config))
+    client_paths = _client_tls_paths(config)
 
-    client_cert_path = config.tls_client_cert
-    client_key_path = config.tls_client_key
-
-    if client_cert_path and client_key_path:
+    if client_paths:
+        client_cert_path, client_key_path = client_paths
         client_cert = _read_file(client_cert_path)
         client_key = _read_file(client_key_path)
         credentials = grpc.ssl_channel_credentials(
@@ -327,6 +365,29 @@ def bind_server_port(
 # ---------------------------------------------------------------------------
 
 
+_UNIVERSAL_BIND_HOSTS = frozenset({"0.0.0.0", "::", "[::]", "*"})
+
+
+def _guess_local_ipv4() -> str:
+    """Best-effort routable LAN address when bind-all is configured."""
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            _ = sock.connect(("8.8.8.8", 80))
+            return sock.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+
+
+def _redis_register_host(bind_host: str) -> str:
+    """Host for Redis discovery endpoint — never ``0.0.0.0``."""
+    normalized = bind_host.strip()
+    if normalized and normalized not in _UNIVERSAL_BIND_HOSTS:
+        return normalized
+    return _guess_local_ipv4()
+
+
 async def start_grpc_server(
     server: grpc.aio.Server,
     service_type: str,
@@ -345,8 +406,11 @@ async def start_grpc_server(
 
     All discovery settings come from ``SharedConfig`` (loaded from env):
 
-    - ``host`` → advertised endpoint host (default ``"0.0.0.0"``)
+    - ``host`` → gRPC bind address (default ``"0.0.0.0"``)
     - ``REDIS_URL`` → Redis for heartbeat registration
+
+    Redis registration never publishes a bind-all address (``0.0.0.0``); when
+    ``host`` is bind-all, a routable local IP is inferred automatically.
 
     Services with their own config can override ``instance_name`` and ``tenants``.
     Without overrides, defaults to instance ``"default"`` and no tenant filter.
@@ -355,7 +419,7 @@ async def start_grpc_server(
         server: The ``grpc.aio.Server`` to start.
         service_type: Service key (``"router"``, ``"brain"``, etc.).
         port: Port number.
-        host: Advertised bind host (from ServiceConfig.host).
+        host: Bind host override (from ``ServiceConfig.host``).
         instance_name: Override instance name (from service config).
         tenants: Override tenant list (from service config).
         redis_url: Optional explicit Redis connection URL.
@@ -376,6 +440,7 @@ async def start_grpc_server(
     from .discovery import register_service
 
     config = _effective_config(config)
+    _validate_mesh_tls_config(config, service_name=service_type)
 
     # Use explicit overrides or hardcoded defaults
     instance_name = instance_name or "default"
@@ -383,17 +448,19 @@ async def start_grpc_server(
         tenants = []
 
     # Bind + start
+    bind_host = host or getattr(config, "host", "0.0.0.0") or "0.0.0.0"
     bind_server_port(
         server,
         port,
         service_type.capitalize(),
         instance_name=instance_name,
+        host=bind_host,
         config=config,
     )
     await server.start()
 
-    # Register in Redis for service discovery
-    advertised_host = host or getattr(config, "host", "0.0.0.0")
+    # Register in Redis for service discovery (never publish 0.0.0.0)
+    advertised_host = _redis_register_host(bind_host)
     endpoint = f"{advertised_host}:{port}"
     actual_redis_url = redis_url or (config.redis.url if config.redis.enabled else None)
     heartbeat_task = await register_service(

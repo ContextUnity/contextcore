@@ -364,6 +364,26 @@ _service_token_lock = threading.Lock()
 _DEFAULT_SERVICE_TTL = 3600  # 1 hour
 
 
+_SERVICE_TOKEN_CACHE_MAX = 256
+
+
+def _purge_expired_service_tokens() -> None:
+    for key in list(_service_token_cache):
+        cached = _service_token_cache.get(key)
+        if cached is not None and cached.is_expired():
+            del _service_token_cache[key]
+
+
+def _trim_service_token_cache() -> None:
+    _purge_expired_service_tokens()
+    while len(_service_token_cache) > _SERVICE_TOKEN_CACHE_MAX:
+        oldest_key = min(
+            _service_token_cache,
+            key=lambda cache_key: _service_token_cache[cache_key].exp_unix or 0.0,
+        )
+        del _service_token_cache[oldest_key]
+
+
 def _tenant_scope_tuple(allowed_tenants: Iterable[str]) -> tuple[str, ...]:
     """Normalize tenant scope for service token construction and cache keys."""
     tenants: list[str] = []
@@ -417,6 +437,7 @@ def mint_service_token(
     cache_key = (token_id, permission_tuple, tenants)
 
     with _service_token_lock:
+        _purge_expired_service_tokens()
         cached = _service_token_cache.get(cache_key)
         if cached is not None and not cached.is_expired():
             return cached
@@ -429,6 +450,7 @@ def mint_service_token(
             provenance=(f"service:{token_id}",),
         )
         _service_token_cache[cache_key] = token
+        _trim_service_token_cache()
         return token
 
 

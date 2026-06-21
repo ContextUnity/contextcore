@@ -627,7 +627,7 @@ class TestHmacFallbackSemantics:
     """
 
     @pytest.mark.asyncio
-    async def test_no_project_record_falls_back_to_env_secret(self, monkeypatch):
+    async def test_no_project_record_falls_back_to_env_secret(self, monkeypatch, caplog):
         """Unregistered project → CU_PROJECT_SECRET dev fallback still works."""
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
@@ -647,6 +647,7 @@ class TestHmacFallbackSemantics:
         monkeypatch.setattr(config.security, "project_secret", "dev-secret-123")
 
         # kid format: project_id:key_version
+        caplog.set_level("WARNING")
         token_str = "unregistered-proj:hmac-v1.fakepayload.fakesig"
         backend = await interceptor._build_verifier_backend(token_str)
 
@@ -654,6 +655,8 @@ class TestHmacFallbackSemantics:
         from contextunity.core.signing import HmacBackend
 
         assert isinstance(backend, HmacBackend)
+        assert "using CU_PROJECT_SECRET fallback for project unregistered-proj" in caplog.text
+        assert "ProjectStore has no key material" in caplog.text
 
     @pytest.mark.asyncio
     async def test_registered_project_uses_stored_secret(self, monkeypatch):

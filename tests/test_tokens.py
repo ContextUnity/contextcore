@@ -448,6 +448,41 @@ class TestServiceTokenTenants:
         assert empty_scope.allowed_tenants == ()
         assert tenant_scope.allowed_tenants == ("tenant-a",)
 
+    def test_service_token_cache_evicts_expired_on_mint(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import contextunity.core.tokens as tokens_mod
+        from contextunity.core.tokens import mint_service_token
+
+        tokens_mod._service_token_cache.clear()
+        now = 1_000_000.0
+        monkeypatch.setattr(tokens_mod.time, "time", lambda: now)
+
+        _ = mint_service_token("svc-a", permissions=("brain:read",), ttl_s=10)
+        assert len(tokens_mod._service_token_cache) == 1
+
+        now += 20.0
+        monkeypatch.setattr(tokens_mod.time, "time", lambda: now)
+        token_b = mint_service_token("svc-b", permissions=("brain:write",), ttl_s=10)
+
+        assert not any(key[0] == "svc-a" for key in tokens_mod._service_token_cache)
+        assert token_b.token_id == "svc-b"
+        assert not token_b.is_expired()
+
+    def test_service_token_remint_after_expiry(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import contextunity.core.tokens as tokens_mod
+        from contextunity.core.tokens import mint_service_token
+
+        tokens_mod._service_token_cache.clear()
+        now = 2_000_000.0
+        monkeypatch.setattr(tokens_mod.time, "time", lambda: now)
+
+        first = mint_service_token("svc", permissions=("brain:read",), ttl_s=5)
+        now += 10.0
+        monkeypatch.setattr(tokens_mod.time, "time", lambda: now)
+        second = mint_service_token("svc", permissions=("brain:read",), ttl_s=5)
+
+        assert second is not first
+        assert not second.is_expired()
+
 
 class TestVerifyEdgeCases:
     """Edge cases for verify() and verify_unit_access()."""

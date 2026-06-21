@@ -145,7 +145,10 @@ async def register_service(
         finally:
             await r.aclose()
 
-    # Validate connectivity before starting heartbeat — fail loudly, not silently
+    # Validate connectivity before starting heartbeat. Redis here is only used for
+    # service-mesh discovery/heartbeat — it is NOT required for a service to function.
+    # So a connection failure degrades gracefully (start without discovery) with a
+    # clear, actionable message rather than crashing startup with a raw exception.
     probe = aioredis.from_url(url, decode_responses=True, socket_connect_timeout=5)
     probe_client: _AsyncRedisProbe = probe
     try:
@@ -153,10 +156,16 @@ async def register_service(
         if asyncio.iscoroutine(ping_result):
             await ping_result
     except Exception as e:
-        await probe.aclose()
         err = RedisConnectionError(e, url)
-        logger.error("Service registration FAILED for %s/%s: %s", service, instance, err)
-        raise err from e
+        logger.warning(
+            "Service '%s/%s' registration SKIPPED — Redis unreachable (%s). "
+            "The service will start WITHOUT mesh discovery. "
+            "Set redis.enabled=false to silence this, or fix the Redis connection to enable discovery.",
+            service,
+            instance,
+            err,
+        )
+        return None
     finally:
         await probe.aclose()
 
