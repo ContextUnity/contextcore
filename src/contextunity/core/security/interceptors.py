@@ -37,6 +37,22 @@ _SKIP_PREFIXES = (
 # ── Helpers ──────────────────────────────────────────────────────
 
 
+def mask_token_id(token_id: str | None) -> str:
+    """Mask a token id for logs/errors — show only the first and last chars.
+
+    Returns ``"<none>"`` for empty input. Short ids are returned as-is once
+    they are too short to meaningfully mask.
+    """
+    if not token_id:
+        return "<none>"
+    tid = token_id.strip()
+    if not tid:
+        return "<none>"
+    if len(tid) <= 12:
+        return tid
+    return f"{tid[:4]}…{tid[-4:]}"
+
+
 def _extract_rpc_name(full_method: str) -> str:
     """Extract RPC name from fully-qualified method string.
 
@@ -258,10 +274,10 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
             deny_reason = "invalid token (cryptographic verification failed)"
             deny_code = grpc.StatusCode.UNAUTHENTICATED
         elif token.is_expired():
-            deny_reason = f"token expired (token '{token.token_id}')"
+            deny_reason = f"token expired (token '{mask_token_id(token.token_id)}')"
             deny_code = grpc.StatusCode.UNAUTHENTICATED
         elif await self._is_token_revoked(token):
-            deny_reason = f"token revoked (token '{token.token_id}')"
+            deny_reason = f"token revoked (token '{mask_token_id(token.token_id)}')"
             deny_code = grpc.StatusCode.UNAUTHENTICATED
         elif required_permission:
             # Non-empty permission string — enforce it.
@@ -269,7 +285,7 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
             # its own authorization (e.g. RegisterManifest).
             perm_denial = check_permission(token, required_permission)
             if perm_denial:
-                deny_reason = f"{perm_denial} (token '{token.token_id}')"
+                deny_reason = f"{perm_denial} (token '{mask_token_id(token.token_id)}')"
                 deny_code = grpc.StatusCode.PERMISSION_DENIED
 
         if deny_reason:
@@ -281,7 +297,7 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
             "%s ALLOWED '%s' for token '%s'",
             self._service_name,
             rpc_name,
-            token.token_id if token else "anonymous",
+            mask_token_id(token.token_id) if token else "anonymous",
         )
 
         # ── Set verified auth context for downstream handlers ─────
@@ -432,4 +448,5 @@ __all__ = [
     "_extract_rpc_name",
     "_should_skip",
     "check_permission",
+    "mask_token_id",
 ]

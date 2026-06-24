@@ -14,6 +14,7 @@ from contextunity.core.permissions import Permissions
 from contextunity.core.security import (
     ServicePermissionInterceptor,
     check_permission,
+    mask_token_id,
 )
 from contextunity.core.token_utils import (
     build_verifier_backend_from_token_string,
@@ -71,6 +72,30 @@ class TestCheckPermission:
         result = check_permission(token, Permissions.BRAIN_READ, tenant_id="tenant-b")
         assert result is not None
         assert "tenant access denied" in result
+
+
+# ── mask_token_id ────────────────────────────────────────────────
+
+
+class TestMaskTokenId:
+    """Tests for mask_token_id helper."""
+
+    def test_none_or_empty(self):
+        assert mask_token_id(None) == "<none>"
+        assert mask_token_id("") == "<none>"
+        assert mask_token_id("   ") == "<none>"
+
+    def test_short_id_returned_as_is(self):
+        assert mask_token_id("expired") == "expired"
+        assert mask_token_id("token-1") == "token-1"
+
+    def test_long_id_masked_to_ends(self):
+        tid = "JFXYN_co0T5xPglUl9UmRyGo6Nv8vtixeNGu51MwbWI"
+        masked = mask_token_id(tid)
+        assert masked.startswith(tid[:4])
+        assert masked.endswith(tid[-4:])
+        assert "\u2026" in masked
+        assert tid[4:-4] not in masked
 
 
 class TestHttpTokenVerification:

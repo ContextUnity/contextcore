@@ -19,6 +19,7 @@ from .interceptors import (
     _extract_rpc_name,
     _should_skip,
     check_permission,
+    mask_token_id,
 )
 from .utils import validate_safe_url
 
@@ -29,6 +30,7 @@ __all__ = [
     "ServicePermissionInterceptor",
     "_extract_rpc_name",
     "_should_skip",
+    "mask_token_id",
     # Utils
     "validate_safe_url",
     "fetch_safe_url",
