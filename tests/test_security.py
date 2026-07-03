@@ -47,13 +47,15 @@ class TestCheckPermission:
         assert "missing permission" in result
 
     def test_inheritance_expansion_allowed(self):
-        """privacy:anonymize should imply privacy:deanonymize via inheritance."""
+        """privacy:anonymize implies check_pii but NOT deanonymize (re-identification
+        is strictly more privileged than masking)."""
         token = ContextToken(
             token_id="t3",
             permissions=(Permissions.PRIVACY_ANONYMIZE,),
         )
         assert check_permission(token, Permissions.PRIVACY_ANONYMIZE) is None
-        assert check_permission(token, Permissions.PRIVACY_DEANONYMIZE) is None
+        assert check_permission(token, Permissions.PRIVACY_CHECK_PII) is None
+        assert check_permission(token, Permissions.PRIVACY_DEANONYMIZE) is not None
 
     def test_tenant_allowed(self):
         token = ContextToken(
@@ -112,10 +114,9 @@ class TestHttpTokenVerification:
         )
         token_str = serialize_token(token, backend=backend)
 
-        monkeypatch.setattr(
-            "contextunity.core.discovery.get_project_key",
-            lambda project_id, **kwargs: {"project_secret": "test_secret"},
-        )
+        from contextunity.core.config import get_core_config
+
+        monkeypatch.setattr(get_core_config().security, "project_secret", "test_secret")
 
         verifier = build_verifier_backend_from_token_string(token_str)
         assert verifier is not None
@@ -203,13 +204,6 @@ _METADATA_KINDS = ("list", "tuple", "aio_metadata")
 
 class TestServicePermissionInterceptor:
     """Tests for the unified ServicePermissionInterceptor."""
-
-    @pytest.fixture(autouse=True)
-    def mock_get_project_key(self, monkeypatch):
-        def _mock_get_project_key(project_id, **kwargs):
-            return {"project_secret": "test_secret"}
-
-        monkeypatch.setattr("contextunity.core.discovery.get_project_key", _mock_get_project_key)
 
     @pytest.mark.asyncio
     async def test_health_check_skipped(self):
@@ -323,8 +317,9 @@ class TestServicePermissionInterceptor:
 
     @pytest.mark.asyncio
     async def test_inherited_permission_allowed(self):
-        """Token with privacy:anonymize → allowed for privacy:deanonymize via inheritance."""
-        privacy_rpc_map = {"Deanonymize": Permissions.PRIVACY_DEANONYMIZE}
+        """Token with privacy:anonymize → allowed for privacy:check_pii via inheritance
+        (deanonymize is deliberately NOT inherited from anonymize)."""
+        privacy_rpc_map = {"CheckPii": Permissions.PRIVACY_CHECK_PII}
         interceptor = ServicePermissionInterceptor(
             privacy_rpc_map,
             service_name="Test",
@@ -336,7 +331,7 @@ class TestServicePermissionInterceptor:
         async def _continuation(details):
             return "handler"
 
-        details = _make_handler_call_details("/test.Service/Deanonymize", metadata)
+        details = _make_handler_call_details("/test.Service/CheckPii", metadata)
         result = await interceptor.intercept_service(_continuation, details)
         assert result == "handler"
 
@@ -639,40 +634,31 @@ class TestMetadataNormalization:
         assert invocation_metadata_as_dict(bad) == {}
 
 
-# ── HMAC Fallback Semantics (ProjectStore Unification Phase 6) ──
+# ── HMAC Resolution Semantics (v1alpha7) ──
 
 
 class TestHmacFallbackSemantics:
     """Verify HMAC secret resolution in _build_verifier_backend.
 
-    After ProjectStore unification, the contract is:
-      - No key_data at all → CU_PROJECT_SECRET dev fallback (single env escape hatch)
-      - key_data exists with project_secret → use it (ProjectStore is source of truth)
-      - key_data exists WITHOUT project_secret → reject (no silent env fallback)
+    v1alpha7 HMAC verification:
+      - HMAC bootstrap tokens use CU_PROJECT_SECRET directly
+      - missing CU_PROJECT_SECRET rejects
+      - no discovery project-key store exists in the verifier path
     """
 
     @pytest.mark.asyncio
-    async def test_no_project_record_falls_back_to_env_secret(self, monkeypatch, caplog):
-        """Unregistered project → CU_PROJECT_SECRET dev fallback still works."""
+    async def test_hmac_uses_env_secret(self, monkeypatch):
+        """HMAC tokens resolve from CU_PROJECT_SECRET."""
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
             service_name="Test",
         )
 
-        # get_project_key returns None (project not registered)
-        monkeypatch.setattr(
-            "contextunity.core.discovery.get_project_key",
-            lambda project_id, **kwargs: None,
-        )
-
-        # CU_PROJECT_SECRET is set
         from contextunity.core.config import get_core_config
 
         config = get_core_config()
         monkeypatch.setattr(config.security, "project_secret", "dev-secret-123")
 
-        # kid format: project_id:key_version
-        caplog.set_level("WARNING")
         token_str = "unregistered-proj:hmac-v1.fakepayload.fakesig"
         backend = await interceptor._build_verifier_backend(token_str)
 
@@ -680,60 +666,23 @@ class TestHmacFallbackSemantics:
         from contextunity.core.signing import HmacBackend
 
         assert isinstance(backend, HmacBackend)
-        assert "using CU_PROJECT_SECRET fallback for project unregistered-proj" in caplog.text
-        assert "ProjectStore has no key material" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_registered_project_uses_stored_secret(self, monkeypatch):
-        """Registered project with project_secret → verifies through ProjectStore."""
+    async def test_hmac_without_env_secret_rejects(self, monkeypatch):
+        """Missing CU_PROJECT_SECRET rejects HMAC tokens."""
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
             service_name="Test",
         )
 
-        monkeypatch.setattr(
-            "contextunity.core.discovery.get_project_key",
-            lambda project_id, **kwargs: {"project_secret": "stored-secret-abc"},
-        )
-
-        token_str = "my-project:hmac-v1.fakepayload.fakesig"
-        backend = await interceptor._build_verifier_backend(token_str)
-
-        assert backend is not None
-        from contextunity.core.signing import HmacBackend
-
-        assert isinstance(backend, HmacBackend)
-
-    @pytest.mark.asyncio
-    async def test_registered_project_without_secret_does_not_fallback_to_env(self, monkeypatch):
-        """Registered project WITHOUT project_secret → reject, no env fallback.
-
-        This is the key behavioral change from Phase 6: when the ProjectStore
-        has the project registered but it has no HMAC secret (e.g. Ed25519-only
-        project), the interceptor must NOT silently fall back to CU_PROJECT_SECRET.
-        """
-        interceptor = ServicePermissionInterceptor(
-            _TEST_RPC_MAP,
-            service_name="Test",
-        )
-
-        # ProjectStore returns key_data but WITHOUT project_secret
-        monkeypatch.setattr(
-            "contextunity.core.discovery.get_project_key",
-            lambda project_id, **kwargs: {"public_key_b64": "some-pub-key"},
-        )
-
-        # CU_PROJECT_SECRET IS set — but should NOT be used
         from contextunity.core.config import get_core_config
 
         config = get_core_config()
-        monkeypatch.setattr(config.security, "project_secret", "should-not-be-used")
+        monkeypatch.setattr(config.security, "project_secret", "")
 
-        # HMAC token for a registered project that has no HMAC secret
         token_str = "registered-proj:hmac-v1.fakepayload.fakesig"
         backend = await interceptor._build_verifier_backend(token_str)
 
-        # Must be None — no silent fallback
         assert backend is None
 
 

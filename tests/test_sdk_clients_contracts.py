@@ -334,9 +334,9 @@ def test_toolkit_resolution_preserves_bidi_tool_path():
 
     manifest = ContextUnityProject.model_validate(
         {
-            "apiVersion": "contextunity/v1alpha6",
+            "apiVersion": "contextunity/v1alpha7",
             "kind": "ContextUnityProject",
-            "project": {"id": "proj", "name": "Project", "tenant": "tenant-a"},
+                "project": {"id": "proj", "name": "Project"},
             "services": {"router": {"enabled": True}},
             "router": {
                 "default_graph": "demo",

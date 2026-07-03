@@ -42,10 +42,10 @@ PERMISSION_INHERITANCE: dict[str, tuple[str, ...]] = {
         Permissions.PRIVACY_CHECK_PII,
         Permissions.PRIVACY_AUDIT,
     ),
-    Permissions.PRIVACY_ANONYMIZE: (
-        Permissions.PRIVACY_DEANONYMIZE,
-        Permissions.PRIVACY_CHECK_PII,
-    ),
+    # NOTE: privacy:anonymize deliberately does NOT imply privacy:deanonymize.
+    # Re-identification of masked PII is strictly more privileged than masking;
+    # grant privacy:deanonymize explicitly (or via privacy:all) where needed.
+    Permissions.PRIVACY_ANONYMIZE: (Permissions.PRIVACY_CHECK_PII,),
 }
 
 

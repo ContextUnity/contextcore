@@ -27,13 +27,10 @@ class LogLevel(str, Enum):
 class RedisConfig(BaseModel):
     """Redis connection and connectivity configuration.
 
-    At-rest encryption for project secrets stored in Redis is controlled
-    by ``REDIS_SECRET_KEY`` env var (loaded into ``security.redis_secret_key``).
     Transport encryption is determined by the URL scheme: ``rediss://`` = TLS.
-
-    Generate an encryption key::
-
-        python -c "import secrets,base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"
+    Redis is used for service discovery, ephemeral registration state, caching,
+    and session coordination. Project key material (HMAC/session secrets) is
+    resolved from env or Shield and is no longer stored in Redis.
     """
 
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="ignore")
@@ -92,7 +89,7 @@ class SharedSecurityConfig(BaseModel):
     )
     redis_secret_key: str = Field(
         default="",
-        description="Key used to encrypt project keys in Redis encrypt-then-MAC",
+        description="Deprecated. Redis no longer stores project key material.",
     )
     project_secret: str = Field(
         default="",

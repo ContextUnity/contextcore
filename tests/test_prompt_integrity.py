@@ -158,5 +158,116 @@ class TestSignPromptIntegrityFailClosed:
         assert node.get("prompt_signature"), "prompted node must be signed when secret is present"
         assert node.get("prompt_version")
 
+    def test_shield_enabled_prompts_without_secret_are_versioned_not_signed(self, monkeypatch):
+        from contextunity.core.sdk.bootstrap.manifest import sign_prompt_integrity
+
+        self._patch_secret(monkeypatch, "")
+        manifest = self._manifest_with_prompt()
+        manifest["services"] = {"shield": {"enabled": True}}
+
+        sign_prompt_integrity(manifest, "proj-1")
+
+        node = manifest["router"]["graph"]["nodes"][0]
+        assert node.get("prompt_version")
+        assert "prompt_signature" not in node
+
+
+class TestExtractNodePrompts:
+    """``extract_node_prompts`` feeds the Shield-mode prompt publisher.
+
+    In Shield mode the canonical prompts are pushed to Shield at registration so
+    the Router can verify against them (no router-local secret). This extractor
+    must surface every prompted node — a regression here would silently leave a
+    node's prompt unpublished, which the Router then rejects as tampering.
+    """
+
+    def test_single_graph_collects_prompts(self):
+        from contextunity.core.sdk.bootstrap.manifest import extract_node_prompts
+
+        manifest = {
+            "router": {
+                "graph": {
+                    "nodes": [{"name": "planner"}, {"name": "verifier"}],
+                    "config": {
+                        "planner_prompt": "You are a planner.",
+                        "verifier_prompt": "You are a verifier.",
+                    },
+                }
+            }
+        }
+        assert extract_node_prompts(manifest) == {
+            "planner": "You are a planner.",
+            "verifier": "You are a verifier.",
+        }
+
+    def test_named_subgraphs_collected(self):
+        from contextunity.core.sdk.bootstrap.manifest import extract_node_prompts
+
+        manifest = {
+            "router": {
+                "graph": {
+                    "default": {
+                        "nodes": [{"name": "planner"}],
+                        "config": {"planner_prompt": "Plan."},
+                    },
+                    "review": {
+                        "nodes": [{"name": "verifier"}],
+                        "config": {"verifier_prompt": "Verify."},
+                    },
+                }
+            }
+        }
+        assert extract_node_prompts(manifest) == {"planner": "Plan.", "verifier": "Verify."}
+
+    def test_node_without_prompt_excluded(self):
+        from contextunity.core.sdk.bootstrap.manifest import extract_node_prompts
+
+        manifest = {
+            "router": {
+                "graph": {
+                    "nodes": [{"name": "planner"}, {"name": "tool_execution"}],
+                    "config": {"planner_prompt": "Plan."},
+                }
+            }
+        }
+        assert extract_node_prompts(manifest) == {"planner": "Plan."}
+
+    def test_no_router_graph_is_empty(self):
+        from contextunity.core.sdk.bootstrap.manifest import extract_node_prompts
+
+        assert extract_node_prompts({"project": {"id": "x"}}) == {}
+
+
+class TestShieldPromptBundleSanitizer:
+    def test_removes_resolved_prompt_text_for_prompt_ref_nodes(self):
+        from contextunity.core.manifest.models import RouterRegistrationBundle
+        from contextunity.core.sdk.bootstrap.api import _strip_resolved_prompt_text
+
+        bundle = RouterRegistrationBundle(
+            project_id="nszu",
+            graph={
+                "default": {
+                    "nodes": [
+                        {
+                            "name": "planner",
+                            "prompt_ref": "src/prompts.py::PLANNER",
+                            "prompt_version": "1234abcd",
+                        },
+                        {"name": "verifier"},
+                    ],
+                    "config": {
+                        "planner_prompt": "Shield-owned prompt text",
+                        "verifier_prompt": "local non-ref prompt",
+                    },
+                }
+            },
+        )
+
+        _strip_resolved_prompt_text(bundle)
+
+        config = bundle.graph["default"]["config"]
+        assert "planner_prompt" not in config
+        assert config["verifier_prompt"] == "local non-ref prompt"
+
 
 pytestmark = pytest.mark.unit

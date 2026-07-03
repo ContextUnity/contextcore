@@ -1,18 +1,18 @@
 import pytest
 from contextunity.core.manifest import ContextUnityMigrationOverlay, ContextUnityProject
 from contextunity.core.manifest.generators import ArtifactGenerator
+from contextunity.core.sdk.bootstrap.api import _extract_stream_tool_names
 from pydantic import ValidationError
 
 
 @pytest.fixture
 def minimal_nszu_payload() -> dict:
     return {
-        "apiVersion": "contextunity/v1alpha6",
+        "apiVersion": "contextunity/v1alpha7",
         "kind": "ContextUnityProject",
         "project": {
             "id": "tenant_a",
             "name": "TenantA",
-            "tenant": "tenant_a",
         },
         "services": {
             "router": {"enabled": True},
@@ -231,9 +231,30 @@ def test_artifact_generator_registers_only_explicit_federated_tools(minimal_nszu
     project = ContextUnityProject(**minimal_nszu_payload)
     bundle = ArtifactGenerator(project).generate_router_registration_bundle()
 
-    assert [tool["name"] for tool in bundle.tools] == ["medical_sql"]
+    assert "tools" not in bundle.model_dump(exclude_none=True)
+    assert [tool["name"] for tool in bundle.graph["main"]["config"]["federated_tools"]] == [
+        "medical_sql"
+    ]
     node_bindings = bundle.graph["main"]["config"]["node_tool_bindings"]
     assert node_bindings == {"custom": {"medical_sql": "execute"}}
+
+
+def test_sdk_stream_tools_use_graph_scoped_federated_tools(minimal_nszu_payload):
+    """SDK stream ready must announce v1alpha7 graph-scoped federated tools."""
+    minimal_nszu_payload["router"]["graph"]["main"].pop("template", None)
+    minimal_nszu_payload["router"]["graph"]["main"]["nodes"] = [
+        {"name": "custom", "type": "tool", "tool_binding": "federated:medical_sql"},
+    ]
+    minimal_nszu_payload["router"]["graph"]["main"]["edges"] = [
+        {"from_node": "__start__", "to_node": "custom"},
+        {"from_node": "custom", "to_node": "__end__"},
+    ]
+
+    project = ContextUnityProject(**minimal_nszu_payload)
+    bundle = ArtifactGenerator(project).generate_router_registration_bundle()
+
+    assert "tools" not in bundle.model_dump(exclude_none=True)
+    assert _extract_stream_tool_names(bundle) == ["medical_sql"]
 
 
 def test_router_agent_node_accepts_tools(minimal_nszu_payload):
@@ -313,7 +334,7 @@ def test_router_node_meta_fields(minimal_nszu_payload):
 def test_overlay_reference_coupling():
     """Positive: valid migration overlay."""
     payload = {
-        "apiVersion": "contextunity/v1alpha6",
+        "apiVersion": "contextunity/v1alpha7",
         "kind": "ContextUnityMigrationOverlay",
         "target_ref": "contextunity.project.yaml",
         "project": {"id": "tagrai"},
@@ -343,7 +364,7 @@ def test_overlay_reference_coupling():
 def test_reject_unaddressed_legacy_bridges(minimal_nszu_payload):
     """Negative: If a legacy bridge is true, there must be gaps documenting it."""
     payload = {
-        "apiVersion": "contextunity/v1alpha6",
+        "apiVersion": "contextunity/v1alpha7",
         "kind": "ContextUnityMigrationOverlay",
         "target_ref": "contextunity.project.yaml",
         "project": {"id": "tagrai"},
@@ -365,7 +386,7 @@ def test_reject_unaddressed_legacy_bridges(minimal_nszu_payload):
 def test_reject_blocking_gap_no_phases():
     """Negative: Blocking gaps must have at least one migration phase defined."""
     payload = {
-        "apiVersion": "contextunity/v1alpha6",
+        "apiVersion": "contextunity/v1alpha7",
         "kind": "ContextUnityMigrationOverlay",
         "target_ref": "contextunity.project.yaml",
         "project": {"id": "tagrai"},

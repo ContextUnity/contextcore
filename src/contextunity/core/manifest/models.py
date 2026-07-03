@@ -49,7 +49,6 @@ class ProjectSection(ManifestModel):
 
     id: str
     name: str
-    tenant: str | None = None
     allowed_tenants: list[str] | None = None
     ownership: ProjectOwnership | None = None
 
@@ -202,10 +201,8 @@ class RouterRegistrationBundle(ManifestModel):
 
     project_id: str = ""
     allowed_tenants: list[str] = Field(default_factory=list)
-    tenant_id: str = ""
     default_graph: str | None = None
     graph: dict[str, WireValue] = Field(default_factory=dict)
-    tools: list[dict[str, WireValue]] = Field(default_factory=list)
     services: dict[str, WireValue] = Field(default_factory=dict)
     policy: dict[str, WireValue] = Field(default_factory=dict)
     secrets: dict[str, str] | None = None
@@ -318,7 +315,7 @@ class ContextUnityProject(ManifestModel):
     v1alpha Target Schema for stable Canonical ContextUnity project integration.
     """
 
-    apiVersion: Literal["contextunity/v1alpha6"]
+    apiVersion: Literal["contextunity/v1alpha7"]
     kind: Literal["ContextUnityProject"]
 
     project: ProjectSection
@@ -428,7 +425,7 @@ class ContextUnityMigrationOverlay(ManifestModel):
     Separated strictly to preserve the purity of canonical v1alpha config.
     """
 
-    apiVersion: Literal["contextunity/v1alpha6"]
+    apiVersion: Literal["contextunity/v1alpha7"]
     kind: Literal["ContextUnityMigrationOverlay"]
     target_ref: str
     project: OverlayProject

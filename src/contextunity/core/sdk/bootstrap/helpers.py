@@ -138,12 +138,17 @@ def bootstrap_django(
     *,
     prompts: PromptMap | None = None,
     manifest_path: str = "",
+    start_executor: bool = True,
+    background: bool = True,
 ) -> None:
     """Bootstrap ContextUnity from a Django ``AppConfig.ready()`` call.
 
     Args:
         prompts: Prompt map — either full-ref or short-key (node names).
         manifest_path: Override manifest location. If empty, auto-resolves.
+        start_executor: Start the federated tool executor stream. Set False in
+            secondary web workers that still need Router auth/session setup.
+        background: Run bootstrap loop in a daemon thread.
 
     Example:
         >>> import os
@@ -173,12 +178,14 @@ def bootstrap_django(
 
     from contextunity.core.sdk.tools import ToolRegistry
 
-    tool_handler = ToolRegistry.build_handler()
+    tool_handler = ToolRegistry.build_handler() if start_executor else None
 
     _ = register_and_start(
         manifest_path=resolved_path,
         prompt_map=prompt_map,
         tool_handler=tool_handler,
+        background=background,
+        start_executor=start_executor,
     )
 
 

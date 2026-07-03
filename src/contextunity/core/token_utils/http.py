@@ -113,7 +113,11 @@ def build_verifier_backend_from_token_string(
     service_name: str = "service",
     config: SharedConfig | None = None,
 ) -> TokenVerifier | None:
-    """Build a verifier backend from a serialized token string."""
+    """Build a verifier backend from a serialized token string.
+
+    Session tokens fetch public keys from Shield; HMAC tokens use
+    ``CU_PROJECT_SECRET`` directly.
+    """
     parts = token_str.strip().rsplit(".", 2)
     if len(parts) != 3:
         return None
@@ -125,39 +129,34 @@ def build_verifier_backend_from_token_string(
 
     project_id, key_version = kid.split(":", 1)
 
-    from ..discovery import get_project_key
-
-    key_data = get_project_key(project_id) or {}
-
     if "session" in key_version:
-        public_key_b64 = key_data.get("public_key_b64")
-        if not public_key_b64 and shield_url:
-            try:
-                public_key_b64, returned_kid = fetch_project_public_key_sync(
-                    project_id,
-                    kid,
-                    shield_url,
-                    provenance=f"{service_name.lower()}:http:fetch_public_key",
-                    config=config,
-                )
-                from ..discovery import update_project_public_key
+        if not shield_url:
+            logger.warning("No Shield URL configured for session token project %s", project_id)
+            return None
+        try:
+            public_key_b64, _returned_kid = fetch_project_public_key_sync(
+                project_id,
+                kid,
+                shield_url,
+                provenance=f"{service_name.lower()}:http:fetch_public_key",
+                config=config,
+            )
+        except Exception as e:
+            logger.warning("Failed to fetch public key from Shield for %s: %s", kid, e)
+            return None
 
-                _ = update_project_public_key(project_id, public_key_b64, returned_kid)
-            except Exception as e:
-                logger.warning("Failed to fetch public key from Shield for %s: %s", kid, e)
-                return None
+        try:
+            from contextunity.core.ed25519 import Ed25519Backend
 
-        if public_key_b64:
-            try:
-                from contextunity.core.ed25519 import Ed25519Backend
-
-                return Ed25519Backend(public_key_b64=public_key_b64, kid=kid)
-            except ImportError:
-                logger.error("contextunity.shield not installed, cannot verify Ed25519 tokens")
-                return None
+            return Ed25519Backend(public_key_b64=public_key_b64, kid=kid)
+        except ImportError:
+            logger.error("contextunity.shield not installed, cannot verify Ed25519 tokens")
+            return None
         return None
 
-    secret = key_data.get("project_secret")
+    from ..config import get_core_config
+
+    secret = get_core_config().security.project_secret
     if not secret:
         return None
 

@@ -71,7 +71,7 @@ def do_register(
     project_id: str,
     payload: ToolPayload,
     backend: AuthBackend | None,
-) -> tuple[str, str]:
+) -> str:
     """Send RegisterManifest gRPC request to Router.
 
     Args:
@@ -81,7 +81,7 @@ def do_register(
         backend: The authentication backend used to sign the registration token.
 
     Returns:
-        tuple[str, str]: A tuple containing the (stream_secret, shield_url) returned by Router.
+        str: The Shield URL returned by Router, if any.
     """
     from contextunity.core import ContextUnit, contextunit_pb2, router_pb2_grpc
     from contextunity.core.grpc_utils import create_channel_sync
@@ -117,7 +117,6 @@ def do_register(
             tool_list = [single] if single else []
 
         graph_name = get_str(result, "graph", "none")
-        secret = get_str(result, "stream_secret")
         shield_url = get_str(result, "shield_url")
 
         logger.info(
@@ -126,7 +125,7 @@ def do_register(
             graph_name,
             shield_url or "none",
         )
-        return secret, shield_url
+        return shield_url
     finally:
         channel.close()
 
@@ -136,14 +135,17 @@ def put_secrets_to_shield(
     secrets: dict[str, str],
     shield_url: str,
     backend: AuthBackend | None,
+    *,
+    allowed_tenants: tuple[str, ...],
 ) -> list[str]:
     """Send API keys to Shield via PutSecret gRPC requests.
 
     Args:
-        project_id: The identifier of the project (used as tenant namespace).
-        secrets: Dictionary mapping providers/names to API key strings.
+        project_id: The identifier of the project.
+        secrets: Dictionary mapping Shield path suffixes to API key strings.
         shield_url: The Shield service gRPC URL.
         backend: The authentication backend used to sign sync tokens.
+        allowed_tenants: Tenant scopes that should receive the project's API keys.
 
     Returns:
         list[str]: A list of provider names successfully synced to Shield.
@@ -156,46 +158,152 @@ def put_secrets_to_shield(
     from contextunity.core.grpc_utils import create_channel_sync
     from contextunity.core.sdk.models import SecurityScopes
 
+    if not allowed_tenants:
+        raise PlatformServiceError(
+            f"Shield secret sync for project '{project_id}' requires at least one allowed tenant"
+        )
+
     metadata = _bootstrap_metadata(
         project_id=project_id,
         backend=backend,
         token_id_suffix="shield-sync",
         permissions=("shield:secrets:write",),
+        allowed_tenants=allowed_tenants,
     )
 
     channel = create_channel_sync(shield_url)
     synced: list[str] = []
-    failed: list[tuple[str, Exception]] = []
+    failed: list[tuple[str, str, Exception]] = []
     try:
         stub = shield_pb2_grpc.ShieldServiceStub(channel)
-        for provider, api_key in secrets.items():
-            shield_path = f"{project_id}/api_keys/{provider}"
-            try:
-                unit = ContextUnit(
-                    payload={
-                        "path": shield_path,
-                        "value": api_key,
-                        "created_by": f"{project_id}:sdk_bootstrap",
-                        "tags": {"type": "llm_api_key", "provider": provider},
-                    },
-                    provenance=[f"{project_id}:sdk_bootstrap:put_secret"],
-                    security=SecurityScopes(write=["secrets:write"]),
-                )
-                _ = stub.PutSecret(
-                    unit.to_protobuf(contextunit_pb2),
-                    metadata=metadata,
-                    timeout=5,
-                )
-                synced.append(provider)
-            except Exception as e:
-                failed.append((provider, e))
+        for tenant_id in allowed_tenants:
+            for provider, api_key in secrets.items():
+                shield_path = f"{tenant_id}/api_keys/{provider}"
+                try:
+                    unit = ContextUnit(
+                        payload={
+                            "path": shield_path,
+                            "value": api_key,
+                            "tenant_id": tenant_id,
+                            "created_by": f"{project_id}:sdk_bootstrap",
+                            "tags": {
+                                "type": "llm_api_key",
+                                "provider": provider,
+                                "project_id": project_id,
+                            },
+                        },
+                        provenance=[f"{project_id}:sdk_bootstrap:put_secret"],
+                        security=SecurityScopes(write=["secrets:write"]),
+                    )
+                    _ = stub.PutSecret(
+                        unit.to_protobuf(contextunit_pb2),
+                        metadata=metadata,
+                        timeout=5,
+                    )
+                    synced.append(f"{tenant_id}:{provider}")
+                except Exception as e:
+                    failed.append((tenant_id, provider, e))
     finally:
         channel.close()
 
     if failed:
-        detail = "; ".join(f"{p}: {e}" for p, e in failed)
+        detail = "; ".join(f"{tenant}/{provider}: {e}" for tenant, provider, e in failed)
+        total = len(secrets) * len(allowed_tenants)
         raise PlatformServiceError(
-            f"Shield sync incomplete — {len(failed)}/{len(secrets)} provider(s) failed: {detail}"
+            f"Shield sync incomplete — {len(failed)}/{total} tenant secret(s) failed: {detail}"
+        )
+
+    return synced
+
+
+def put_prompts_to_shield(
+    project_id: str,
+    prompts: dict[str, str],
+    shield_url: str,
+    backend: AuthBackend | None,
+    *,
+    allowed_tenants: tuple[str, ...],
+) -> list[str]:
+    """Publish canonical node prompts to Shield via ``PutSecret``.
+
+    Stores each prompt at ``{project_id}/prompts/{node_name}`` in every allowed
+    tenant scope. Router execution fetches the prompt from Shield using the node's
+    effective tenant, so Shield is the per-project integrity authority.
+
+    Args:
+        project_id: The project identifier (tenant namespace).
+        prompts: Mapping of ``node_name`` → prompt text.
+        shield_url: The Shield service gRPC URL.
+        backend: The authentication backend used to sign the write tokens.
+        allowed_tenants: Tenant scopes that may execute with these prompts.
+
+    Returns:
+        list[str]: Node names whose prompts were stored.
+
+    Raises:
+        PlatformServiceError: If one or more prompts failed to sync.
+    """
+    from contextunity.core import ContextUnit, contextunit_pb2, shield_pb2_grpc
+    from contextunity.core.exceptions import PlatformServiceError
+    from contextunity.core.grpc_utils import create_channel_sync
+    from contextunity.core.sdk.models import SecurityScopes
+
+    if not prompts:
+        return []
+
+    if not allowed_tenants:
+        raise PlatformServiceError(
+            f"Shield prompt sync for project '{project_id}' requires at least one allowed tenant"
+        )
+
+    metadata = _bootstrap_metadata(
+        project_id=project_id,
+        backend=backend,
+        token_id_suffix="shield-prompts",
+        permissions=("shield:secrets:write",),
+        allowed_tenants=allowed_tenants,
+    )
+
+    channel = create_channel_sync(shield_url)
+    synced: list[str] = []
+    failed: list[tuple[str, str, Exception]] = []
+    try:
+        stub = shield_pb2_grpc.ShieldServiceStub(channel)
+        for tenant_id in allowed_tenants:
+            for node_name, prompt_text in prompts.items():
+                shield_path = f"{project_id}/prompts/{node_name}"
+                try:
+                    unit = ContextUnit(
+                        payload={
+                            "path": shield_path,
+                            "value": prompt_text,
+                            "tenant_id": tenant_id,
+                            "created_by": f"{project_id}:sdk_bootstrap",
+                            "tags": {
+                                "type": "node_prompt",
+                                "node": node_name,
+                                "project_id": project_id,
+                            },
+                        },
+                        provenance=[f"{project_id}:sdk_bootstrap:put_prompt"],
+                        security=SecurityScopes(write=["secrets:write"]),
+                    )
+                    _ = stub.PutSecret(
+                        unit.to_protobuf(contextunit_pb2),
+                        metadata=metadata,
+                        timeout=5,
+                    )
+                    synced.append(f"{tenant_id}:{node_name}")
+                except Exception as e:
+                    failed.append((tenant_id, node_name, e))
+    finally:
+        channel.close()
+
+    if failed:
+        detail = "; ".join(f"{tenant}/{node}: {e}" for tenant, node, e in failed)
+        total = len(prompts) * len(allowed_tenants)
+        raise PlatformServiceError(
+            f"Shield prompt sync incomplete — {len(failed)}/{total} tenant prompt(s) failed: {detail}"
         )
 
     return synced

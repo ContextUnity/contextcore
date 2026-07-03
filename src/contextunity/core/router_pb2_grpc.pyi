@@ -75,10 +75,10 @@ class RouterServiceStub:
     Dynamic Project Manifest Registration
     =========================================
 
-    Register an entire ContextUnity project manifest at once via dynamic gRPC push.
-    Replaces RegisterTools by acting on the Canonical Project Manifest directly.
+    Register an entire ContextUnity project via a compiled registration bundle.
+    Tool registration is represented only by this bundle registration RPC.
 
-    Security: Requires "tools:register" write scope in ContextUnit.
+    Security: Requires a ContextToken with "tools:register:{project_id}" permission.
 
     Request payload: {
       bundle: {... compiled dictionary from ArtifactGenerator ...},
@@ -107,7 +107,8 @@ class RouterServiceStub:
        Project → Router: {"action": "error", "request_id": "abc",
                            "error": "timeout"}
 
-    Security: Requires ContextToken with "tools:register" permission.
+    Security: Requires a ContextToken with "stream:executor" or
+    "stream:executor:{project_id}" permission.
     """
     ExecuteNode: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """=========================================
@@ -148,7 +149,7 @@ class RouterServiceStub:
 
     Response payload: {
       projects: [{
-        project_id, owner_tenant, security_mode,
+        project_id,
         services, tools, graphs, policy
       }]
     }
@@ -204,10 +205,10 @@ class RouterServiceAsyncStub(RouterServiceStub):
     Dynamic Project Manifest Registration
     =========================================
 
-    Register an entire ContextUnity project manifest at once via dynamic gRPC push.
-    Replaces RegisterTools by acting on the Canonical Project Manifest directly.
+    Register an entire ContextUnity project via a compiled registration bundle.
+    Tool registration is represented only by this bundle registration RPC.
 
-    Security: Requires "tools:register" write scope in ContextUnit.
+    Security: Requires a ContextToken with "tools:register:{project_id}" permission.
 
     Request payload: {
       bundle: {... compiled dictionary from ArtifactGenerator ...},
@@ -236,7 +237,8 @@ class RouterServiceAsyncStub(RouterServiceStub):
        Project → Router: {"action": "error", "request_id": "abc",
                            "error": "timeout"}
 
-    Security: Requires ContextToken with "tools:register" permission.
+    Security: Requires a ContextToken with "stream:executor" or
+    "stream:executor:{project_id}" permission.
     """
     ExecuteNode: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """=========================================
@@ -277,7 +279,7 @@ class RouterServiceAsyncStub(RouterServiceStub):
 
     Response payload: {
       projects: [{
-        project_id, owner_tenant, security_mode,
+        project_id,
         services, tools, graphs, policy
       }]
     }
@@ -360,10 +362,10 @@ class RouterServiceServicer(metaclass=_abc_1.ABCMeta):
         Dynamic Project Manifest Registration
         =========================================
 
-        Register an entire ContextUnity project manifest at once via dynamic gRPC push.
-        Replaces RegisterTools by acting on the Canonical Project Manifest directly.
+        Register an entire ContextUnity project via a compiled registration bundle.
+        Tool registration is represented only by this bundle registration RPC.
 
-        Security: Requires "tools:register" write scope in ContextUnit.
+        Security: Requires a ContextToken with "tools:register:{project_id}" permission.
 
         Request payload: {
           bundle: {... compiled dictionary from ArtifactGenerator ...},
@@ -398,7 +400,8 @@ class RouterServiceServicer(metaclass=_abc_1.ABCMeta):
            Project → Router: {"action": "error", "request_id": "abc",
                                "error": "timeout"}
 
-        Security: Requires ContextToken with "tools:register" permission.
+        Security: Requires a ContextToken with "stream:executor" or
+        "stream:executor:{project_id}" permission.
         """
 
     @_abc_1.abstractmethod
@@ -451,7 +454,7 @@ class RouterServiceServicer(metaclass=_abc_1.ABCMeta):
 
         Response payload: {
           projects: [{
-            project_id, owner_tenant, security_mode,
+            project_id,
             services, tools, graphs, policy
           }]
         }

@@ -161,10 +161,10 @@ class RouterServiceServicer(object):
         Dynamic Project Manifest Registration
         =========================================
 
-        Register an entire ContextUnity project manifest at once via dynamic gRPC push.
-        Replaces RegisterTools by acting on the Canonical Project Manifest directly.
+        Register an entire ContextUnity project via a compiled registration bundle.
+        Tool registration is represented only by this bundle registration RPC.
 
-        Security: Requires "tools:register" write scope in ContextUnit.
+        Security: Requires a ContextToken with "tools:register:{project_id}" permission.
 
         Request payload: {
         bundle: {... compiled dictionary from ArtifactGenerator ...},
@@ -197,7 +197,8 @@ class RouterServiceServicer(object):
         Project → Router: {"action": "error", "request_id": "abc",
         "error": "timeout"}
 
-        Security: Requires ContextToken with "tools:register" permission.
+        Security: Requires a ContextToken with "stream:executor" or
+        "stream:executor:{project_id}" permission.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -246,7 +247,7 @@ class RouterServiceServicer(object):
 
         Response payload: {
         projects: [{
-        project_id, owner_tenant, security_mode,
+        project_id,
         services, tools, graphs, policy
         }]
         }

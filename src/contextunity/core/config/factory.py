@@ -44,7 +44,9 @@ SHARED_ENV_MAPPINGS: dict[str, str] = {
     "LOG_JSON": "log_json",
     # gRPC
     "GRPC_REUSE_PORT": "grpc_reuse_port",
-    # Redis
+    # Redis connection and TLS settings.
+    # NOTE: REDIS_SECRET_KEY is deprecated. Project HMAC/session secrets are
+    # resolved from CU_PROJECT_SECRET / CU_SHIELD_GRPC_URL, not stored in Redis.
     "REDIS_ENABLED": "redis.enabled",
     "REDIS_URL": "redis.url",
     # Observability
@@ -70,7 +72,6 @@ SHARED_ENV_MAPPINGS: dict[str, str] = {
     "CU_LOCAL_MODE": "local_mode",
     "DEV_MODE": "dev_mode",
     # Security (systemd-creds on prod, env fallback on dev)
-    "REDIS_SECRET_KEY": "security.redis_secret_key",
     "CU_PROJECT_SECRET": "security.project_secret",
 }
 

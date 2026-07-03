@@ -142,9 +142,9 @@ class TestProjectBootstrapConfig:
     def _manifest_with_node_secrets() -> ContextUnityProject:
         return ContextUnityProject.model_validate(
             {
-                "apiVersion": "contextunity/v1alpha6",
+                "apiVersion": "contextunity/v1alpha7",
                 "kind": "ContextUnityProject",
-                "project": {"id": "proj", "name": "Project", "tenant": "tenant-a"},
+                "project": {"id": "proj", "name": "Project"},
                 "services": {"router": {"enabled": True}},
                 "router": {
                     "default_graph": "demo",
@@ -180,9 +180,9 @@ class TestProjectBootstrapConfig:
     def test_resolve_secrets_warns_on_node_name_collision(self, monkeypatch, caplog) -> None:
         manifest = ContextUnityProject.model_validate(
             {
-                "apiVersion": "contextunity/v1alpha6",
+                "apiVersion": "contextunity/v1alpha7",
                 "kind": "ContextUnityProject",
-                "project": {"id": "proj", "name": "Project", "tenant": "tenant-a"},
+                    "project": {"id": "proj", "name": "Project"},
                 "services": {"router": {"enabled": True}},
                 "router": {
                     "default_graph": "g1",
@@ -231,9 +231,9 @@ class TestProjectBootstrapConfig:
     def test_resolve_secrets_includes_policy_langfuse_refs(self, monkeypatch) -> None:
         manifest = ContextUnityProject.model_validate(
             {
-                "apiVersion": "contextunity/v1alpha6",
+                "apiVersion": "contextunity/v1alpha7",
                 "kind": "ContextUnityProject",
-                "project": {"id": "proj", "name": "Project", "tenant": "tenant-a"},
+                    "project": {"id": "proj", "name": "Project"},
                 "services": {"router": {"enabled": True}},
                 "router": {
                     "default_graph": "g1",
@@ -264,9 +264,9 @@ class TestProjectBootstrapConfig:
     def test_resolve_secrets_skips_langfuse_when_tracing_disabled(self, monkeypatch) -> None:
         manifest = ContextUnityProject.model_validate(
             {
-                "apiVersion": "contextunity/v1alpha6",
+                "apiVersion": "contextunity/v1alpha7",
                 "kind": "ContextUnityProject",
-                "project": {"id": "proj", "name": "Project", "tenant": "tenant-a"},
+                    "project": {"id": "proj", "name": "Project"},
                 "services": {"router": {"enabled": True}},
                 "router": {
                     "default_graph": "g1",

@@ -12,6 +12,7 @@ Projects use ``register_and_start()`` from ``contextunity.core.sdk.bootstrap``.
 from __future__ import annotations
 
 import queue
+import random
 import threading
 import time
 from collections.abc import Iterator
@@ -34,6 +35,10 @@ logger = get_contextunit_logger(__name__)
 # ── Constants ──
 RECONNECT_DELAY_MIN = 5
 RECONNECT_DELAY_MAX = 30
+# Graceful (non-error) reconnect pacing — small floor + jitter so an
+# idle-timeout or eviction close cannot become a zero-delay tight loop.
+RECONNECT_GRACEFUL_MIN = 1.0
+RECONNECT_GRACEFUL_JITTER = 2.0
 HEARTBEAT_INTERVAL = 30
 TOKEN_TTL_STREAM = 3600  # 1 hour
 
@@ -127,7 +132,6 @@ def run_stream_loop(
     tool_names: list[str],
     tool_handler: ToolHandler,
     register_fn: ManifestRegistrationCallback | None = None,
-    stream_secret: str = "",
     backend: AuthBackend | None = None,
 ) -> None:
     """Reconnect loop — keeps stream alive with exponential backoff.
@@ -138,7 +142,7 @@ def run_stream_loop(
         tool_names: List of federated tool names to announce.
         tool_handler: Project-provided callback: (tool_name, args) -> result_dict.
         register_fn: Optional re-registration callback for reconnects.
-        stream_secret: Initial stream secret from registration.
+        backend: Optional authentication backend.
     """
     delay = RECONNECT_DELAY_MIN
 
@@ -165,11 +169,7 @@ def run_stream_loop(
         if is_reconnect and register_fn is not None:
             try:
                 logger.info("Re-registering (session #%d)...", session)
-                result = register_fn()
-                if result:
-                    new_secret = result[0]
-                    if new_secret:
-                        stream_secret = new_secret
+                _ = register_fn()
                 logger.info("Re-registration OK (session #%d)", session)
                 delay = RECONNECT_DELAY_MIN
             except Exception as e:
@@ -184,14 +184,21 @@ def run_stream_loop(
                 continue
 
         try:
-            _run_stream(router_url, project_id, tool_names, tool_handler, session, stream_secret, backend)
+            _run_stream(router_url, project_id, tool_names, tool_handler, session, backend)
+            # Graceful end — usually an idle-timeout close, so reconnect quickly.
+            # But a stream can also end gracefully because the Router evicted it
+            # (it keeps one executor per project and replaces the old stream on
+            # re-registration). Without any pause that turns into a tight
+            # reconnect→re-register→evict loop. A small jittered sleep caps the
+            # rate and de-synchronises concurrent executors instead of spinning.
+            backoff = RECONNECT_GRACEFUL_MIN + random.random() * RECONNECT_GRACEFUL_JITTER
             logger.warning(
-                "Stream ended gracefully (session #%d) | reconnecting immediately",
+                "Stream ended gracefully (session #%d) | reconnecting in %.1fs",
                 session,
+                backoff,
             )
             delay = RECONNECT_DELAY_MIN
-            # Graceful end — reconnect immediately without sleeping.
-            # The stream closed due to idle timeout, not an error.
+            time.sleep(backoff)
             continue
         except Exception as e:
             reason = format_grpc_error(e)
@@ -216,7 +223,6 @@ def _run_stream(
     tool_names: list[str],
     tool_handler: ToolHandler,
     session: int,
-    stream_secret: str = "",
     backend: AuthBackend | None = None,
 ) -> None:
     """Run a single BiDi stream session.
@@ -227,7 +233,6 @@ def _run_stream(
         tool_names: List of federated tool names.
         tool_handler: The target tool execution handler.
         session: The session index/counter.
-        stream_secret: The stream secret.
         backend: Optional authentication backend.
     """
     import grpc
@@ -261,7 +266,6 @@ def _run_stream(
                     "action": "ready",
                     "project_id": project_id,
                     "tools": tool_names,
-                    "stream_secret": stream_secret,
                 },
                 provenance=[f"{project_id}:stream_executor:ready"],
             )

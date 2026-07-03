@@ -270,7 +270,7 @@ class TestLoadConfigFile:
               api_key: nested-should-be-stripped
               organization: safe-non-secret
             security:
-              redis_secret_key: nope
+              project_secret: nope
             demo_port: 1234
             """),
             encoding="utf-8",

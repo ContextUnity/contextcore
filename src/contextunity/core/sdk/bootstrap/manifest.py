@@ -36,6 +36,15 @@ def _router_graph(manifest_dict: JsonDict) -> JsonDict | None:
     return graph
 
 
+def _manifest_shield_enabled(manifest_dict: JsonDict) -> bool:
+    """Return true when the project manifest explicitly enables Shield."""
+    services = _as_json_dict(manifest_dict.get("services", {}))
+    if services is None:
+        return False
+    shield = _as_json_dict(services.get("shield", {}))
+    return bool(shield and shield.get("enabled") is True)
+
+
 def _graph_node_entries(graph: JsonDict) -> list[JsonDict]:
     if "nodes" in graph:
         return [graph]
@@ -294,7 +303,7 @@ def sign_prompt_integrity(
     manifest_dict: JsonDict,
     project_id: str,
 ) -> None:
-    """Sign resolved prompts and compute content-addressable versions.
+    """Sign resolved prompts or mark Shield-backed prompt versions.
 
     Args:
         manifest_dict: The manifest dictionary to sign in-place.
@@ -320,8 +329,11 @@ def sign_prompt_integrity(
     if not graph_entries:
         return
 
-    # Determine whether any node carries a prompt that must be signed (WS-9).
-    def _has_signable_prompts() -> bool:
+    from contextunity.core.sdk.prompt_integrity import compute_prompt_version
+
+    shield_enabled = _manifest_shield_enabled(manifest_dict)
+
+    def _has_prompts() -> bool:
         for config, nodes in graph_entries:
             for node in nodes:
                 node_name = get_str(node, "name")
@@ -333,24 +345,55 @@ def sign_prompt_integrity(
                     return True
         return False
 
+    if shield_enabled:
+        versioned_count = 0
+        for config, nodes in graph_entries:
+            for node in nodes:
+                node_name = get_str(node, "name")
+                if not node_name:
+                    continue
+
+                prompt_value = get_str(config, f"{node_name}_prompt")
+                if prompt_value:
+                    node["prompt_version"] = compute_prompt_version(prompt_value)
+                    node.pop("prompt_signature", None)
+                    versioned_count += 1
+
+                sub_prompts_dict = get_json_dict(config, f"{node_name}_sub_prompts")
+                if sub_prompts_dict:
+                    node["prompt_variants_versions"] = {
+                        sub_key: compute_prompt_version(sub_text)
+                        for sub_key, sub_text in sub_prompts_dict.items()
+                        if isinstance(sub_text, str)
+                    }
+                    versioned_count += len(node["prompt_variants_versions"])
+
+        if versioned_count:
+            logger.info(
+                "Prepared %d Shield-backed prompt version(s) for project '%s'",
+                versioned_count,
+                project_id,
+            )
+        return
+
     project_secret = get_core_config().security.project_secret
     if not project_secret:
         # Fail closed: a manifest that ships LLM prompts MUST sign them. Silently
         # skipping (the old behaviour) would register unsigned prompts that the
         # runtime then cannot tamper-check — i.e. infra-level prompt injection.
-        if _has_signable_prompts():
+        if _has_prompts():
             from contextunity.core.exceptions import ConfigurationError
 
             raise ConfigurationError(
                 f"Project '{project_id}' manifest defines LLM prompt(s) but CU_PROJECT_SECRET "
                 "is not set. Prompt-integrity signing is mandatory when prompts are present: "
-                "set CU_PROJECT_SECRET (OSS) or provision a Shield project HMAC (Enterprise). "
+                "set CU_PROJECT_SECRET (OSS) or enable services.shield.enabled (Enterprise). "
                 "Refusing to register unsigned prompts (fail-closed — WS-9)."
             )
         logger.debug("No CU_PROJECT_SECRET and no signable prompts — nothing to sign")
         return
 
-    from contextunity.core.sdk.prompt_integrity import compute_prompt_version, sign_prompt
+    from contextunity.core.sdk.prompt_integrity import sign_prompt
     from contextunity.core.signing import HmacBackend
 
     backend = HmacBackend(project_id, project_secret)
@@ -380,6 +423,41 @@ def sign_prompt_integrity(
 
     if signed_count:
         logger.info("Signed %d prompt(s) for project '%s'", signed_count, project_id)
+
+
+def extract_node_prompts(manifest_dict: JsonDict) -> dict[str, str]:
+    """Return ``{node_name: prompt_text}`` for every prompted router graph node.
+
+    Mirrors the graph traversal in :func:`sign_prompt_integrity`. Used in Shield
+    mode to publish the canonical prompts to Shield (``put_prompts_to_shield``),
+    so the Router can load the runtime prompt from Shield instead of trusting a
+    local manifest copy or recomputing an HMAC with a router-local secret.
+    """
+    graph = _router_graph(manifest_dict)
+    if graph is None:
+        return {}
+
+    graph_entries: list[tuple[JsonDict, list[JsonDict]]] = []
+    if "nodes" in graph:
+        graph_entries.append((dict(get_json_dict(graph, "config")), get_json_dict_list(graph, "nodes")))
+    else:
+        for entry in graph.values():
+            entry_dict = _as_json_dict(entry)
+            if entry_dict is not None and "nodes" in entry_dict:
+                graph_entries.append(
+                    (dict(get_json_dict(entry_dict, "config")), get_json_dict_list(entry_dict, "nodes"))
+                )
+
+    prompts: dict[str, str] = {}
+    for config, nodes in graph_entries:
+        for node in nodes:
+            node_name = get_str(node, "name")
+            if not node_name:
+                continue
+            prompt_value = get_str(config, f"{node_name}_prompt")
+            if prompt_value:
+                prompts[node_name] = prompt_value
+    return prompts
 
 
 _resolve_prompt_refs = resolve_prompt_refs

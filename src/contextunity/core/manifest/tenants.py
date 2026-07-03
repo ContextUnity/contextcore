@@ -13,8 +13,7 @@ def resolve_project_allowed_tenants(project: ProjectSection) -> list[str]:
 
     Resolution order:
     1. ``project.allowed_tenants`` when non-empty.
-    2. ``[project.tenant]`` when ``tenant`` is set (legacy single-tenant manifest).
-    3. ``[project.id]`` when no tenant scope is declared.
+    2. ``[project.id]`` when no tenant scope is declared.
 
     Args:
         project: Validated project section from the manifest.
@@ -26,8 +25,6 @@ def resolve_project_allowed_tenants(project: ProjectSection) -> list[str]:
         tenants = [tenant for tenant in project.allowed_tenants if tenant]
         if tenants:
             return tenants
-    if project.tenant:
-        return [project.tenant]
     if project.id:
         return [project.id]
     raise ConfigurationError(message="Project section must define 'id' for tenant scope resolution")
@@ -58,11 +55,12 @@ def resolve_bundle_allowed_tenants(bundle: dict[str, object]) -> list[str]:
         if allowed:
             return allowed
 
-    tenant_id_raw = bundle.get("tenant_id")
-    if isinstance(tenant_id_raw, str) and tenant_id_raw:
-        return [tenant_id_raw]
-
-    return [project_id_raw]
+    raise ConfigurationError(
+        message=(
+            f"Project '{project_id_raw}' registration bundle must define non-empty "
+            "'allowed_tenants'. Rebuild the bundle with a v1alpha7 SDK."
+        )
+    )
 
 
 def parse_allowed_tenants_field(raw: object) -> list[str] | None:
@@ -148,9 +146,8 @@ def resolve_effective_allowed_tenants(
 
 
 def apply_allowed_tenants_to_bundle(bundle: RouterRegistrationBundle, project: ProjectSection) -> None:
-    """Populate ``allowed_tenants`` on a compiled bundle and drop legacy ``tenant_id``."""
+    """Populate ``allowed_tenants`` on a compiled bundle."""
     bundle.allowed_tenants = resolve_project_allowed_tenants(project)
-    bundle.tenant_id = ""
 
 
 def _registration_caller_tenants(caller: object) -> tuple[str, ...] | None:

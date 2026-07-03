@@ -12,11 +12,17 @@ from typing import TYPE_CHECKING
 
 from contextunity.core.logging import get_contextunit_logger
 from contextunity.core.manifest.helpers import parse_tool_ref as _parse_tool_binding
-from contextunity.core.types import JsonDict, is_json_dict
+from contextunity.core.types import JsonDict, is_json_dict, is_object_dict, is_object_list
 
 from ..types import PromptMap, ToolHandler, ToolPayload
 from .loop import bootstrap_loop
-from .manifest import auto_resolve_prompt_refs, load_manifest, resolve_prompt_refs, sign_prompt_integrity
+from .manifest import (
+    auto_resolve_prompt_refs,
+    extract_node_prompts,
+    load_manifest,
+    resolve_prompt_refs,
+    sign_prompt_integrity,
+)
 
 if TYPE_CHECKING:
     from contextunity.core.manifest import ContextUnityProject
@@ -32,6 +38,7 @@ def register_and_start(
     prompt_map: PromptMap | None = None,
     tool_handler: ToolHandler | None = None,
     background: bool = True,
+    start_executor: bool = True,
     graceful_fallback: bool = True,
     manifest_path: str = "",
     router_url: str = "",
@@ -44,6 +51,8 @@ def register_and_start(
         prompt_map: Mappings of prompt names to their resolved text values.
         tool_handler: Custom tool handler callable. If None, builds from ToolRegistry.
         background: If True, executes the event loop in a background thread.
+        start_executor: If False, perform auth/session setup and registration
+            without starting the federated tool executor stream.
         graceful_fallback: If True, catches bootstrap errors and returns None.
         manifest_path: Custom path to the manifest file.
         router_url: Router gRPC URL override.
@@ -62,6 +71,7 @@ def register_and_start(
             prompt_map=prompt_map,
             tool_handler=tool_handler,
             background=background,
+            start_executor=start_executor,
             manifest_path=manifest_path,
             router_url=router_url,
             project_id=project_id,
@@ -79,6 +89,7 @@ def _register_and_start_impl(
     prompt_map: PromptMap | None = None,
     tool_handler: ToolHandler | None = None,
     background: bool = True,
+    start_executor: bool = True,
     manifest_path: str = "",
     router_url: str = "",
     project_id: str = "",
@@ -90,6 +101,7 @@ def _register_and_start_impl(
         prompt_map: Mappings of prompt names to their resolved text values.
         tool_handler: Custom tool handler callable. If None, builds from ToolRegistry.
         background: If True, executes the event loop in a background thread.
+        start_executor: If False, skip the federated tool executor stream.
         manifest_path: Custom path to the manifest file.
         router_url: Router gRPC URL override.
         project_id: Project identifier override.
@@ -102,7 +114,7 @@ def _register_and_start_impl(
         ConfigurationError: If configuration parameters are invalid.
     """
     # Auto-wire ToolRegistry if no explicit handler given
-    if tool_handler is None:
+    if start_executor and tool_handler is None:
         from contextunity.core.sdk.tools import ToolRegistry
 
         tool_handler = ToolRegistry.build_handler()
@@ -180,8 +192,10 @@ def _register_and_start_impl(
     generator = ArtifactGenerator(manifest)
     shield_enabled = bool(manifest.services and manifest.services.shield and manifest.services.shield.enabled)
 
-    inline_secrets = resolved_secrets if resolved_secrets and not shield_enabled else None
-    bundle = generator.generate_router_registration_bundle(resolved_secrets=inline_secrets)
+    prompts_for_shield = extract_node_prompts(manifest_dict) if shield_enabled else {}
+    bundle = generator.generate_router_registration_bundle()
+    if shield_enabled:
+        _strip_resolved_prompt_text(bundle)
     worker_bindings = generator.generate_worker_bindings()
 
     from contextunity.core.sdk.identity import set_required_services, set_worker_bindings
@@ -204,16 +218,9 @@ def _register_and_start_impl(
 
         raise ConfigurationError("Empty bundle — manifest has no router config")
 
-    if inline_secrets:
-        logger.warning(
-            "Shield disabled — %d API key(s) included inline in bundle (insecure). "
-            + "Enable Shield in manifest for production use.",
-            len(inline_secrets),
-        )
-
     payload: ToolPayload = {"bundle": bundle.model_dump(exclude_none=True)}
 
-    tool_names = sorted(name for tool in bundle.tools for name in [tool.get("name")] if isinstance(name, str) and name)
+    tool_names = _extract_stream_tool_names(bundle) if start_executor else []
 
     if shield_enabled:
         # In Shield mode, pass HMAC backend — the bootstrap loop will
@@ -242,6 +249,8 @@ def _register_and_start_impl(
         shield_enabled,
         config.shield_url,
         backend,
+        prompts_for_shield,
+        tuple(allowed_tenants),
     )
 
     if background:
@@ -370,3 +379,51 @@ def _resolve_toolkits(manifest: ContextUnityProject) -> None:
             if "toolkit" not in existing_meta:
                 existing_meta["toolkit"] = toolkit_name
             node.meta = RouterNodeMeta.model_validate(existing_meta)
+
+
+def _extract_stream_tool_names(bundle: object) -> list[str]:
+    """Return project-side BiDi tool names from graph-scoped bundle config."""
+    names: set[str] = set()
+    graph_raw: object = getattr(bundle, "graph", {})
+    if not is_json_dict(graph_raw):
+        return []
+
+    for graph_entry in graph_raw.values():
+        if not is_json_dict(graph_entry):
+            continue
+        config = graph_entry.get("config")
+        if not is_json_dict(config):
+            continue
+        federated_tools = config.get("federated_tools")
+        if not is_object_list(federated_tools):
+            continue
+        for raw_tool in federated_tools:
+            if not is_json_dict(raw_tool):
+                continue
+            name = raw_tool.get("name")
+            if isinstance(name, str) and name:
+                names.add(name)
+
+    return sorted(names)
+
+
+def _strip_resolved_prompt_text(bundle: object) -> None:
+    """Remove Shield-backed prompt text from the Router registration bundle."""
+    graph_raw: object = getattr(bundle, "graph", {})
+    if not is_object_dict(graph_raw):
+        return
+
+    for graph_entry in graph_raw.values():
+        if not is_object_dict(graph_entry):
+            continue
+        config = graph_entry.get("config")
+        nodes = graph_entry.get("nodes")
+        if not is_object_dict(config) or not is_object_list(nodes):
+            continue
+        for node_raw in nodes:
+            if not is_object_dict(node_raw):
+                continue
+            node_name = node_raw.get("name")
+            prompt_ref = node_raw.get("prompt_ref")
+            if isinstance(node_name, str) and isinstance(prompt_ref, str) and prompt_ref.strip():
+                config.pop(f"{node_name}_prompt", None)

@@ -17,12 +17,12 @@ from contextunity.core.types import ConfigMapping, is_json_dict
 SYSTEM_CONFIG_DIR = Path("/etc/contextunity")
 
 # Keys that MUST NOT come from config files (secrets → systemd-creds / env only).
+# NOTE: redis_secret_key is deprecated; project secrets are no longer stored in Redis.
 _SECRET_KEYS = frozenset(
     {
         "security",
         "shield_master_key",
         "shield_encryption_key",
-        "redis_secret_key",
         "project_secret",
         "openai_api_key",
         "api_key",

@@ -119,7 +119,7 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
     1. Logs caller identity
     2. Extracts ContextToken string from gRPC metadata
     3. Infers project_id from composite kid
-    4. Dynamically builds the verification backend (from ProjectStore/Shield)
+    4. Dynamically builds the verification backend (from env/Shield)
     5. Validates the token cryptographically
     6. Checks permissions
     7. Aborts with ``UNAUTHENTICATED`` / ``PERMISSION_DENIED`` if any check fails
@@ -346,7 +346,6 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
             return None
 
         try:
-            from ..discovery import update_project_public_key
             from ..token_utils import fetch_project_public_key_async
 
             pub_b64, ret_kid = await fetch_project_public_key_async(
@@ -356,7 +355,6 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
                 provenance=f"{self._service_name.lower()}:key_refresh_retry",
                 config=self._config,
             )
-            _ = update_project_public_key(_proj_id, pub_b64, ret_kid)
 
             from contextunity.core.ed25519 import Ed25519Backend as _Ed
 
@@ -364,7 +362,7 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
             token = verify_token_string(token_str, fresh_backend)
             if token:
                 logger.info(
-                    "%s key-refresh retry succeeded for %s (stale Redis cache)",
+                    "%s key-refresh retry succeeded for %s",
                     self._service_name,
                     kid,
                 )

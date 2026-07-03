@@ -1,9 +1,9 @@
 # ContextUnity Project Manifest — Golden Example
 #
-# Valid `contextunity/v1alpha6` reference. Copy to project root as `contextunity.project.yaml`.
+# Valid `contextunity/v1alpha7` reference. Copy to project root as `contextunity.project.yaml`.
 #
 # Flow:
-#   1. Set project.id / name / tenant
+#   1. Set project.id / name
 #   2. Under router.graph.<graph_id>, define nodes + edges for inline topology,
 #      use template: yaml:<name> with overrides only, or builtin: dispatcher
 #   3. Register tools in Python with @federated_tool; reference them as federated:<tool_name>
@@ -13,14 +13,13 @@
 # Validate locally:
 #   uv run python -c "import yaml; from contextunity.core.manifest import ContextUnityProject; ContextUnityProject.model_validate(yaml.safe_load(open('contextunity.project.yaml')))"
 
-apiVersion: "contextunity/v1alpha6"
+apiVersion: "contextunity/v1alpha7"
 kind: "ContextUnityProject"
 
 # ── Project Identity ─────────────────────────────────────────────
 project:
   id: "my-project"
   name: "My Project"
-  tenant: "my-project"
 
 # ── Services ─────────────────────────────────────────────────────
 services:

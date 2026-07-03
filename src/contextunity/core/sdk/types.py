@@ -85,9 +85,9 @@ class SyncIteratorFactory(Protocol[T_co]):
 
 @runtime_checkable
 class ManifestRegistrationCallback(Protocol):
-    """Bootstrap reconnect hook returning ``(stream_secret, shield_url)``."""
+    """Bootstrap reconnect hook returning the Shield URL, if any."""
 
-    def __call__(self) -> tuple[str, str]: ...
+    def __call__(self) -> str: ...
 
 
 @runtime_checkable

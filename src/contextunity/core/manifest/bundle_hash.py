@@ -11,8 +11,11 @@ from contextunity.core.types import is_object_dict
 def compute_registration_bundle_hash(bundle: dict[str, object]) -> str:
     """Compute a stable SHA-256 hash of a registration bundle.
 
-    Inline secrets are part of the registration state, so rotating them must
-    invalidate the idempotency hash and trigger re-registration.
+    The hash covers the entire serialized bundle so that any material change to
+    graphs, tools, policy, or services forces a fresh RegisterManifest. Inline
+    secrets are rejected by RegisterManifest in v1alpha7, but provider API keys
+    resolved in ``policy`` or third-party secret refs still change the bundle
+    shape and will invalidate the idempotency hash.
 
     Args:
         bundle: Serialized ``RouterRegistrationBundle`` dict.

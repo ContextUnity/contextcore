@@ -12,7 +12,7 @@ and pass the result via resolved_secrets parameter.
 from __future__ import annotations
 
 from contextunity.core.logging import get_contextunit_logger
-from contextunity.core.types import WireValue, is_object_dict, is_object_list
+from contextunity.core.types import WireValue, is_object_dict
 
 from .helpers import parse_tool_ref
 from .models import ContextUnityProject, RouterRegistrationBundle, WorkerBindingsBundle
@@ -57,9 +57,8 @@ class ArtifactGenerator:
         pii_masking) into the flat config dict that graph builders expect.
 
         Args:
-            resolved_secrets: Pre-resolved {provider: api_key} from
-                ProjectBootstrapConfig.resolve_secrets(). If provided,
-                included in the bundle under "secrets" key.
+            resolved_secrets: Deprecated. Registration bundles no longer carry
+                inline secrets; Shield/env are the runtime secret sources.
 
         Returns:
             RouterRegistrationBundle: Compiled router registration payload.
@@ -71,7 +70,6 @@ class ArtifactGenerator:
         project_tenants = resolve_project_allowed_tenants(self.manifest.project)
 
         graphs_dict: dict[str, WireValue] = {}
-        bundle_tools: dict[str, dict[str, WireValue]] = {}
         for graph_key, graph_model in router.graph.items():
             graph_config: dict[str, WireValue] = dict(graph_model.config or {})
             graph_scope = project_tenants
@@ -90,6 +88,8 @@ class ArtifactGenerator:
                 graph_config["goal"] = graph_model.goal
             if graph_model.persona is not None:
                 graph_config["persona"] = graph_model.persona
+            if self.manifest.services:
+                graph_config["services"] = self.manifest.services.model_dump(exclude_none=True)
 
             if graph_model.nodes:
                 for node in graph_model.nodes:
@@ -137,25 +137,6 @@ class ArtifactGenerator:
                         "config": {"graph_key": graph_key},
                     }
                 )
-                existing = bundle_tools.get(tool_name)
-                graph_keys: list[str] = []
-                if existing is not None:
-                    cfg = existing.get("config")
-                    if is_object_dict(cfg):
-                        raw_keys = cfg.get("graph_keys")
-                        if is_object_list(raw_keys):
-                            for key_obj in raw_keys:
-                                if isinstance(key_obj, str):
-                                    graph_keys.append(key_obj)
-                if graph_key not in graph_keys:
-                    graph_keys.append(graph_key)
-                bundle_tools[tool_name] = {
-                    "name": tool_name,
-                    "type": "bidi",
-                    "description": f"Federated project tool: {tool_name}",
-                    "config": {"graph_keys": graph_keys},
-                }
-
             # If no model_key set explicitly, use default from policy
             if "model_key" not in graph_config and router.policy and router.policy.models:
                 graph_config["model_key"] = router.policy.models.llm.default
@@ -192,10 +173,9 @@ class ArtifactGenerator:
             project_id=self.manifest.project.id,
             default_graph=router.default_graph,
             graph=graphs_dict,
-            tools=sorted(bundle_tools.values(), key=lambda entry: str(entry.get("name", ""))),
             services=self.manifest.services.model_dump(exclude_none=True),
             policy=policy,
-            secrets=dict(resolved_secrets) if resolved_secrets else None,
+            secrets=None,
         )
         apply_allowed_tenants_to_bundle(bundle, self.manifest.project)
         return bundle

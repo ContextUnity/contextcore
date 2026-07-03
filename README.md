@@ -109,7 +109,7 @@ src/contextunity/core/
 | `REDIS_URL` | Redis connection for discovery |
 | `CU_PROJECT_SECRET` | HMAC secret (Open Source mode) |
 | `CU_SHIELD_GRPC_URL` | Shield endpoint (Enterprise mode) |
-| `REDIS_SECRET_KEY` | Redis encryption key (`false` for dev) |
+| `REDIS_SECRET_KEY` | Deprecated; no longer used |
 | `OTEL_ENABLED` | OpenTelemetry toggle |
 
 ---
@@ -122,6 +122,8 @@ Security is always enforced — no toggle needed. Backend auto-detected at boots
 |---------|------|---------|
 | `HmacBackend` | Open Source | `CU_PROJECT_SECRET` set |
 | `SessionTokenBackend` | Enterprise | Shield enabled in manifest |
+
+Bootstrap computes prompt versions in both modes. OSS mode signs prompt text with HMAC; Shield mode publishes canonical prompts to Shield and registers only prompt references plus versions with Router.
 
 ---
 

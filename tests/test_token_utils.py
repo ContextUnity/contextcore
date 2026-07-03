@@ -72,15 +72,11 @@ class TestBuildVerifierBackend:
 
     @pytest.fixture
     def mock_discovery(self, monkeypatch):
-        mock_get_key = MagicMock()
         mock_fetch_key = MagicMock()
-        mock_update_key = MagicMock()
 
-        monkeypatch.setattr("contextunity.core.discovery.get_project_key", mock_get_key)
         monkeypatch.setattr("contextunity.core.token_utils.http.fetch_project_public_key_sync", mock_fetch_key)
-        monkeypatch.setattr("contextunity.core.discovery.update_project_public_key", mock_update_key)
 
-        return mock_get_key, mock_fetch_key, mock_update_key
+        return mock_fetch_key
 
     def test_invalid_token_format_returns_none(self):
         from contextunity.core.token_utils.http import build_verifier_backend_from_token_string
@@ -93,9 +89,10 @@ class TestBuildVerifierBackend:
 
         assert build_verifier_backend_from_token_string("legacykid.payload.sig") is None
 
-    def test_hmac_backend_success(self, mock_discovery):
-        mock_get_key, _, _ = mock_discovery
-        mock_get_key.return_value = {"project_secret": "my-secret"}
+    def test_hmac_backend_success(self, monkeypatch):
+        from contextunity.core.config import get_core_config
+
+        monkeypatch.setattr(get_core_config().security, "project_secret", "my-secret")
 
         from contextunity.core.token_utils.http import build_verifier_backend_from_token_string
 
@@ -104,29 +101,26 @@ class TestBuildVerifierBackend:
         assert backend is not None
         assert backend.__class__.__name__ == "HmacBackend"
 
-    def test_hmac_backend_missing_secret(self, mock_discovery):
-        mock_get_key, _, _ = mock_discovery
-        mock_get_key.return_value = {}
+    def test_hmac_backend_missing_secret(self, monkeypatch):
+        from contextunity.core.config import get_core_config
+
+        monkeypatch.setattr(get_core_config().security, "project_secret", "")
 
         from contextunity.core.token_utils.http import build_verifier_backend_from_token_string
 
         assert build_verifier_backend_from_token_string("proj:v1.payload.sig") is None
 
-    def test_ed25519_backend_success_from_cache(self, mock_discovery, monkeypatch):
-        mock_get_key, _, _ = mock_discovery
-        mock_get_key.return_value = {"public_key_b64": "fake-pub-key"}
+    def test_ed25519_backend_requires_shield_url(self, monkeypatch):
+        from contextunity.core.token_utils.http import build_verifier_backend_from_token_string
 
         mock_ed25519 = MagicMock()
         monkeypatch.setattr("contextunity.core.ed25519.Ed25519Backend", mock_ed25519)
 
-        from contextunity.core.token_utils.http import build_verifier_backend_from_token_string
-
-        backend = build_verifier_backend_from_token_string("proj:session-1.payload.sig")
-        assert backend is not None
+        assert build_verifier_backend_from_token_string("proj:session-1.payload.sig") is None
+        mock_ed25519.assert_not_called()
 
     def test_ed25519_backend_fetches_from_shield(self, mock_discovery, monkeypatch):
-        mock_get_key, mock_fetch_key, mock_update_key = mock_discovery
-        mock_get_key.return_value = {}
+        mock_fetch_key = mock_discovery
         mock_fetch_key.return_value = ("fetched-pub-key", "proj:session-1")
 
         mock_ed25519 = MagicMock()
@@ -138,7 +132,6 @@ class TestBuildVerifierBackend:
         mock_fetch_key.assert_called_once_with(
             "proj", "proj:session-1", "http://shield", provenance="service:http:fetch_public_key", config=None
         )
-        mock_update_key.assert_called_once_with("proj", "fetched-pub-key", "proj:session-1")
         assert backend is not None
 
 

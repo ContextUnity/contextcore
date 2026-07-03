@@ -4,15 +4,12 @@ Unified CLI for administrative, security, and validation tasks.
 """
 
 import sys
-from typing import Annotated
 
 import typer
 
 # Import cleaned logic from existing command scripts
 from contextunity.core.cli.mint import mint_hmac as _mint_hmac
 from contextunity.core.cli.mint import mint_redis as _mint_redis
-from contextunity.core.cli.mint import mint_rotate as _mint_rotate
-from contextunity.core.cli.mint import mint_rotate_redis_key as _mint_rotate_redis_key
 from contextunity.core.cli.mint import mint_shield as _mint_shield
 from contextunity.core.cli.validate import main as validate_main
 from rich.console import Console
@@ -41,34 +38,8 @@ def mint_shield():
 
 @app.command("redis")
 def mint_redis():
-    """Generate a new REDIS_SECRET_KEY to encrypt project tokens in Redis."""
+    """Print a deprecation notice for REDIS_SECRET_KEY minting."""
     _mint_redis()
-
-
-@app.command("rotate")
-def mint_rotate(
-    project_id: str,
-    redis_url: Annotated[str | None, typer.Option(help="Redis connection URL")] = None,
-):
-    """Rotate the active key for a project in Redis (admin operation).
-
-    Args:
-        project_id (str): The identifier of the project.
-        redis_url (str): The redis url parameter.
-    """
-    _mint_rotate(project_id, redis_url or "")
-
-
-@app.command("rotate-redis-key")
-def mint_rotate_redis_key(
-    redis_url: Annotated[str | None, typer.Option(help="Redis connection URL")] = None,
-):
-    """Re-encrypt the Redis DB with a new REDIS_SECRET_KEY.
-
-    Args:
-        redis_url (str): The redis url parameter.
-    """
-    _mint_rotate_redis_key(redis_url or "")
 
 
 @app.command("validate")

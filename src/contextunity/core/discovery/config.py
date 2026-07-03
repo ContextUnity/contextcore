@@ -10,10 +10,6 @@ logger = get_contextunit_logger(__name__)
 # Default prefix for all service discovery keys in Redis
 DEFAULT_PREFIX = "contextunity:services"
 DEFAULT_TTL = 30  # seconds
-STREAM_SECRET_TTL = 3600  # seconds
-
-# Project registry prefix
-PROJECTS_PREFIX = "contextunity:projects"
 
 
 def _get_prefix() -> str:
@@ -67,16 +63,6 @@ def _redis_key(service: str, instance: str) -> str:
         str: The generated Redis key.
     """
     return f"{_get_prefix()}:{service}:{instance}"
-
-
-def _project_key(project_id: str) -> str:
-    """Generate a Redis key for a project."""
-    return f"{PROJECTS_PREFIX}:{project_id}"
-
-
-def project_key(project_id: str) -> str:
-    """Public Redis key builder for project registry entries."""
-    return _project_key(project_id)
 
 
 get_prefix = _get_prefix

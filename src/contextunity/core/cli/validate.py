@@ -161,7 +161,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     try:
         generator = ArtifactGenerator(manifest)
-        bundle = generator.generate_router_registration_bundle(resolved_secrets=resolved_secrets)
+        bundle = generator.generate_router_registration_bundle()
         print(f"✅ 3. Router Artifact Generator: PASS (Payload proxy size: {len(str(bundle))} bytes)")
 
         worker_bindings = generator.generate_worker_bindings()

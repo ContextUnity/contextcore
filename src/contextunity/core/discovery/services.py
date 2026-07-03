@@ -2,7 +2,7 @@
 
 Used by:
 - Services: register themselves on startup (``register_service()``)
-- contextunity.view: discover all running instances (``discover_services()``)
+- contextunity.forge: discover all running instances (``discover_services()``)
 - Projects: discover tenant-scoped services via ``discover_services(tenant_id=...)``
 """
 
@@ -13,14 +13,13 @@ from dataclasses import dataclass, field
 from json import JSONDecodeError
 from typing import Protocol
 
-from contextunity.core.parsing import json_dumps
-from contextunity.core.types import JsonDict, is_object_list
+from contextunity.core.parsing import json_dumps, json_loads
+from contextunity.core.types import JsonDict, is_json_dict, is_object_list
 
 from ..exceptions import RedisConnectionError
 from ..logging import get_contextunit_logger
 from .client import RedisNotAvailable, SyncRedisClient
 from .config import get_prefix, get_redis_url, get_ttl, redis_key
-from .types import parse_json_object
 
 logger = get_contextunit_logger(__name__)
 
@@ -31,6 +30,14 @@ class _AsyncRedisProbe(Protocol):
 
 def _probe_redis(client: _AsyncRedisProbe) -> object:
     return client.ping()
+
+
+def _parse_service_record(raw: str | bytes) -> JsonDict:
+    data: object = json_loads(raw)
+    if not is_json_dict(data):
+        msg = "service discovery record must be a JSON object"
+        raise JSONDecodeError(msg, str(raw), 0)
+    return data
 
 
 @dataclass
@@ -248,7 +255,7 @@ def discover_services(
             if not raw:
                 continue
             try:
-                data = parse_json_object(raw)
+                data = _parse_service_record(raw)
                 service_name = data.get("service")
                 instance_name = data.get("instance")
                 endpoint = data.get("endpoint")

@@ -45,11 +45,8 @@ from .discovery import (
     deregister_service,
     discover_endpoints,
     discover_services,
-    get_registered_projects,
-    register_project,
     register_service,
     resolve_service_endpoint,
-    verify_project_owner,
 )
 from .exceptions import (
     ConfigurationError,
@@ -237,9 +234,6 @@ __all__ = [
     "discover_services",
     "discover_endpoints",
     "resolve_service_endpoint",
-    "register_project",
-    "verify_project_owner",
-    "get_registered_projects",
     # Security integration
     "check_permission",
     "ServicePermissionInterceptor",

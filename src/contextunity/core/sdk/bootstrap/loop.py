@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from contextunity.core.logging import get_contextunit_logger
 
 from ..types import ToolHandler, ToolPayload
-from .client import do_register, put_secrets_to_shield, register_schedules
+from .client import do_register, put_prompts_to_shield, put_secrets_to_shield, register_schedules
 
 if TYPE_CHECKING:
     from contextunity.core.signing import AuthBackend
@@ -73,6 +73,8 @@ def bootstrap_loop(
     shield_enabled: bool = False,
     shield_url: str = "",
     backend: AuthBackend | None = None,
+    prompts: dict[str, str] | None = None,
+    allowed_tenants: tuple[str, ...] = (),
 ) -> None:
     """Main bootstrap loop: [Shield token] → [Shield sync] → register → stream loop.
 
@@ -90,6 +92,8 @@ def bootstrap_loop(
         shield_enabled: Whether Shield integration is enabled.
         shield_url: The Shield service gRPC URL.
         backend: The authentication backend.
+        prompts: Canonical node prompts to publish to Shield.
+        allowed_tenants: Tenant scopes declared by the project manifest.
     """
     import time
 
@@ -151,7 +155,13 @@ def bootstrap_loop(
         retry_delay = _INITIAL_RETRY_DELAY_SECONDS
         while True:
             try:
-                synced = put_secrets_to_shield(project_id, resolved_secrets, shield_url, backend)
+                synced = put_secrets_to_shield(
+                    project_id,
+                    resolved_secrets,
+                    shield_url,
+                    backend,
+                    allowed_tenants=allowed_tenants,
+                )
                 logger.info("Synced %d API key(s) to Shield: %s", len(synced), ", ".join(synced))
                 break
             except Exception as e:
@@ -165,12 +175,40 @@ def bootstrap_loop(
                 time.sleep(retry_delay)
                 retry_delay = _next_retry_delay(retry_delay)
 
+    # ── Shield prompt publication (integrity authority, with retry) ──
+    # In Shield mode the canonical prompts live in Shield; Router fetches them
+    # at execution time using the node's effective tenant.
+    if prompts and shield_enabled and shield_url:
+        retry_delay = _INITIAL_RETRY_DELAY_SECONDS
+        while True:
+            try:
+                stored = put_prompts_to_shield(
+                    project_id,
+                    prompts,
+                    shield_url,
+                    backend,
+                    allowed_tenants=allowed_tenants,
+                )
+                logger.info(
+                    "Published %d prompt(s) to Shield: %s", len(stored), ", ".join(stored)
+                )
+                break
+            except Exception as e:
+                _log_retry(
+                    "Shield prompt publish FAILED for project '%s'",
+                    e,
+                    "publishing prompts to Shield",
+                    retry_delay,
+                    project_id,
+                )
+                time.sleep(retry_delay)
+                retry_delay = _next_retry_delay(retry_delay)
+
     logger.info("Registering with Router at %s...", router_url)
-    stream_secret: str | None = None
     retry_delay = _INITIAL_RETRY_DELAY_SECONDS
     while True:
         try:
-            stream_secret, _ = do_register(router_url, project_id, payload, backend)
+            _ = do_register(router_url, project_id, payload, backend)
             break
         except Exception as e:
             _log_retry(
@@ -203,9 +241,6 @@ def bootstrap_loop(
                 time.sleep(retry_delay)
                 retry_delay = _next_retry_delay(retry_delay)
 
-    if not stream_secret:
-        logger.warning("No stream_secret returned — stream auth may fail. Check Router security config.")
-
     if not tool_names:
         logger.info("No federated tools — skipping stream executor")
         return
@@ -214,11 +249,11 @@ def bootstrap_loop(
         logger.warning("No tool_handler provided — stream executor has no tool to run.")
         return
 
-    def re_register() -> tuple[str, str]:
+    def re_register() -> str:
         """Re-register manifest on stream reconnect.
 
         Returns:
-            tuple[str, str]: A tuple containing the (stream_secret, shield_url).
+            str: The Shield URL returned by Router, if any.
         """
         return do_register(router_url, project_id, payload, backend)
 
@@ -228,7 +263,6 @@ def bootstrap_loop(
         tool_names=tool_names,
         tool_handler=tool_handler,
         register_fn=re_register,
-        stream_secret=stream_secret,
         backend=backend,
     )
 
