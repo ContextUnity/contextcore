@@ -151,6 +151,33 @@ class BrainServiceStub:
     Request payload: {ids: [UUID, ...]}
     Response payload: {records: [{id, content, metadata, scope_path, created_at}]}
     """
+    RecordSynapse: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """=========================================
+    BrainSynapse Operations (Flat Memory Phase B)
+    =========================================
+
+    Record a BrainSynapse learning trace.
+    Request payload: {tenant_id?, agent_id, action_type, action_data?, action_data_ref?,
+      thought_trace_ref?, content_hash?, graph_name?, graph_run_id?, node_id?, node_name?,
+      node_role?, scope_path?, context_summary?, client_id?, fault_class?, status?,
+      q_action?, q_hypothesis?, q_relevance?, metadata?}
+    Response payload: {id, agent_id, action_type, node_role, status, q_action,
+      q_hypothesis, q_relevance, q_composite, scope_path, metadata, created_at, updated_at}
+    """
+    QuerySynapses: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Query BrainSynapses, ranked by q_composite and bounded by limit.
+    Request payload: {tenant_id?, action_type?, agent_id?, node_role?, status?,
+      scope_path?, min_q?, limit?}
+    Response payload stream: one ContextUnit per Synapse row, same shape as RecordSynapse's
+      response plus {graph_name, graph_run_id, node_id, node_name, action_data,
+      action_data_ref, context_summary, thought_trace_ref, content_hash, fault_class}
+    """
+    UpdateSynapseQ: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Update Q-values/fault/status on one tenant-owned Synapse after an outcome/review.
+    Request payload: {synapse_id, q_action?, q_hypothesis?, q_relevance?, fault_class?,
+      status?, metadata_patch?}
+    Response payload: {id, q_action, q_hypothesis, q_relevance, q_composite, updated_at}
+    """
     MatchDuckDB: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """=========================================
     DuckDB Operations
@@ -228,8 +255,8 @@ class BrainServiceStub:
     Request payload: {tenant_id?, user_id?, session_id?, hours?, limit?, offset?}
     Response payload: {events: [...], total: int}
     """
-    AdminGetKnowledgeNodes: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """List knowledge_nodes with optional tenant/kind filter (cross-tenant).
+    AdminGetCells: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """List cells with optional tenant/kind filter (cross-tenant).
     Requires admin:read.
     tenant_id is optional only when token has admin:all; otherwise required.
     Request payload: {tenant_id?, kind?, limit?}
@@ -365,6 +392,33 @@ class BrainServiceAsyncStub(BrainServiceStub):
     Request payload: {ids: [UUID, ...]}
     Response payload: {records: [{id, content, metadata, scope_path, created_at}]}
     """
+    RecordSynapse: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """=========================================
+    BrainSynapse Operations (Flat Memory Phase B)
+    =========================================
+
+    Record a BrainSynapse learning trace.
+    Request payload: {tenant_id?, agent_id, action_type, action_data?, action_data_ref?,
+      thought_trace_ref?, content_hash?, graph_name?, graph_run_id?, node_id?, node_name?,
+      node_role?, scope_path?, context_summary?, client_id?, fault_class?, status?,
+      q_action?, q_hypothesis?, q_relevance?, metadata?}
+    Response payload: {id, agent_id, action_type, node_role, status, q_action,
+      q_hypothesis, q_relevance, q_composite, scope_path, metadata, created_at, updated_at}
+    """
+    QuerySynapses: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Query BrainSynapses, ranked by q_composite and bounded by limit.
+    Request payload: {tenant_id?, action_type?, agent_id?, node_role?, status?,
+      scope_path?, min_q?, limit?}
+    Response payload stream: one ContextUnit per Synapse row, same shape as RecordSynapse's
+      response plus {graph_name, graph_run_id, node_id, node_name, action_data,
+      action_data_ref, context_summary, thought_trace_ref, content_hash, fault_class}
+    """
+    UpdateSynapseQ: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Update Q-values/fault/status on one tenant-owned Synapse after an outcome/review.
+    Request payload: {synapse_id, q_action?, q_hypothesis?, q_relevance?, fault_class?,
+      status?, metadata_patch?}
+    Response payload: {id, q_action, q_hypothesis, q_relevance, q_composite, updated_at}
+    """
     MatchDuckDB: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """=========================================
     DuckDB Operations
@@ -442,8 +496,8 @@ class BrainServiceAsyncStub(BrainServiceStub):
     Request payload: {tenant_id?, user_id?, session_id?, hours?, limit?, offset?}
     Response payload: {events: [...], total: int}
     """
-    AdminGetKnowledgeNodes: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """List knowledge_nodes with optional tenant/kind filter (cross-tenant).
+    AdminGetCells: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """List cells with optional tenant/kind filter (cross-tenant).
     Requires admin:read.
     tenant_id is optional only when token has admin:all; otherwise required.
     Request payload: {tenant_id?, kind?, limit?}
@@ -680,6 +734,51 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         """
 
     @_abc_1.abstractmethod
+    def RecordSynapse(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """=========================================
+        BrainSynapse Operations (Flat Memory Phase B)
+        =========================================
+
+        Record a BrainSynapse learning trace.
+        Request payload: {tenant_id?, agent_id, action_type, action_data?, action_data_ref?,
+          thought_trace_ref?, content_hash?, graph_name?, graph_run_id?, node_id?, node_name?,
+          node_role?, scope_path?, context_summary?, client_id?, fault_class?, status?,
+          q_action?, q_hypothesis?, q_relevance?, metadata?}
+        Response payload: {id, agent_id, action_type, node_role, status, q_action,
+          q_hypothesis, q_relevance, q_composite, scope_path, metadata, created_at, updated_at}
+        """
+
+    @_abc_1.abstractmethod
+    def QuerySynapses(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_abc.Iterator[_contextunit_pb2.ContextUnit], _abc.AsyncIterator[_contextunit_pb2.ContextUnit]]:
+        """Query BrainSynapses, ranked by q_composite and bounded by limit.
+        Request payload: {tenant_id?, action_type?, agent_id?, node_role?, status?,
+          scope_path?, min_q?, limit?}
+        Response payload stream: one ContextUnit per Synapse row, same shape as RecordSynapse's
+          response plus {graph_name, graph_run_id, node_id, node_name, action_data,
+          action_data_ref, context_summary, thought_trace_ref, content_hash, fault_class}
+        """
+
+    @_abc_1.abstractmethod
+    def UpdateSynapseQ(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Update Q-values/fault/status on one tenant-owned Synapse after an outcome/review.
+        Request payload: {synapse_id, q_action?, q_hypothesis?, q_relevance?, fault_class?,
+          status?, metadata_patch?}
+        Response payload: {id, q_action, q_hypothesis, q_relevance, q_composite, updated_at}
+        """
+
+    @_abc_1.abstractmethod
     def MatchDuckDB(
         self,
         request: _contextunit_pb2.ContextUnit,
@@ -817,12 +916,12 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         """
 
     @_abc_1.abstractmethod
-    def AdminGetKnowledgeNodes(
+    def AdminGetCells(
         self,
         request: _contextunit_pb2.ContextUnit,
         context: _ServicerContext,
     ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
-        """List knowledge_nodes with optional tenant/kind filter (cross-tenant).
+        """List cells with optional tenant/kind filter (cross-tenant).
         Requires admin:read.
         tenant_id is optional only when token has admin:all; otherwise required.
         Request payload: {tenant_id?, kind?, limit?}

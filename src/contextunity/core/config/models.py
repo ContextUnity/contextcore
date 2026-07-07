@@ -167,6 +167,38 @@ class SharedConfig(BaseModel):
         description="Developer mode: hot-reload (CLI) and Forge auto-session when CU_PROJECT_SECRET is set",
     )
     manifest_path: str = Field(default="", description="Path to contextunity.project.yaml")
+    enable_passbyref: bool = Field(
+        default=False,
+        description=(
+            "Feature flag: convert large wrapped-mode platform tool results "
+            "into a Blackboard PassByRef envelope. Off by default; inline "
+            "payloads are unchanged when this is False."
+        ),
+    )
+    passbyref_ttl_seconds: int = Field(
+        default=900,
+        ge=0,
+        description=(
+            "TTL for Router-created PassByRef Blackboard records. Set 0 to write non-expiring references explicitly."
+        ),
+    )
+    passbyref_threshold_bytes: int = Field(
+        default=1024,
+        ge=1,
+        description=(
+            "Serialized-payload size above which a wrapped-mode platform tool "
+            "result is converted to a PassByRef envelope (default 1024, "
+            "configurable). Mirrors "
+            "contextunity.core.passbyref.DEFAULT_PASSBYREF_THRESHOLD_BYTES."
+        ),
+    )
+    blackboard_prune_interval_seconds: float = Field(
+        default=300.0,
+        ge=0,
+        description=(
+            "In-process Blackboard TTL prune interval for local/in-process Brain. Set 0 to disable the local janitor."
+        ),
+    )
 
     # Security — unified config, replaces per-service SecurityConfig
     security: SharedSecurityConfig = Field(

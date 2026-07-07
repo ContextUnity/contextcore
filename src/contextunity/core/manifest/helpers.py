@@ -83,9 +83,7 @@ def validate_graph_source_shape(
 
     if has_template:
         if template == "local":
-            raise ValueError(
-                "template='local' was removed in contextunity/v1alpha7; omit template for inline graphs"
-            )
+            raise ValueError("template='local' was removed in contextunity/v1alpha7; omit template for inline graphs")
         if not template or not template.startswith("yaml:"):
             raise ValueError(f"{label} template must use yaml:<template_name>")
         return

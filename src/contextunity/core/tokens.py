@@ -29,6 +29,9 @@ class ContextToken:
     - allowed_tenants: Tenant IDs this token can access. Empty grants no tenant
       access unless the token has ``admin:all``.
     - exp_unix: Expiration timestamp (None = no expiration)
+    - iat: Issue timestamp (None = not tracked for this token). Used for
+      precise epoch-based revoke-all comparisons (see
+      contextunity.core.security.backend_resolver.is_token_revoked).
     - user_id: Identity of the human user (None = system/anonymous)
     - agent_id: Identity of the executing agent (None = unspecified)
     - user_namespace: Access tier within tenant ("free", "pro", "admin", "system")
@@ -41,6 +44,7 @@ class ContextToken:
     permissions: tuple[str, ...] = ()
     allowed_tenants: tuple[str, ...] = ()
     exp_unix: float | None = None
+    iat: float | None = None  # Issue time (Unix seconds); enables precise epoch-based revoke-all
     revocation_id: str | None = None  # For instant revocation via RevocationStore
 
     # Identity scoping — who is making the request
@@ -199,7 +203,8 @@ class TokenBuilder:
         _ = user_ctx  # reserved for future datalog facts
         token_id = secrets.token_urlsafe(32)  # 256 bits
         revocation_id = f"rev-{secrets.token_urlsafe(16)}"
-        exp_unix = time.time() + ttl_s
+        now = time.time()
+        exp_unix = now + ttl_s
 
         identity = user_id or agent_id or "system"
 
@@ -208,6 +213,7 @@ class TokenBuilder:
             permissions=tuple(permissions),
             allowed_tenants=tuple(allowed_tenants or ()),
             exp_unix=exp_unix,
+            iat=now,
             revocation_id=revocation_id,
             user_id=user_id,
             agent_id=agent_id,
@@ -288,6 +294,7 @@ class TokenBuilder:
             permissions=perms,
             allowed_tenants=tenants,
             exp_unix=exp_unix,
+            iat=token.iat,
             revocation_id=token.revocation_id,
             user_id=token.user_id,
             agent_id=agent_id if agent_id is not None else token.agent_id,

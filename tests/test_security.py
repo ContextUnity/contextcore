@@ -24,6 +24,32 @@ from contextunity.core.token_utils import (
 )
 from contextunity.core.tokens import ContextToken
 
+
+@pytest.fixture(autouse=True)
+def _project_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Guarantee ``get_core_config().security.project_secret == "test_secret"``
+    for every test in this file — not just when ``get_core_config()``'s
+    process-wide singleton happens to still be uncached.
+
+    The module-level ``os.environ["CU_PROJECT_SECRET"] = "test_secret"``
+    above only works if it runs *before* the first ``get_core_config()``
+    call anywhere in the test session — env vars are read once, at
+    construction time, and cached indefinitely afterward. If any other test
+    file (e.g. one with a fixture that calls ``get_core_config()``, such as
+    ``tests/contracts/conftest.py``) constructs the singleton first — which
+    depends on collection/execution order and is not guaranteed — every test
+    here that signs with ``HmacBackend("test_proj", "test_secret")`` and
+    relies on verification resolving the *same* secret via
+    ``build_verifier_backend()``'s ``get_core_config().security.project_secret``
+    lookup fails with "HMAC signature verification failed", intermittently,
+    depending on pytest-randomly's collection order. Found as a rare
+    (~1-in-10 to 1-in-20 full-suite runs) flake.
+    """
+    from contextunity.core.config import get_core_config
+
+    monkeypatch.setattr(get_core_config().security, "project_secret", "test_secret")
+
+
 # ── check_permission ────────────────────────────────────────────
 
 
@@ -590,6 +616,176 @@ class TestServicePermissionInterceptor:
             token_id="non-revocable",
             permissions=(Permissions.BRAIN_READ,),
             revocation_id=None,
+        )
+        assert await interceptor._is_token_revoked(token) is False
+
+    @pytest.mark.asyncio
+    async def test_revocation_epoch_check_blocks_stale_session_token(self, monkeypatch):
+        """A session token issued before a project's epoch bump must be
+        rejected — the Token Revocation Model's O(1) revoke-all."""
+        interceptor = ServicePermissionInterceptor(_TEST_RPC_MAP, service_name="Test")
+
+        class _AsyncFakeRedis:
+            async def exists(self, key: str):
+                return 0
+
+            async def get(self, key: str):
+                if key == "contextunity:epoch:proj-x":
+                    return "2000000000"  # epoch bumped far in the future
+                return None
+
+            async def aclose(self):
+                return None
+
+        monkeypatch.setattr("redis.asyncio.from_url", lambda *a, **k: _AsyncFakeRedis())
+        from contextunity.core.config import get_core_config
+
+        config = get_core_config()
+        monkeypatch.setattr(config.redis, "url", "redis://localhost:6379/0")
+
+        token = ContextToken(
+            token_id="session:proj-x:1000000000",
+            iat=1000000000.0,  # issued long before the epoch above
+            permissions=(Permissions.BRAIN_READ,),
+        )
+        assert await interceptor._is_token_revoked(token) is True
+
+    @pytest.mark.asyncio
+    async def test_revocation_epoch_check_allows_token_issued_after_bump(self, monkeypatch):
+        """A session token issued AFTER the epoch watermark must pass."""
+        interceptor = ServicePermissionInterceptor(_TEST_RPC_MAP, service_name="Test")
+
+        class _AsyncFakeRedis:
+            async def exists(self, key: str):
+                return 0
+
+            async def get(self, key: str):
+                if key == "contextunity:epoch:proj-y":
+                    return "1000000000"  # epoch bumped in the past
+                return None
+
+            async def aclose(self):
+                return None
+
+        monkeypatch.setattr("redis.asyncio.from_url", lambda *a, **k: _AsyncFakeRedis())
+        from contextunity.core.config import get_core_config
+
+        config = get_core_config()
+        monkeypatch.setattr(config.redis, "url", "redis://localhost:6379/0")
+
+        token = ContextToken(
+            token_id="session:proj-y:2000000000",
+            iat=2000000000.0,  # issued after the epoch bump
+            permissions=(Permissions.BRAIN_READ,),
+        )
+        assert await interceptor._is_token_revoked(token) is False
+
+    @pytest.mark.asyncio
+    async def test_revocation_epoch_check_uses_precise_iat_not_truncated_token_id(self, monkeypatch):
+        """Regression test: a token issued in the SAME integer second as a
+        revoke_all bump, but chronologically AFTER it, must not be rejected.
+
+        token_id only has 1-second resolution (``int(now)``); comparing the
+        epoch against that truncated value could reject a token issued right
+        after a bump within the same second. ``ContextToken.iat`` (a float,
+        precise to the microsecond) must be used instead when present.
+        """
+        interceptor = ServicePermissionInterceptor(_TEST_RPC_MAP, service_name="Test")
+
+        class _AsyncFakeRedis:
+            async def exists(self, key: str):
+                return 0
+
+            async def get(self, key: str):
+                if key == "contextunity:epoch:proj-race":
+                    return repr(1000.900)  # revoke_all bumped at 1000.900
+                return None
+
+            async def aclose(self):
+                return None
+
+        monkeypatch.setattr("redis.asyncio.from_url", lambda *a, **k: _AsyncFakeRedis())
+        from contextunity.core.config import get_core_config
+
+        config = get_core_config()
+        monkeypatch.setattr(config.redis, "url", "redis://localhost:6379/0")
+
+        # Both the bump (1000.900) and the token issue time (1000.950) truncate
+        # to the same token_id timestamp "1000" via int(now) — the bug this
+        # test guards against would compare 1000 < 1000.900 and wrongly reject.
+        token = ContextToken(
+            token_id="session:proj-race:1000",
+            iat=1000.950,  # issued 50ms AFTER the epoch bump
+            permissions=(Permissions.BRAIN_READ,),
+        )
+        assert await interceptor._is_token_revoked(token) is False
+
+    @pytest.mark.asyncio
+    async def test_revocation_epoch_check_skipped_without_iat(self, monkeypatch):
+        """A session-shaped token_id with iat=None does NOT fall back to a
+        token_id-derived comparison — the epoch check is skipped entirely
+        (not approximated), and no Redis connection is opened for it, because
+        the sole minter of session tokens (Shield's issue_session_token)
+        always sets iat; a session token without one cannot occur in
+        practice, so there is nothing to defensively approximate."""
+        interceptor = ServicePermissionInterceptor(_TEST_RPC_MAP, service_name="Test")
+
+        def _explode(*a, **k):
+            raise AssertionError("must not connect to redis for a session token without iat")
+
+        monkeypatch.setattr("redis.asyncio.from_url", _explode)
+
+        token = ContextToken(
+            token_id="session:proj-legacy:1000000000",
+            iat=None,
+            permissions=(Permissions.BRAIN_READ,),
+        )
+        assert await interceptor._is_token_revoked(token) is False
+
+    @pytest.mark.asyncio
+    async def test_revocation_epoch_check_passes_when_no_epoch_ever_set(self, monkeypatch):
+        """No revoke-all has ever occurred for this project: absence of an
+        epoch key means pass, not fail-closed (distinct from the explicit
+        revocation_id check, which fails closed on missing infrastructure)."""
+        interceptor = ServicePermissionInterceptor(_TEST_RPC_MAP, service_name="Test")
+
+        class _AsyncFakeRedis:
+            async def exists(self, key: str):
+                return 0
+
+            async def get(self, key: str):
+                return None
+
+            async def aclose(self):
+                return None
+
+        monkeypatch.setattr("redis.asyncio.from_url", lambda *a, **k: _AsyncFakeRedis())
+        from contextunity.core.config import get_core_config
+
+        config = get_core_config()
+        monkeypatch.setattr(config.redis, "url", "redis://localhost:6379/0")
+
+        token = ContextToken(
+            token_id="session:proj-z:1000000000",
+            iat=1000000000.0,
+            permissions=(Permissions.BRAIN_READ,),
+        )
+        assert await interceptor._is_token_revoked(token) is False
+
+    @pytest.mark.asyncio
+    async def test_revocation_skips_redis_for_non_session_non_revocable_token(self, monkeypatch):
+        """Tokens that are neither explicitly revocable nor session-shaped must
+        not even open a Redis connection (fast path preserved)."""
+        interceptor = ServicePermissionInterceptor(_TEST_RPC_MAP, service_name="Test")
+
+        def _explode(*a, **k):
+            raise AssertionError("must not connect to redis for a non-revocable, non-session token")
+
+        monkeypatch.setattr("redis.asyncio.from_url", _explode)
+
+        token = ContextToken(
+            token_id="not-a-session-token-id",
+            permissions=(Permissions.BRAIN_READ,),
         )
         assert await interceptor._is_token_revoked(token) is False
 

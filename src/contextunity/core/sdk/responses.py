@@ -185,6 +185,34 @@ class EpisodeRecord(TypedDict, total=False):
     created_at: str
 
 
+class SynapseRecord(TypedDict, total=False):
+    """Single BrainSynapse learning-trace record from Brain (query_synapses)."""
+
+    id: str
+    graph_name: str
+    graph_run_id: str
+    node_id: str
+    node_name: str
+    agent_id: str
+    action_type: str
+    action_data: JsonDict
+    action_data_ref: str
+    context_summary: str
+    thought_trace_ref: str
+    content_hash: str
+    node_role: str
+    fault_class: str
+    status: str
+    q_action: float
+    q_hypothesis: float
+    q_relevance: float
+    q_composite: float
+    scope_path: str
+    metadata: JsonDict
+    created_at: str
+    updated_at: str
+
+
 # ---- Worker responses --------------------------------------------------------
 #
 # Worker unary RPCs return open ``ContextUnitPayload``. TypedDicts document common
@@ -346,6 +374,7 @@ __all__ = [
     "EpisodeRecord",
     "EpisodeStatsResult",
     "EpisodeStatsWireFields",
+    "SynapseRecord",
     "TraceRecord",
     # Worker
     "StartWorkflowResult",

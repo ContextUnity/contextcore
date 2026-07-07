@@ -134,20 +134,20 @@ class BrainAdminMixin(_MixinBase):
             wire["hours"] = hours
         return await self._admin_call("AdminSearchEpisodes", wire)
 
-    async def get_knowledge_nodes(
+    async def get_cells(
         self,
         *,
         tenant_id: str | None = None,
         kind: str | None = None,
         limit: int = 50,
     ) -> list[JsonDict]:
-        """List knowledge_nodes with optional tenant/kind filter."""
+        """List cells with optional tenant/kind filter."""
         wire: ContextUnitPayload = {"limit": limit}
         if tenant_id is not None:
             wire["tenant_id"] = tenant_id
         if kind is not None:
             wire["kind"] = kind
-        result = await self._admin_call("AdminGetKnowledgeNodes", wire)
+        result = await self._admin_call("AdminGetCells", wire)
         return get_json_dict_list(result, "nodes")
 
     async def get_analytics_summary(

@@ -336,7 +336,7 @@ def test_toolkit_resolution_preserves_bidi_tool_path():
         {
             "apiVersion": "contextunity/v1alpha7",
             "kind": "ContextUnityProject",
-                "project": {"id": "proj", "name": "Project"},
+            "project": {"id": "proj", "name": "Project"},
             "services": {"router": {"enabled": True}},
             "router": {
                 "default_graph": "demo",

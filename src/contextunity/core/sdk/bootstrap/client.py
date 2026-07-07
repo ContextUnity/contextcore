@@ -209,9 +209,7 @@ def put_secrets_to_shield(
     if failed:
         detail = "; ".join(f"{tenant}/{provider}: {e}" for tenant, provider, e in failed)
         total = len(secrets) * len(allowed_tenants)
-        raise PlatformServiceError(
-            f"Shield sync incomplete — {len(failed)}/{total} tenant secret(s) failed: {detail}"
-        )
+        raise PlatformServiceError(f"Shield sync incomplete — {len(failed)}/{total} tenant secret(s) failed: {detail}")
 
     return synced
 

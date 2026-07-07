@@ -182,7 +182,7 @@ class TestProjectBootstrapConfig:
             {
                 "apiVersion": "contextunity/v1alpha7",
                 "kind": "ContextUnityProject",
-                    "project": {"id": "proj", "name": "Project"},
+                "project": {"id": "proj", "name": "Project"},
                 "services": {"router": {"enabled": True}},
                 "router": {
                     "default_graph": "g1",
@@ -233,7 +233,7 @@ class TestProjectBootstrapConfig:
             {
                 "apiVersion": "contextunity/v1alpha7",
                 "kind": "ContextUnityProject",
-                    "project": {"id": "proj", "name": "Project"},
+                "project": {"id": "proj", "name": "Project"},
                 "services": {"router": {"enabled": True}},
                 "router": {
                     "default_graph": "g1",
@@ -266,7 +266,7 @@ class TestProjectBootstrapConfig:
             {
                 "apiVersion": "contextunity/v1alpha7",
                 "kind": "ContextUnityProject",
-                    "project": {"id": "proj", "name": "Project"},
+                "project": {"id": "proj", "name": "Project"},
                 "services": {"router": {"enabled": True}},
                 "router": {
                     "default_graph": "g1",

@@ -232,9 +232,7 @@ def test_artifact_generator_registers_only_explicit_federated_tools(minimal_nszu
     bundle = ArtifactGenerator(project).generate_router_registration_bundle()
 
     assert "tools" not in bundle.model_dump(exclude_none=True)
-    assert [tool["name"] for tool in bundle.graph["main"]["config"]["federated_tools"]] == [
-        "medical_sql"
-    ]
+    assert [tool["name"] for tool in bundle.graph["main"]["config"]["federated_tools"]] == ["medical_sql"]
     node_bindings = bundle.graph["main"]["config"]["node_tool_bindings"]
     assert node_bindings == {"custom": {"medical_sql": "execute"}}
 

@@ -154,6 +154,24 @@ class BrainServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
+        self.RecordSynapse = channel.unary_unary(
+            "/contextunity.brain.BrainService/RecordSynapse",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.QuerySynapses = channel.unary_stream(
+            "/contextunity.brain.BrainService/QuerySynapses",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.UpdateSynapseQ = channel.unary_unary(
+            "/contextunity.brain.BrainService/UpdateSynapseQ",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
         self.MatchDuckDB = channel.unary_unary(
             "/contextunity.brain.BrainService/MatchDuckDB",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
@@ -214,8 +232,8 @@ class BrainServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.AdminGetKnowledgeNodes = channel.unary_unary(
-            "/contextunity.brain.BrainService/AdminGetKnowledgeNodes",
+        self.AdminGetCells = channel.unary_unary(
+            "/contextunity.brain.BrainService/AdminGetCells",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
@@ -420,6 +438,45 @@ class BrainServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def RecordSynapse(self, request, context):
+        """=========================================
+        BrainSynapse Operations (Flat Memory Phase B)
+        =========================================
+
+        Record a BrainSynapse learning trace.
+        Request payload: {tenant_id?, agent_id, action_type, action_data?, action_data_ref?,
+        thought_trace_ref?, content_hash?, graph_name?, graph_run_id?, node_id?, node_name?,
+        node_role?, scope_path?, context_summary?, client_id?, fault_class?, status?,
+        q_action?, q_hypothesis?, q_relevance?, metadata?}
+        Response payload: {id, agent_id, action_type, node_role, status, q_action,
+        q_hypothesis, q_relevance, q_composite, scope_path, metadata, created_at, updated_at}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def QuerySynapses(self, request, context):
+        """Query BrainSynapses, ranked by q_composite and bounded by limit.
+        Request payload: {tenant_id?, action_type?, agent_id?, node_role?, status?,
+        scope_path?, min_q?, limit?}
+        Response payload stream: one ContextUnit per Synapse row, same shape as RecordSynapse's
+        response plus {graph_name, graph_run_id, node_id, node_name, action_data,
+        action_data_ref, context_summary, thought_trace_ref, content_hash, fault_class}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def UpdateSynapseQ(self, request, context):
+        """Update Q-values/fault/status on one tenant-owned Synapse after an outcome/review.
+        Request payload: {synapse_id, q_action?, q_hypothesis?, q_relevance?, fault_class?,
+        status?, metadata_patch?}
+        Response payload: {id, q_action, q_hypothesis, q_relevance, q_composite, updated_at}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
     def MatchDuckDB(self, request, context):
         """=========================================
         DuckDB Operations
@@ -537,8 +594,8 @@ class BrainServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def AdminGetKnowledgeNodes(self, request, context):
-        """List knowledge_nodes with optional tenant/kind filter (cross-tenant).
+    def AdminGetCells(self, request, context):
+        """List cells with optional tenant/kind filter (cross-tenant).
         Requires admin:read.
         tenant_id is optional only when token has admin:all; otherwise required.
         Request payload: {tenant_id?, kind?, limit?}
@@ -647,6 +704,21 @@ def add_BrainServiceServicer_to_server(servicer, server):
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
+        "RecordSynapse": grpc.unary_unary_rpc_method_handler(
+            servicer.RecordSynapse,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "QuerySynapses": grpc.unary_stream_rpc_method_handler(
+            servicer.QuerySynapses,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "UpdateSynapseQ": grpc.unary_unary_rpc_method_handler(
+            servicer.UpdateSynapseQ,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
         "MatchDuckDB": grpc.unary_unary_rpc_method_handler(
             servicer.MatchDuckDB,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
@@ -697,8 +769,8 @@ def add_BrainServiceServicer_to_server(servicer, server):
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
-        "AdminGetKnowledgeNodes": grpc.unary_unary_rpc_method_handler(
-            servicer.AdminGetKnowledgeNodes,
+        "AdminGetCells": grpc.unary_unary_rpc_method_handler(
+            servicer.AdminGetCells,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -1245,6 +1317,96 @@ class BrainService(object):
         )
 
     @staticmethod
+    def RecordSynapse(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/RecordSynapse",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def QuerySynapses(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            "/contextunity.brain.BrainService/QuerySynapses",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def UpdateSynapseQ(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/UpdateSynapseQ",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
     def MatchDuckDB(
         request,
         target,
@@ -1545,7 +1707,7 @@ class BrainService(object):
         )
 
     @staticmethod
-    def AdminGetKnowledgeNodes(
+    def AdminGetCells(
         request,
         target,
         options=(),
@@ -1560,7 +1722,7 @@ class BrainService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextunity.brain.BrainService/AdminGetKnowledgeNodes",
+            "/contextunity.brain.BrainService/AdminGetCells",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,

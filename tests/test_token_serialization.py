@@ -39,6 +39,7 @@ class TestSerializeVerifyRoundtrip:
             permissions=("brain:read", "memory:write", "trace:read"),
             allowed_tenants=("tenant_a", "tenant_b"),
             exp_unix=9999999999.0,
+            iat=1700000000.123,
             revocation_id="rev-abc",
             user_id="dr_ivanov",
             agent_id="dispatcher",
@@ -53,6 +54,7 @@ class TestSerializeVerifyRoundtrip:
         assert restored.permissions == ("brain:read", "memory:write", "trace:read")
         assert restored.allowed_tenants == ("tenant_a", "tenant_b")
         assert restored.exp_unix == 9999999999.0
+        assert restored.iat == 1700000000.123
         assert restored.revocation_id == "rev-abc"
         assert restored.user_id == "dr_ivanov"
         assert restored.agent_id == "dispatcher"
@@ -227,7 +229,7 @@ class TestSerializeConditionalFields:
         assert "allowed_tenants" not in payload_json
 
     def test_none_optional_fields_omitted(self, backend) -> None:
-        """None user_id, agent_id, revocation_id are NOT in wire format."""
+        """None user_id, agent_id, revocation_id, iat are NOT in wire format."""
         import base64
         import json
 
@@ -236,7 +238,7 @@ class TestSerializeConditionalFields:
 
         parts = token_str.split(".")
         payload_json = json.loads(base64.b64decode(parts[1]))
-        for field in ("user_id", "agent_id", "revocation_id"):
+        for field in ("user_id", "agent_id", "revocation_id", "iat"):
             assert field not in payload_json, f"{field} should not be in wire format when None"
 
 

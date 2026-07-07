@@ -110,9 +110,15 @@ class ProviderError(ContextUnityError):
 
 
 class SecurityError(ContextUnityError):
-    """Authorization/security failure (token missing/invalid/expired)."""
+    """Authorization/security failure (token missing/invalid/expired).
+
+    Declares ``fault_class`` so ``contextunity.core.faults.classify_exception``
+    attributes it to ``policy_fault`` directly — permission/tenant-access
+    denials are never the agent's own logic failing.
+    """
 
     code: str = "SECURITY_ERROR"
+    fault_class: str = "policy_fault"
 
 
 class TamperDetectedError(SecurityError):

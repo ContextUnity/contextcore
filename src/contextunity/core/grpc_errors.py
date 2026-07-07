@@ -43,6 +43,12 @@ _ERROR_CODE_MAP: dict[str, str] = {
     "SHIELD_DECRYPTION_ERROR": "FAILED_PRECONDITION",
     "SECURITY_ERROR": "PERMISSION_DENIED",
     "TAMPER_DETECTED": "ABORTED",
+    # policy_fault: cross-tenant/spoofing rejection is a permission denial,
+    # not a generic internal error (would otherwise fall through the BRAIN
+    # prefix to INTERNAL, per _SERVICE_PREFIX_MAP below).
+    "BRAIN_VALIDATION_ERROR": "INVALID_ARGUMENT",
+    "BRAIN_SYNAPSES_DISABLED": "FAILED_PRECONDITION",
+    "BRAIN_SYNAPSE_TENANT_MISMATCH": "PERMISSION_DENIED",
     "RETRIEVAL_ERROR": "NOT_FOUND",
     "PROVIDER_ERROR": "UNAVAILABLE",
     "STORAGE_ERROR": "UNAVAILABLE",

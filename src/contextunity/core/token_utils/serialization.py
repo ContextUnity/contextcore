@@ -67,6 +67,7 @@ def token_from_payload_dict(data: TokenPayloadDict) -> ContextToken:
         permissions=_string_tuple(data.get("permissions")),
         allowed_tenants=_string_tuple(data.get("allowed_tenants")),
         exp_unix=data.get("exp_unix"),
+        iat=data.get("iat"),
         revocation_id=data.get("revocation_id"),
         user_id=data.get("user_id"),
         agent_id=data.get("agent_id"),
@@ -82,6 +83,7 @@ def token_from_session_dict(data: TokenSessionDict) -> ContextToken:
         permissions=_string_tuple(data.get("permissions")),
         allowed_tenants=_string_tuple(data.get("allowed_tenants")),
         exp_unix=data.get("exp_unix"),
+        iat=data.get("iat"),
         user_id=data.get("user_id"),
         user_namespace=data.get("user_namespace") or "default",
         agent_id=data.get("agent_id", ""),
@@ -104,6 +106,8 @@ def serialize_token(
         data["allowed_tenants"] = list(token.allowed_tenants)
     if token.exp_unix is not None:
         data["exp_unix"] = token.exp_unix
+    if token.iat is not None:
+        data["iat"] = token.iat
     if token.revocation_id:
         data["revocation_id"] = token.revocation_id
     if token.user_id:

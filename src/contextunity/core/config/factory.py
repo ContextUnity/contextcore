@@ -71,6 +71,10 @@ SHARED_ENV_MAPPINGS: dict[str, str] = {
     "CU_MANIFEST_PATH": "manifest_path",
     "CU_LOCAL_MODE": "local_mode",
     "DEV_MODE": "dev_mode",
+    "CU_ENABLE_PASSBYREF": "enable_passbyref",
+    "CU_PASSBYREF_TTL_SECONDS": "passbyref_ttl_seconds",
+    "CU_PASSBYREF_THRESHOLD_BYTES": "passbyref_threshold_bytes",
+    "CU_BLACKBOARD_PRUNE_INTERVAL_SECONDS": "blackboard_prune_interval_seconds",
     # Security (systemd-creds on prod, env fallback on dev)
     "CU_PROJECT_SECRET": "security.project_secret",
 }

@@ -15,6 +15,7 @@ class TokenPayloadDict(TypedDict, total=False):
     permissions: list[str]
     allowed_tenants: list[str]
     exp_unix: float
+    iat: float
     revocation_id: str
     user_id: str
     agent_id: str
@@ -39,6 +40,7 @@ class TokenSessionDict(TypedDict, total=False):
     permissions: list[str]
     allowed_tenants: list[str]
     exp_unix: float
+    iat: float
     user_id: str
     user_namespace: str
     agent_id: str

@@ -11,6 +11,7 @@ from .base import BrainClientBase
 from .commerce import CommerceCompatMixin
 from .knowledge import KnowledgeMixin
 from .memory import MemoryMixin
+from .synapses import SynapseMixin
 from .traces import TraceMixin
 
 
@@ -19,6 +20,7 @@ class BrainClient(
     CommerceCompatMixin,
     KnowledgeMixin,
     MemoryMixin,
+    SynapseMixin,
     TraceMixin,
     BrainClientBase,
 ):

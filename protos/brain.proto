@@ -129,6 +129,33 @@ service BrainService {
     rpc ReadBlackboard(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // =========================================
+    // BrainSynapse Operations (Flat Memory Phase B)
+    // =========================================
+
+    // Record a BrainSynapse learning trace.
+    // Request payload: {tenant_id?, agent_id, action_type, action_data?, action_data_ref?,
+    //   thought_trace_ref?, content_hash?, graph_name?, graph_run_id?, node_id?, node_name?,
+    //   node_role?, scope_path?, context_summary?, client_id?, fault_class?, status?,
+    //   q_action?, q_hypothesis?, q_relevance?, metadata?}
+    // Response payload: {id, agent_id, action_type, node_role, status, q_action,
+    //   q_hypothesis, q_relevance, q_composite, scope_path, metadata, created_at, updated_at}
+    rpc RecordSynapse(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Query BrainSynapses, ranked by q_composite and bounded by limit.
+    // Request payload: {tenant_id?, action_type?, agent_id?, node_role?, status?,
+    //   scope_path?, min_q?, limit?}
+    // Response payload stream: one ContextUnit per Synapse row, same shape as RecordSynapse's
+    //   response plus {graph_name, graph_run_id, node_id, node_name, action_data,
+    //   action_data_ref, context_summary, thought_trace_ref, content_hash, fault_class}
+    rpc QuerySynapses(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
+
+    // Update Q-values/fault/status on one tenant-owned Synapse after an outcome/review.
+    // Request payload: {synapse_id, q_action?, q_hypothesis?, q_relevance?, fault_class?,
+    //   status?, metadata_patch?}
+    // Response payload: {id, q_action, q_hypothesis, q_relevance, q_composite, updated_at}
+    rpc UpdateSynapseQ(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // =========================================
     // DuckDB Operations
     // =========================================
 
@@ -205,12 +232,12 @@ service BrainService {
     // Response payload: {events: [...], total: int}
     rpc AdminSearchEpisodes(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
-    // List knowledge_nodes with optional tenant/kind filter (cross-tenant).
+    // List cells with optional tenant/kind filter (cross-tenant).
     // Requires admin:read.
     // tenant_id is optional only when token has admin:all; otherwise required.
     // Request payload: {tenant_id?, kind?, limit?}
     // Response payload: {nodes: [...]}
-    rpc AdminGetKnowledgeNodes(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc AdminGetCells(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Rich analytics summary with per-hour breakdown, token costs, tool usage.
     // Requires admin:read.

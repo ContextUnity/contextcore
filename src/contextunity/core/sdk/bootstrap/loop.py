@@ -112,10 +112,21 @@ def bootstrap_loop(
             while True:
                 try:
                     from contextunity.core.sdk.identity import get_required_services
+                    from contextunity.core.tokens import ContextToken
 
                     required_services = get_required_services()
+                    # Request the manifest's full tenant scope (v1alpha7 Phase E1).
+                    # Shield clamps this to the project's admin-provisioned policy
+                    # allowed_tenants ∪ {project_id} — it is never adopted verbatim;
+                    # single-tenant manifests resolve to (project_id,) already, so
+                    # this is a no-op for them.
+                    requested_token = ContextToken(token_id="bootstrap-request", allowed_tenants=allowed_tenants)
                     token, kid, expires_at = _request_session_token(
-                        project_id, shield_url, hmac_backend, required_services=required_services
+                        project_id,
+                        shield_url,
+                        hmac_backend,
+                        required_services=required_services,
+                        requested_token=requested_token,
                     )
                     backend = SessionTokenBackend(
                         project_id=project_id,
@@ -189,9 +200,7 @@ def bootstrap_loop(
                     backend,
                     allowed_tenants=allowed_tenants,
                 )
-                logger.info(
-                    "Published %d prompt(s) to Shield: %s", len(stored), ", ".join(stored)
-                )
+                logger.info("Published %d prompt(s) to Shield: %s", len(stored), ", ".join(stored))
                 break
             except Exception as e:
                 _log_retry(

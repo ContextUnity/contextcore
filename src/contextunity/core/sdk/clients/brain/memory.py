@@ -8,7 +8,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from contextunity.core.grpc_client_errors import wrap_client_error
-from contextunity.core.sdk.payload import copy_wire_payload, get_int, get_json_dict, get_json_value, get_str
+from contextunity.core.sdk.payload import (
+    copy_wire_payload,
+    get_int,
+    get_json_dict,
+    get_json_value,
+    get_str,
+)
 from contextunity.core.sdk.responses import EpisodeRecord
 from contextunity.core.types import ContextUnitPayload, JsonDict, JsonValue
 
@@ -189,6 +195,85 @@ class MemoryMixin(_MixinBase):
                 if fact_key:
                     facts[fact_key] = fact_value
         return facts
+
+    # =========================================
+    # Blackboard (Pass-by-Reference)
+    # =========================================
+
+    async def write_blackboard(
+        self,
+        *,
+        tenant_id: str,
+        scope_path: str,
+        content: ContextUnitPayload,
+        metadata: JsonDict | None = None,
+        ttl_seconds: int | None = None,
+        created_by: str | None = None,
+    ) -> ContextUnitPayload:
+        """Write a Blackboard record for pass-by-reference between graph nodes.
+
+        Args:
+            tenant_id: Tenant identifier for isolation (validated against the token).
+            scope_path: LTREE-shaped scope path, e.g. ``"tenant.project.session.step"``.
+            content: JSON-serializable payload to store.
+            metadata: Optional metadata dict.
+            ttl_seconds: Optional TTL in seconds. ``None`` means no expiry.
+            created_by: Optional agent_id or node_name provenance tag.
+
+        Returns:
+            The service response payload unchanged: ``{id, scope_path, created_at}``.
+        """
+        unit = ContextUnit(
+            payload={
+                "tenant_id": tenant_id,
+                "scope_path": scope_path,
+                "content": content,
+                "metadata": metadata or {},
+                "ttl_seconds": ttl_seconds,
+                "created_by": created_by,
+            },
+            provenance=["sdk:brain_client:write_blackboard"],
+        )
+
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        with wrap_client_error("Brain", "WriteBlackboard"):
+            response_pb = await self._stub.WriteBlackboard(req, metadata=grpc_metadata)
+        result = ContextUnit.from_protobuf(response_pb)
+        return copy_wire_payload(result.payload)
+
+    async def read_blackboard(
+        self,
+        *,
+        ids: list[str],
+        tenant_id: str,
+    ) -> ContextUnitPayload:
+        """Read Blackboard records by UUID — strictly batched, single round trip.
+
+        Args:
+            ids: UUID strings to resolve. The server excludes expired records.
+            tenant_id: Tenant identifier. Not sent over the wire — the server
+                resolves the read tenant from the verified token
+                (``ReadBlackboardPayload`` has no ``tenant_id`` field by
+                design — a token-first contract). Kept as an explicit
+                parameter for call-site symmetry with ``write_blackboard`` and
+                for local ContextUnit provenance.
+
+        Returns:
+            The service response payload unchanged: ``{records: [...]}``.
+        """
+        _ = tenant_id
+        unit = ContextUnit(
+            payload={"ids": ids},
+            provenance=["sdk:brain_client:read_blackboard"],
+        )
+
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        with wrap_client_error("Brain", "ReadBlackboard"):
+            response_pb = await self._stub.ReadBlackboard(req, metadata=grpc_metadata)
+        result = ContextUnit.from_protobuf(response_pb)
+        return copy_wire_payload(result.payload)
 
     # =========================================
     # Retention & Distillation
