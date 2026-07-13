@@ -82,6 +82,60 @@ class BrainServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
+        self.UpsertCell = channel.unary_unary(
+            "/contextunity.brain.BrainService/UpsertCell",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.QueryCells = channel.unary_stream(
+            "/contextunity.brain.BrainService/QueryCells",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.GetCell = channel.unary_unary(
+            "/contextunity.brain.BrainService/GetCell",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.EnqueueCellEmbedding = channel.unary_unary(
+            "/contextunity.brain.BrainService/EnqueueCellEmbedding",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.ClaimCellEmbeddingJobs = channel.unary_unary(
+            "/contextunity.brain.BrainService/ClaimCellEmbeddingJobs",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.EmbedClaimedCell = channel.unary_unary(
+            "/contextunity.brain.BrainService/EmbedClaimedCell",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.FailCellEmbeddingJob = channel.unary_unary(
+            "/contextunity.brain.BrainService/FailCellEmbeddingJob",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.GetCellEmbeddingStatus = channel.unary_unary(
+            "/contextunity.brain.BrainService/GetCellEmbeddingStatus",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.GetEmbeddingCapability = channel.unary_unary(
+            "/contextunity.brain.BrainService/GetEmbeddingCapability",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
         self.AddEpisode = channel.unary_unary(
             "/contextunity.brain.BrainService/AddEpisode",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
@@ -94,14 +148,8 @@ class BrainServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.UpsertFact = channel.unary_unary(
-            "/contextunity.brain.BrainService/UpsertFact",
-            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=contextunit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-        self.GetUserFacts = channel.unary_stream(
-            "/contextunity.brain.BrainService/GetUserFacts",
+        self.GetOldEpisodes = channel.unary_stream(
+            "/contextunity.brain.BrainService/GetOldEpisodes",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
@@ -150,6 +198,12 @@ class BrainServiceStub(object):
         )
         self.ReadBlackboard = channel.unary_unary(
             "/contextunity.brain.BrainService/ReadBlackboard",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.PruneExpiredBlackboard = channel.unary_unary(
+            "/contextunity.brain.BrainService/PruneExpiredBlackboard",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
@@ -311,6 +365,74 @@ class BrainServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def UpsertCell(self, request, context):
+        """Phase 3: Canonical BrainCell API
+        Upsert a canonical BrainCell over current knowledge storage.
+        Request payload: {tenant_id?, cell_id?, cell_kind, content, metadata?, scope_path?,
+        content_hash?, source_type?, source_ref?, confidence?, visibility?, user_id?}
+        Response payload: {id, tenant_id, cell_kind, source_type, scope_path, content_hash, confidence, visibility, created_at, updated_at}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def QueryCells(self, request, context):
+        """Query canonical BrainCells by text/scope/source/metadata.
+        Request payload: {tenant_id?, query_text?, cell_kind?, source_type?, scope_path?,
+        metadata_filter?, limit?, user_id?}
+        Response payload stream: {id, tenant_id, cell_kind, content, metadata, score?, source_type, source_ref, scope_path, content_hash, confidence, visibility}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def GetCell(self, request, context):
+        """Get one BrainCell by id.
+        Request payload: {tenant_id?, cell_id}
+        Response payload: {id, tenant_id, cell_kind, content, metadata, source_type, source_ref, scope_path, content_hash, confidence, visibility, created_at, updated_at}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def EnqueueCellEmbedding(self, request, context):
+        """Durable asynchronous embedding enrichment. Payloads contain references
+        and status only; Brain keeps cell text/provider calls internal.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ClaimCellEmbeddingJobs(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def EmbedClaimedCell(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def FailCellEmbeddingJob(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def GetCellEmbeddingStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def GetEmbeddingCapability(self, request, context):
+        """Cheap gate/storage readiness preflight. Does not load or call the provider."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
     def AddEpisode(self, request, context):
         """=========================================
         NewsEngine Operations
@@ -336,18 +458,10 @@ class BrainServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def UpsertFact(self, request, context):
-        """Upsert user fact
-        Request payload: {user_id, tenant_id, key, value, confidence?, source_id?}
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def GetUserFacts(self, request, context):
-        """Get all facts for a user
-        Request payload: {tenant_id, user_id}
-        Response payload: {fact_key, fact_value, confidence, updated_at}
+    def GetOldEpisodes(self, request, context):
+        """Get episodes older than N days (retention / synthesis)
+        Request payload: {tenant_id, older_than_days?, limit?}
+        Response payload: {id, user_id, content, metadata, created_at, source_hash?, graph_run_id?}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -433,6 +547,15 @@ class BrainServiceServicer(object):
         """Read one or more records by UUID(s) — STRICTLY BATCHED
         Request payload: {ids: [UUID, ...]}
         Response payload: {records: [{id, content, metadata, scope_path, created_at}]}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def PruneExpiredBlackboard(self, request, context):
+        """Prune expired Blackboard records for one tenant.
+        Request payload: {tenant_id}
+        Response payload: {deleted_count, tenant_id}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -644,6 +767,51 @@ def add_BrainServiceServicer_to_server(servicer, server):
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
+        "UpsertCell": grpc.unary_unary_rpc_method_handler(
+            servicer.UpsertCell,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "QueryCells": grpc.unary_stream_rpc_method_handler(
+            servicer.QueryCells,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "GetCell": grpc.unary_unary_rpc_method_handler(
+            servicer.GetCell,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "EnqueueCellEmbedding": grpc.unary_unary_rpc_method_handler(
+            servicer.EnqueueCellEmbedding,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ClaimCellEmbeddingJobs": grpc.unary_unary_rpc_method_handler(
+            servicer.ClaimCellEmbeddingJobs,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "EmbedClaimedCell": grpc.unary_unary_rpc_method_handler(
+            servicer.EmbedClaimedCell,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "FailCellEmbeddingJob": grpc.unary_unary_rpc_method_handler(
+            servicer.FailCellEmbeddingJob,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "GetCellEmbeddingStatus": grpc.unary_unary_rpc_method_handler(
+            servicer.GetCellEmbeddingStatus,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "GetEmbeddingCapability": grpc.unary_unary_rpc_method_handler(
+            servicer.GetEmbeddingCapability,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
         "AddEpisode": grpc.unary_unary_rpc_method_handler(
             servicer.AddEpisode,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
@@ -654,13 +822,8 @@ def add_BrainServiceServicer_to_server(servicer, server):
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
-        "UpsertFact": grpc.unary_unary_rpc_method_handler(
-            servicer.UpsertFact,
-            request_deserializer=contextunit__pb2.ContextUnit.FromString,
-            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
-        ),
-        "GetUserFacts": grpc.unary_stream_rpc_method_handler(
-            servicer.GetUserFacts,
+        "GetOldEpisodes": grpc.unary_stream_rpc_method_handler(
+            servicer.GetOldEpisodes,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -701,6 +864,11 @@ def add_BrainServiceServicer_to_server(servicer, server):
         ),
         "ReadBlackboard": grpc.unary_unary_rpc_method_handler(
             servicer.ReadBlackboard,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "PruneExpiredBlackboard": grpc.unary_unary_rpc_method_handler(
+            servicer.PruneExpiredBlackboard,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -957,6 +1125,276 @@ class BrainService(object):
         )
 
     @staticmethod
+    def UpsertCell(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/UpsertCell",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def QueryCells(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            "/contextunity.brain.BrainService/QueryCells",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def GetCell(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/GetCell",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def EnqueueCellEmbedding(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/EnqueueCellEmbedding",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ClaimCellEmbeddingJobs(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/ClaimCellEmbeddingJobs",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def EmbedClaimedCell(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/EmbedClaimedCell",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def FailCellEmbeddingJob(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/FailCellEmbeddingJob",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def GetCellEmbeddingStatus(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/GetCellEmbeddingStatus",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def GetEmbeddingCapability(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/GetEmbeddingCapability",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
     def AddEpisode(
         request,
         target,
@@ -1017,37 +1455,7 @@ class BrainService(object):
         )
 
     @staticmethod
-    def UpsertFact(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            "/contextunity.brain.BrainService/UpsertFact",
-            contextunit__pb2.ContextUnit.SerializeToString,
-            contextunit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def GetUserFacts(
+    def GetOldEpisodes(
         request,
         target,
         options=(),
@@ -1062,7 +1470,7 @@ class BrainService(object):
         return grpc.experimental.unary_stream(
             request,
             target,
-            "/contextunity.brain.BrainService/GetUserFacts",
+            "/contextunity.brain.BrainService/GetOldEpisodes",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,
@@ -1303,6 +1711,36 @@ class BrainService(object):
             request,
             target,
             "/contextunity.brain.BrainService/ReadBlackboard",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def PruneExpiredBlackboard(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/PruneExpiredBlackboard",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,

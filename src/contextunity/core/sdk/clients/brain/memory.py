@@ -1,4 +1,4 @@
-"""Memory methods - episodic events, user facts.
+"""Memory methods - episodic events and retention.
 
 All operations are delegated to the Brain gRPC service.
 """
@@ -12,14 +12,12 @@ from contextunity.core.sdk.payload import (
     copy_wire_payload,
     get_int,
     get_json_dict,
-    get_json_value,
     get_str,
 )
 from contextunity.core.sdk.responses import EpisodeRecord
-from contextunity.core.types import ContextUnitPayload, JsonDict, JsonValue
+from contextunity.core.types import ContextUnitPayload, JsonDict
 
 from ...contextunit import ContextUnit
-from .base import logger
 
 if TYPE_CHECKING:
     from .base import BrainClientBase as _MixinBase
@@ -121,82 +119,6 @@ class MemoryMixin(_MixinBase):
         return episodes
 
     # =========================================
-    # Entity Memory (User Facts)
-    # =========================================
-
-    async def upsert_fact(
-        self,
-        *,
-        tenant_id: str,
-        user_id: str,
-        key: str,
-        value: object,
-        confidence: float = 1.0,
-        source_id: str | None = None,
-    ) -> None:
-        """Upsert a persistent fact about a user.
-
-        Args:
-            tenant_id: Tenant identifier for isolation.
-            user_id: User identifier.
-            key: Fact key (e.g., "language", "specialty").
-            value: Fact value.
-            confidence: Confidence score (0-1).
-            source_id: Optional source episode ID.
-        """
-        unit = ContextUnit(
-            payload={
-                "tenant_id": tenant_id,
-                "user_id": user_id,
-                "key": key,
-                "value": value,
-                "confidence": confidence,
-                "source_id": source_id or "",
-            },
-            provenance=["sdk:brain_client:upsert_fact"],
-        )
-
-        req = unit.to_protobuf(self._cu_pb2)
-        grpc_metadata = self._get_metadata()
-        with wrap_client_error("Brain", "UpsertFact"):
-            _ = await self._stub.UpsertFact(req, metadata=grpc_metadata)
-
-    async def get_user_facts(
-        self,
-        *,
-        tenant_id: str,
-        user_id: str,
-    ) -> dict[str, JsonValue]:
-        """Get all known facts about a user.
-
-        Args:
-            tenant_id: Tenant identifier for isolation.
-            user_id: User identifier.
-
-        Returns:
-            Dict mapping fact_key -> fact_value (JSON-serializable values).
-        """
-        unit = ContextUnit(
-            payload={
-                "tenant_id": tenant_id,
-                "user_id": user_id,
-            },
-            provenance=["sdk:brain_client:get_user_facts"],
-        )
-
-        req = unit.to_protobuf(self._cu_pb2)
-        grpc_metadata = self._get_metadata()
-        facts: dict[str, JsonValue] = {}
-        with wrap_client_error("Brain", "GetUserFacts"):
-            async for response_pb in self._stub.GetUserFacts(req, metadata=grpc_metadata):
-                result = ContextUnit.from_protobuf(response_pb)
-                fact_key = get_str(result.payload, "fact_key")
-                fact_value = get_json_value(result.payload, "fact_value")
-                if fact_key:
-                    facts[fact_key] = fact_value
-        return facts
-
-    # =========================================
     # Blackboard (Pass-by-Reference)
     # =========================================
 
@@ -276,6 +198,19 @@ class MemoryMixin(_MixinBase):
         return copy_wire_payload(result.payload)
 
     # =========================================
+    async def prune_expired_blackboard(self, *, tenant_id: str) -> int:
+        """Prune expired Blackboard records for one tenant."""
+        unit = ContextUnit(
+            payload={"tenant_id": tenant_id},
+            provenance=["sdk:brain_client:prune_expired_blackboard"],
+        )
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        with wrap_client_error("Brain", "PruneExpiredBlackboard"):
+            response_pb = await self._stub.PruneExpiredBlackboard(req, metadata=grpc_metadata)
+        result = ContextUnit.from_protobuf(response_pb)
+        return get_int(result.payload, "deleted_count")
+
     # Retention & Distillation
     # =========================================
 
@@ -327,16 +262,40 @@ class MemoryMixin(_MixinBase):
             limit: Maximum batch size.
 
         Returns:
-            List of episode dicts with id, user_id, content, metadata, created_at.
+            List of episode dicts with id, user_id, content, metadata, created_at,
+            source_hash, and graph_run_id when present on the wire.
         """
-        # TODO: implement dedicated GetOldEpisodes streaming RPC
-        logger.warning(
-            "get_old_episodes via gRPC not yet implemented, returning empty (tenant_id=%s, older_than_days=%s, limit=%s)",
-            tenant_id,
-            older_than_days,
-            limit,
+        unit = ContextUnit(
+            payload={
+                "tenant_id": tenant_id,
+                "older_than_days": older_than_days,
+                "limit": limit,
+            },
+            provenance=["sdk:brain_client:get_old_episodes"],
         )
-        return []
+
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        episodes: list[EpisodeRecord] = []
+        with wrap_client_error("Brain", "GetOldEpisodes"):
+            async for response_pb in self._stub.GetOldEpisodes(req, metadata=grpc_metadata):
+                result = ContextUnit.from_protobuf(response_pb)
+                p = result.payload
+                episodes.append(
+                    EpisodeRecord(
+                        id=get_str(p, "id"),
+                        user_id=get_str(p, "user_id"),
+                        content=get_str(p, "content"),
+                        session_id="",
+                        metadata=get_json_dict(p, "metadata"),
+                        created_at=get_str(p, "created_at"),
+                        source_hash=get_str(p, "source_hash"),
+                        graph_run_id=get_str(p, "graph_run_id"),
+                    )
+                )
+                if len(episodes) >= limit:
+                    break
+        return episodes
 
     async def get_episode_stats(
         self,

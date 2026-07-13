@@ -12,6 +12,7 @@ decision tree.
 from __future__ import annotations
 
 import re
+from collections import OrderedDict
 from collections.abc import Awaitable
 from typing import TYPE_CHECKING
 
@@ -46,6 +47,22 @@ _SESSION_TOKEN_ID_RE = re.compile(r"^session:([a-z0-9][a-z0-9_\-]{0,62}):\d+$")
 # (rather than imported) because core cannot depend on the shield package —
 # the same pattern already used for the "contextunity:revoked:" prefix below.
 _EPOCH_KEY_PREFIX = "contextunity:epoch"
+_MAX_SESSION_VERIFIERS = 256
+_session_verifiers: OrderedDict[tuple[str, str], VerifierBackend] = OrderedDict()
+
+
+def cache_session_verifier(*, shield_url: str, kid: str, backend: VerifierBackend) -> None:
+    """Cache one immutable, versioned Ed25519 verifier with a bounded LRU."""
+    key = (shield_url, kid)
+    _session_verifiers[key] = backend
+    _session_verifiers.move_to_end(key)
+    while len(_session_verifiers) > _MAX_SESSION_VERIFIERS:
+        _session_verifiers.popitem(last=False)
+
+
+def reset_session_verifier_cache() -> None:
+    """Clear verifier state for tests and explicit runtime reconfiguration."""
+    _session_verifiers.clear()
 
 
 def _parse_session_project_id(token_id: str | None) -> str | None:
@@ -228,6 +245,11 @@ async def build_verifier_backend(
         if not shield_url:
             logger.warning("No Shield URL configured for session token project %s", project_id)
             return None
+        cache_key = (shield_url, kid)
+        cached = _session_verifiers.get(cache_key)
+        if cached is not None:
+            _session_verifiers.move_to_end(cache_key)
+            return cached
         return await _bootstrap_ed25519_from_shield(project_id, kid, shield_url, service_name, config=config)
 
     from ..config import get_core_config
@@ -269,7 +291,9 @@ async def _bootstrap_ed25519_from_shield(
         try:
             from contextunity.core.ed25519 import Ed25519Backend
 
-            return Ed25519Backend(public_key_b64=pub_key_b64, kid=returned_kid)
+            backend = Ed25519Backend(public_key_b64=pub_key_b64, kid=returned_kid)
+            cache_session_verifier(shield_url=shield_url, kid=returned_kid, backend=backend)
+            return backend
         except ImportError:
             logger.error("contextunity.shield not installed, cannot verify Ed25519 tokens")
             return None
@@ -280,5 +304,7 @@ async def _bootstrap_ed25519_from_shield(
 
 __all__ = [
     "build_verifier_backend",
+    "cache_session_verifier",
     "is_token_revoked",
+    "reset_session_verifier_cache",
 ]

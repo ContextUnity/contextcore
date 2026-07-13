@@ -21,6 +21,8 @@ PERMISSION_INHERITANCE: dict[str, tuple[str, ...]] = {
         Permissions.ADMIN_TRACE,
         Permissions.BRAIN_READ,
         Permissions.BRAIN_WRITE,
+        Permissions.DOCS_READ,
+        Permissions.DOCS_WRITE,
         Permissions.MEMORY_READ,
         Permissions.MEMORY_WRITE,
         Permissions.TRACE_READ,
@@ -33,8 +35,17 @@ PERMISSION_INHERITANCE: dict[str, tuple[str, ...]] = {
         Permissions.GRAPH_NEWS,
         Permissions.GRAPH_MEDICAL,
     ),
-    Permissions.MEMORY_WRITE: (Permissions.MEMORY_READ,),
+    # v1alpha8: memory:* is the graph-author-facing family for canonical memory
+    # surfaces (BrainCell + BrainSynapse + Blackboard). Expansion gives tokens
+    # the Brain RPC permissions QueryCells/UpsertCell still enforce, so a
+    # memory:read-only token works end-to-end against real Brain without
+    # authors also listing brain:read.
+    Permissions.MEMORY_READ: (Permissions.BRAIN_READ,),
+    Permissions.MEMORY_WRITE: (Permissions.MEMORY_READ, Permissions.BRAIN_WRITE),
     Permissions.BRAIN_WRITE: (Permissions.BRAIN_READ,),
+    Permissions.BRAIN_EMBED: (Permissions.BRAIN_READ,),
+    Permissions.DOCS_READ: (Permissions.BRAIN_READ,),
+    Permissions.DOCS_WRITE: (Permissions.DOCS_READ, Permissions.BRAIN_WRITE),
     Permissions.ADMIN_TRACE: (Permissions.TRACE_READ,),
     Permissions.PRIVACY_ALL: (
         Permissions.PRIVACY_ANONYMIZE,

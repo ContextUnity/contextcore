@@ -134,7 +134,6 @@ def bootstrap_loop(
                         kid=kid,
                         expires_at=expires_at,
                         shield_url=shield_url,
-                        hmac_backend=hmac_backend,
                     )
                     set_signing_backend(backend)
                     logger.info("Shield session token acquired for project '%s'", project_id)

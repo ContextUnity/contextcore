@@ -802,12 +802,12 @@ class TestMetadataNormalization:
     def test_grpc_container_shapes_preserve_authorization(self):
         from contextunity.core.grpc_metadata import invocation_metadata_as_dict
 
-        pairs = [("authorization", "Bearer abc"), ("x-tenant", "nszu")]
+        pairs = [("authorization", "Bearer abc"), ("x-tenant", "sample_project")]
         for kind in _METADATA_KINDS:
             container = _as_metadata_container(pairs, kind)
             result = invocation_metadata_as_dict(container)
             assert result.get("authorization") == "Bearer abc", f"lost auth header for kind={kind}"
-            assert result.get("x-tenant") == "nszu", f"lost x-tenant for kind={kind}"
+            assert result.get("x-tenant") == "sample_project", f"lost x-tenant for kind={kind}"
 
     def test_dict_metadata_supported(self):
         from contextunity.core.grpc_metadata import invocation_metadata_as_dict
@@ -880,6 +880,37 @@ class TestHmacFallbackSemantics:
         backend = await interceptor._build_verifier_backend(token_str)
 
         assert backend is None
+
+
+@pytest.mark.asyncio
+async def test_session_verifier_cache_avoids_repeated_shield_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextunity.core.security import backend_resolver
+    from contextunity.core.signing import HmacBackend
+
+    backend_resolver.reset_session_verifier_cache()
+    cached = HmacBackend("sample", "secret")
+    backend_resolver.cache_session_verifier(
+        shield_url="shield:50054",
+        kid="sample:session-v1",
+        backend=cached,
+    )
+
+    async def fail_fetch(*_args: object, **_kwargs: object) -> tuple[str, str]:
+        pytest.fail("cached session verifier must not fetch Shield")
+
+    monkeypatch.setattr(
+        "contextunity.core.token_utils.fetch_project_public_key_async",
+        fail_fetch,
+    )
+    try:
+        resolved = await backend_resolver.build_verifier_backend(
+            "sample:session-v1.payload.signature",
+            shield_url="shield:50054",
+        )
+    finally:
+        backend_resolver.reset_session_verifier_cache()
+
+    assert resolved is cached
 
 
 pytestmark = pytest.mark.unit

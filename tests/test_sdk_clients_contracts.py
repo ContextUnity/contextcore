@@ -59,6 +59,69 @@ async def test_brain_client_keeps_legacy_match_duckdb_surface():
 
 
 @pytest.mark.asyncio
+async def test_brain_client_get_old_episodes_preserves_provenance_wire_fields():
+    class _Stub:
+        async def GetOldEpisodes(self, req, metadata=None):
+            yield ContextUnit(
+                payload={
+                    "id": "ep-1",
+                    "user_id": "user-1",
+                    "content": "old episode",
+                    "metadata": {"source_hash": "sha256:meta", "synapse_ids": ["syn-1"]},
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "source_hash": "sha256:wire",
+                    "graph_run_id": "graph-run-1",
+                }
+            ).to_protobuf(contextunit_pb2)
+
+    client = BrainClient.__new__(BrainClient)
+    client._stub = _Stub()
+    client._cu_pb2 = contextunit_pb2
+    client._get_metadata = lambda: ()
+
+    episodes = await client.get_old_episodes(tenant_id="tenant-a", older_than_days=30, limit=10)
+
+    assert episodes == [
+        {
+            "id": "ep-1",
+            "user_id": "user-1",
+            "content": "old episode",
+            "session_id": "",
+            "metadata": {"source_hash": "sha256:meta", "synapse_ids": ["syn-1"]},
+            "created_at": "2026-01-01T00:00:00Z",
+            "source_hash": "sha256:wire",
+            "graph_run_id": "graph-run-1",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_brain_client_query_all_cells_pages_with_bounded_offsets():
+    offsets: list[int] = []
+
+    class _Stub:
+        async def QueryCells(self, req, metadata=None):
+            payload = MessageToDict(req.payload)
+            offset = int(payload.get("offset", 0))
+            offsets.append(offset)
+            count = 2 if offset < 4 else 1
+            for index in range(count):
+                yield ContextUnit(payload={"id": f"cell-{offset + index}", "content_hash": "sha256:value"}).to_protobuf(
+                    contextunit_pb2
+                )
+
+    client = BrainClient.__new__(BrainClient)
+    client._stub = _Stub()
+    client._cu_pb2 = contextunit_pb2
+    client._get_metadata = lambda: ()
+
+    cells = await client.query_all_cells(tenant_id="tenant-a", page_size=2, max_items=10)
+
+    assert offsets == [0, 2, 4]
+    assert [cell["id"] for cell in cells] == ["cell-0", "cell-1", "cell-2", "cell-3", "cell-4"]
+
+
+@pytest.mark.asyncio
 async def test_shield_scan_preserves_firewall_wire_fields():
     """ShieldClient must return the live firewall wire payload, not getter projections."""
     from contextunity.core.sdk.clients import shield as shield_module
@@ -334,7 +397,7 @@ def test_toolkit_resolution_preserves_bidi_tool_path():
 
     manifest = ContextUnityProject.model_validate(
         {
-            "apiVersion": "contextunity/v1alpha7",
+            "apiVersion": "contextunity/v1alpha8",
             "kind": "ContextUnityProject",
             "project": {"id": "proj", "name": "Project"},
             "services": {"router": {"enabled": True}},
@@ -342,7 +405,9 @@ def test_toolkit_resolution_preserves_bidi_tool_path():
                 "default_graph": "demo",
                 "toolkits": ["ContractToolkit"],
                 "graph": {"demo": {"template": "yaml:demo"}},
-                "policy": {"models": {"llm": {"default": "openai/gpt-4o"}}},
+                "config": {
+                    "policy": {"models": {"llm": {"default": "openai/gpt-4o"}}},
+                },
             },
         }
     )

@@ -217,7 +217,33 @@ class TestExtractNodePrompts:
                 }
             }
         }
-        assert extract_node_prompts(manifest) == {"planner": "Plan.", "verifier": "Verify."}
+        # Graph-scoped keys: {graph_key}/{node_name}
+        assert extract_node_prompts(manifest) == {
+            "default/planner": "Plan.",
+            "review/verifier": "Verify.",
+        }
+
+    def test_same_node_name_in_two_graphs_does_not_collide(self):
+        from contextunity.core.sdk.bootstrap.manifest import extract_node_prompts
+
+        manifest = {
+            "router": {
+                "graph": {
+                    "alpha": {
+                        "nodes": [{"name": "planner"}],
+                        "config": {"planner_prompt": "Plan A."},
+                    },
+                    "beta": {
+                        "nodes": [{"name": "planner"}],
+                        "config": {"planner_prompt": "Plan B."},
+                    },
+                }
+            }
+        }
+        assert extract_node_prompts(manifest) == {
+            "alpha/planner": "Plan A.",
+            "beta/planner": "Plan B.",
+        }
 
     def test_node_without_prompt_excluded(self):
         from contextunity.core.sdk.bootstrap.manifest import extract_node_prompts
@@ -244,7 +270,7 @@ class TestShieldPromptBundleSanitizer:
         from contextunity.core.sdk.bootstrap.api import _strip_resolved_prompt_text
 
         bundle = RouterRegistrationBundle(
-            project_id="nszu",
+            project_id="sample_project",
             graph={
                 "default": {
                     "nodes": [

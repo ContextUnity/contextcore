@@ -42,16 +42,19 @@ Choose at most **1 primary skill** based on the target task:
 
 | Trigger | Skill |
 |---------|-------|
+| New platform capability / shared SDK surface / cross-service contract flow | **`acdd-feature-development`** (then `contract-boundaries` + `tdd` as needed) |
 | `types.py`, `parsing.py`, SDK payloads, JSON/gRPC seams, `basedpyright` | **`contract-boundaries`** (primary) → **`type-validation`** |
 | `.proto` changes | `proto-change` |
 | Exceptions, registry, config schemas | `core-contract-change` (also read **`contract-boundaries`** for type touches) |
 | Security interceptors / Authz | `security-implementation` |
+| Implementation loop (Red-Green after ACDD or small fix) | `tdd` |
 | File add/move/delete | `mempalace-files-changed` |
 
 ## Workflow Routing (Slash Commands)
 
 | Command | Workflow |
 |---------|----------|
+| ACDD feature loop | [/acdd](../../.agents/workflows/acdd-feature-development.md) |
 | Contract boundaries | [/contract-boundaries](../../.agents/workflows/contract-boundaries.md) |
 | Documentation standards | [/documentation-standard](../../.agents/workflows/documentation-standard.md) |
 | gRPC Brain Client SDK | [/brain-sdk](../../.agents/workflows/brain-sdk.md) |

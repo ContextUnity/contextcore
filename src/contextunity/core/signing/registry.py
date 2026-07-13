@@ -78,7 +78,6 @@ def get_signing_backend(
             kid=kid,
             expires_at=expires_at,
             shield_url=shield_url,
-            hmac_backend=hmac_backend,
         )
     else:
         backend = HmacBackend(project_id=project_id, project_secret=project_secret)

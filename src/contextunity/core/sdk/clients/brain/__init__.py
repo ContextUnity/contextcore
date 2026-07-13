@@ -9,6 +9,7 @@ from __future__ import annotations
 from .admin import BrainAdminMixin
 from .base import BrainClientBase
 from .commerce import CommerceCompatMixin
+from .embedding import EmbeddingMixin
 from .knowledge import KnowledgeMixin
 from .memory import MemoryMixin
 from .synapses import SynapseMixin
@@ -19,6 +20,7 @@ class BrainClient(
     BrainAdminMixin,
     CommerceCompatMixin,
     KnowledgeMixin,
+    EmbeddingMixin,
     MemoryMixin,
     SynapseMixin,
     TraceMixin,

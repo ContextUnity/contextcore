@@ -224,19 +224,23 @@ def put_prompts_to_shield(
 ) -> list[str]:
     """Publish canonical node prompts to Shield via ``PutSecret``.
 
-    Stores each prompt at ``{project_id}/prompts/{node_name}`` in every allowed
-    tenant scope. Router execution fetches the prompt from Shield using the node's
-    effective tenant, so Shield is the per-project integrity authority.
+    ``prompts`` keys are path suffixes under ``{project_id}/prompts/`` from
+    :func:`~contextunity.core.sdk.bootstrap.manifest.extract_node_prompts`:
+
+    - Multi-graph: ``{graph_key}/{node_name}``
+    - Legacy flat: ``{node_name}``
+
+    Full Shield path is always ``{project_id}/prompts/{key}``.
 
     Args:
         project_id: The project identifier (tenant namespace).
-        prompts: Mapping of ``node_name`` → prompt text.
+        prompts: Mapping of path-suffix → prompt text.
         shield_url: The Shield service gRPC URL.
         backend: The authentication backend used to sign the write tokens.
         allowed_tenants: Tenant scopes that may execute with these prompts.
 
     Returns:
-        list[str]: Node names whose prompts were stored.
+        list[str]: ``tenant:path_suffix`` keys that were stored.
 
     Raises:
         PlatformServiceError: If one or more prompts failed to sync.
@@ -268,20 +272,27 @@ def put_prompts_to_shield(
     try:
         stub = shield_pb2_grpc.ShieldServiceStub(channel)
         for tenant_id in allowed_tenants:
-            for node_name, prompt_text in prompts.items():
-                shield_path = f"{project_id}/prompts/{node_name}"
+            for path_suffix, prompt_text in prompts.items():
+                shield_path = f"{project_id}/prompts/{path_suffix}"
+                if "/" in path_suffix:
+                    graph_key, node_name = path_suffix.split("/", 1)
+                else:
+                    graph_key, node_name = "", path_suffix
                 try:
+                    tags: dict[str, str] = {
+                        "type": "node_prompt",
+                        "node": node_name,
+                        "project_id": project_id,
+                    }
+                    if graph_key:
+                        tags["graph_key"] = graph_key
                     unit = ContextUnit(
                         payload={
                             "path": shield_path,
                             "value": prompt_text,
                             "tenant_id": tenant_id,
                             "created_by": f"{project_id}:sdk_bootstrap",
-                            "tags": {
-                                "type": "node_prompt",
-                                "node": node_name,
-                                "project_id": project_id,
-                            },
+                            "tags": tags,
                         },
                         provenance=[f"{project_id}:sdk_bootstrap:put_prompt"],
                         security=SecurityScopes(write=["secrets:write"]),
@@ -291,14 +302,14 @@ def put_prompts_to_shield(
                         metadata=metadata,
                         timeout=5,
                     )
-                    synced.append(f"{tenant_id}:{node_name}")
+                    synced.append(f"{tenant_id}:{path_suffix}")
                 except Exception as e:
-                    failed.append((tenant_id, node_name, e))
+                    failed.append((tenant_id, path_suffix, e))
     finally:
         channel.close()
 
     if failed:
-        detail = "; ".join(f"{tenant}/{node}: {e}" for tenant, node, e in failed)
+        detail = "; ".join(f"{tenant}/{key}: {e}" for tenant, key, e in failed)
         total = len(prompts) * len(allowed_tenants)
         raise PlatformServiceError(
             f"Shield prompt sync incomplete — {len(failed)}/{total} tenant prompt(s) failed: {detail}"

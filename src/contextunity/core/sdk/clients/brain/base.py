@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from contextunity.core import ContextToken
     from contextunity.core.brain_pb2_grpc import BrainServiceAsyncStub
     from contextunity.core.sdk.types import GrpcMetadata, TokenProviderFactory
+    from contextunity.core.signing.protocols import AuthBackend
 
     _BrainBase: TypeAlias = BaseServiceClient[BrainServiceAsyncStub]
 else:
@@ -47,6 +48,7 @@ class BrainClientBase(_BrainBase):
         host: str | None = None,
         token: ContextToken | TokenProviderFactory | None = None,
         tenant_id: str | None = None,
+        auth_backend: AuthBackend | None = None,
     ) -> None:
         """Initialize the BrainClient base instance.
 
@@ -54,8 +56,14 @@ class BrainClientBase(_BrainBase):
             host: Optional explicit gRPC host address.
             token: Authentication token or token factory.
             tenant_id: Optional tenant identifier for identity scoping.
+            auth_backend: Optional client-owned backend for autonomous service calls.
         """
-        super().__init__(host=host, token=token, tenant_id=tenant_id)
+        super().__init__(
+            host=host,
+            token=token,
+            tenant_id=tenant_id,
+            auth_backend=auth_backend,
+        )
         # Expose token directly for backward compatibility —
         # some callers check ``client.token`` (legacy pattern).
         self.token = self._token
@@ -95,10 +103,10 @@ class BrainClientBase(_BrainBase):
             List of (key, value) tuples for gRPC metadata
 
         Raises:
-            PermissionError: If no token is available.
+            PermissionError: If neither a token nor a client-owned backend is available.
         """
-        if self._token is None and self._token_factory is None:
-            raise PermissionError("BrainClient: no ContextToken available — cannot create gRPC metadata.")
+        if self._token is None and self._token_factory is None and self._auth_backend is None:
+            raise PermissionError("BrainClient: no ContextToken or client-owned AuthBackend available")
 
         # Path 1: Forward the original pre-serialized token string
         # (available when running inside a service with an active gRPC auth context)

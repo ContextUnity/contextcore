@@ -1,114 +1,70 @@
-# ContextUnity Project Manifest — Golden Example
-#
-# Valid `contextunity/v1alpha7` reference. Copy to project root as `contextunity.project.yaml`.
-#
-# Flow:
-#   1. Set project.id / name
-#   2. Under router.graph.<graph_id>, define nodes + edges for inline topology,
-#      use template: yaml:<name> with overrides only, or builtin: dispatcher
-#   3. Register tools in Python with @federated_tool; reference them as federated:<tool_name>
-#   4. policy.models.llm + policy.langfuse declare model and observability secret *names* (env vars)
-#   5. bootstrap_standalone() / bootstrap_django() loads the manifest and registers with Router
-#
-# Validate locally:
-#   uv run python -c "import yaml; from contextunity.core.manifest import ContextUnityProject; ContextUnityProject.model_validate(yaml.safe_load(open('contextunity.project.yaml')))"
-
-apiVersion: "contextunity/v1alpha7"
-kind: "ContextUnityProject"
-
-# ── Project Identity ─────────────────────────────────────────────
+apiVersion: contextunity/v1alpha8
+kind: ContextUnityProject
 project:
-  id: "my-project"
-  name: "My Project"
-
-# ── Services ─────────────────────────────────────────────────────
+  id: my-project
+  name: My Project
 services:
-  router: { enabled: true }
-  brain: { enabled: true }
-  shield: { enabled: true }
-
-# ── Router ─────────────────────────────────────────────────────
-# graph is a map: <graph_id> → RouterGraph. Inline graphs omit template/builtin.
+  router:
+    enabled: true
+  brain:
+    enabled: true
+  shield:
+    enabled: true
 router:
-  default_graph: "my-project"
+  default_graph: my-project
   graph:
     my-project:
       nodes:
-        - name: "planner"
-          type: "llm"
-          model: "openai/gpt-5-mini"
-          model_secret_ref: "MY_PLANNER_API_KEY"
-          prompt_ref: "src/app/prompts.py::PLANNER_PROMPT"
-          pii_masking: true
-
-        - name: "tool_execution"
-          type: "tool"
-          tool_binding: "federated:my_sql_tool"
-
-        - name: "research_agent"
-          type: "agent"
-          model: "openai/gpt-5-mini"
-          model_secret_ref: "MY_AGENT_API_KEY"
-          prompt_ref: "src/app/prompts.py::AGENT_PROMPT"
-          tools:
-            - "federated:my_sql_tool"
-          config:
-            tool_choice: "auto"
-            max_tool_calls: 5
-
-        - name: "verifier"
-          type: "llm"
-          model: "openai/gpt-5-mini"
-          model_secret_ref: "MY_VERIFIER_API_KEY"
-          prompt_ref: "src/app/prompts.py::VERIFIER_PROMPT"
-          pii_masking: true
-
-        - name: "visualizer"
-          type: "llm"
-          model: "openai/gpt-5-mini"
-          model_secret_ref: "MY_VISUALIZER_API_KEY"
-          prompt_ref: "src/app/prompts.py::VISUALIZER_PROMPT"
-          pii_masking: true
-
+      - name: planner
+        type: llm
+        model: openai/gpt-5-mini
+        model_secret_ref: MY_PLANNER_API_KEY
+        prompt_ref: src/app/prompts.py::PLANNER_PROMPT
+        pii_masking: true
+      - name: tool_execution
+        type: tool
+        tool_binding: federated:my_sql_tool
+      - name: research_agent
+        type: agent
+        model: openai/gpt-5-mini
+        model_secret_ref: MY_AGENT_API_KEY
+        prompt_ref: src/app/prompts.py::AGENT_PROMPT
+        tools:
+        - federated:my_sql_tool
+        config:
+          tool_choice: auto
+          max_tool_calls: 5
+      - name: verifier
+        type: llm
+        model: openai/gpt-5-mini
+        model_secret_ref: MY_VERIFIER_API_KEY
+        prompt_ref: src/app/prompts.py::VERIFIER_PROMPT
+        pii_masking: true
+      - name: visualizer
+        type: llm
+        model: openai/gpt-5-mini
+        model_secret_ref: MY_VISUALIZER_API_KEY
+        prompt_ref: src/app/prompts.py::VISUALIZER_PROMPT
+        pii_masking: true
       edges:
-        - from_node: "planner"
-          to_node: "tool_execution"
-        - from_node: "tool_execution"
-          to_node: "research_agent"
-        - from_node: "research_agent"
-          to_node: "verifier"
-        - from_node: "verifier"
-          condition_key: "status"
-          condition_map:
-            "success": "visualizer"
-            "retry": "planner"
-
-      config:
+      - from_node: planner
+        to_node: tool_execution
+      - from_node: tool_execution
+        to_node: research_agent
+      - from_node: research_agent
+        to_node: verifier
+      - from_node: verifier
+        condition_key: status
+        condition_map:
+          success: visualizer
+          retry: planner
+      runtime:
         max_retries: 2
-
-  policy:
-    models:
-      llm:
-        default: "openai/gpt-5-mini"
-        secret_ref: "MY_DEFAULT_MODEL_KEY"
-    langfuse:
-      tracing_enabled: false
-      # When enabling Langfuse, set tracing_enabled: true and env var *names*:
-      # public_key_ref: LANGFUSE_PUBLIC_KEY
-      # secret_key_ref: LANGFUSE_SECRET_KEY
-      # host_ref: LANGFUSE_HOST
-
-# ── Secrets (optional) ───────────────────────────────────────────
-# Listed keys are read from os.environ during bootstrap and may be synced to Shield.
-# Runtime use still requires ContextToken scopes / path attenuation — listing alone does not grant access.
-# secrets:
-#   - owner: "contextunity"
-#     resolver: "env"
-#     keys: ["SOME_EXTRA_PLATFORM_KEY"]
-
-# ═══════════════════════════════════════════════════════════════════
-# Shield: bootstrap resolves model_secret_ref, policy.langfuse refs,
-# and manifest.secrets from the project env and may PutSecret to Shield
-# when services.shield.enabled is true. Inline bundle secrets when Shield
-# is disabled (dev only). Runtime reads still require token scopes.
-# ═══════════════════════════════════════════════════════════════════
+  config:
+    policy:
+      models:
+        llm:
+          default: openai/gpt-5-mini
+          secret_ref: MY_DEFAULT_MODEL_KEY
+      langfuse:
+        tracing_enabled: false

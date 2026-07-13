@@ -198,5 +198,135 @@ class KnowledgeMixin(_MixinBase):
         result = ContextUnit.from_protobuf(response_pb)
         return copy_wire_payload(result.payload)
 
+    async def upsert_cell(
+        self,
+        *,
+        cell_kind: str,
+        content: str,
+        tenant_id: str | None = None,
+        cell_id: str | None = None,
+        user_id: str | None = None,
+        metadata: JsonDict | None = None,
+        scope_path: str | None = None,
+        content_hash: str | None = None,
+        source_type: str = "manual",
+        source_ref: str | None = None,
+        confidence: float = 0.5,
+        visibility: str = "tenant",
+    ) -> ContextUnitPayload:
+        """Upsert a canonical BrainCell using content hash for idempotency and source metadata."""
+        payload: ContextUnitPayload = {
+            "cell_kind": cell_kind,
+            "content": content,
+            "metadata": metadata or {},
+            "source_type": source_type,
+            "confidence": confidence,
+            "visibility": visibility,
+        }
+        if tenant_id is not None:
+            payload["tenant_id"] = tenant_id
+        if cell_id is not None:
+            payload["cell_id"] = cell_id
+        if user_id is not None:
+            payload["user_id"] = user_id
+        if scope_path is not None:
+            payload["scope_path"] = scope_path
+        if content_hash is not None:
+            payload["content_hash"] = content_hash
+        if source_ref is not None:
+            payload["source_ref"] = source_ref
+        unit = ContextUnit(payload=payload, provenance=["sdk:brain_client:upsert_cell"])
+        req = unit.to_protobuf(self._cu_pb2)
+        with wrap_client_error("Brain", "UpsertCell"):
+            response_pb = await self._stub.UpsertCell(req, metadata=self._get_metadata())
+        return copy_wire_payload(ContextUnit.from_protobuf(response_pb).payload)
+
+    async def query_cells(
+        self,
+        *,
+        tenant_id: str | None = None,
+        query_text: str | None = None,
+        cell_kind: str | None = None,
+        source_type: str | None = None,
+        scope_path: str | None = None,
+        metadata_filter: JsonDict | None = None,
+        limit: int = 10,
+        offset: int = 0,
+        user_id: str | None = None,
+    ) -> list[ContextUnitPayload]:
+        """Query canonical BrainCells with optional filters."""
+        payload: ContextUnitPayload = {
+            "query_text": query_text,
+            "cell_kind": cell_kind,
+            "source_type": source_type,
+            "scope_path": scope_path,
+            "metadata_filter": metadata_filter or {},
+            "limit": limit,
+            "offset": offset,
+        }
+        if tenant_id is not None:
+            payload["tenant_id"] = tenant_id
+        if user_id is not None:
+            payload["user_id"] = user_id
+        unit = ContextUnit(payload=payload, provenance=["sdk:brain_client:query_cells"])
+        req = unit.to_protobuf(self._cu_pb2)
+        out: list[ContextUnitPayload] = []
+        with wrap_client_error("Brain", "QueryCells"):
+            async for response_pb in self._stub.QueryCells(req, metadata=self._get_metadata()):
+                out.append(copy_wire_payload(ContextUnit.from_protobuf(response_pb).payload))
+        return out
+
+    async def query_all_cells(
+        self,
+        *,
+        tenant_id: str | None = None,
+        query_text: str | None = None,
+        cell_kind: str | None = None,
+        source_type: str | None = None,
+        scope_path: str | None = None,
+        metadata_filter: JsonDict | None = None,
+        user_id: str | None = None,
+        max_items: int = 10_000,
+        page_size: int = 100,
+    ) -> list[ContextUnitPayload]:
+        """Read a bounded complete cell result set through QueryCells pagination."""
+        if max_items < 1 or page_size < 1 or page_size > 100:
+            raise ValueError("query_all_cells requires max_items >= 1 and 1 <= page_size <= 100")
+        records: list[ContextUnitPayload] = []
+        offset = 0
+        while len(records) < max_items:
+            requested = min(page_size, max_items - len(records))
+            page = await self.query_cells(
+                tenant_id=tenant_id,
+                query_text=query_text,
+                cell_kind=cell_kind,
+                source_type=source_type,
+                scope_path=scope_path,
+                metadata_filter=metadata_filter,
+                user_id=user_id,
+                limit=requested,
+                offset=offset,
+            )
+            records.extend(page)
+            if len(page) < requested:
+                break
+            offset += len(page)
+        return records
+
+    async def get_cell(
+        self, *, cell_id: str, tenant_id: str | None = None, user_id: str | None = None
+    ) -> ContextUnitPayload | None:
+        """Retrieve a single canonical BrainCell by ID."""
+        payload: ContextUnitPayload = {"cell_id": cell_id}
+        if tenant_id is not None:
+            payload["tenant_id"] = tenant_id
+        if user_id is not None:
+            payload["user_id"] = user_id
+        unit = ContextUnit(payload=payload, provenance=["sdk:brain_client:get_cell"])
+        req = unit.to_protobuf(self._cu_pb2)
+        with wrap_client_error("Brain", "GetCell"):
+            response_pb = await self._stub.GetCell(req, metadata=self._get_metadata())
+        return copy_wire_payload(ContextUnit.from_protobuf(response_pb).payload)
+
 
 __all__ = ["KnowledgeMixin"]

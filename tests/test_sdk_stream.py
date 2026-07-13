@@ -55,21 +55,20 @@ class TestFederatedToolStream:
         assert payload["row_count"] == 1
 
     def test_stream_metadata_uses_session_token_only_in_shield_mode(self):
-        from contextunity.core.signing import HmacBackend, SessionTokenBackend
+        from contextunity.core.signing import SessionTokenBackend
 
-        token = ContextToken(token_id="nszu-executor", allowed_tenants=("nszu",))
+        token = ContextToken(token_id="sample_project-executor", allowed_tenants=("sample_project",))
         backend = SessionTokenBackend(
-            project_id="nszu",
+            project_id="sample_project",
             session_token="shield-session",
-            kid="nszu:session-001",
+            kid="sample_project:session-001",
             expires_at=9999999999,
             shield_url="localhost:50054",
-            hmac_backend=HmacBackend("nszu", "bootstrap-secret"),
         )
 
         with patch(
             "contextunity.core.signing._request_session_token",
-            return_value=("shield-stream-token", "nszu:session-001", 9999999999),
+            return_value=("shield-stream-token", "sample_project:session-001", 9999999999),
         ):
             metadata = _create_stream_metadata(token, backend)
 
@@ -79,8 +78,8 @@ class TestFederatedToolStream:
         from contextunity.core.signing import HmacBackend
         from contextunity.core.token_utils import verify_token_string
 
-        token = ContextToken(token_id="nszu-executor", allowed_tenants=("nszu",))
-        backend = HmacBackend("nszu", "open-source-secret")
+        token = ContextToken(token_id="sample_project-executor", allowed_tenants=("sample_project",))
+        backend = HmacBackend("sample_project", "open-source-secret")
 
         metadata = _create_stream_metadata(token, backend)
 
@@ -90,8 +89,8 @@ class TestFederatedToolStream:
         token_str = metadata[0][1][7:]
         verified = verify_token_string(token_str, backend)
         assert verified is not None
-        assert verified.token_id == "nszu-executor"
-        assert verified.allowed_tenants == ("nszu",)
+        assert verified.token_id == "sample_project-executor"
+        assert verified.allowed_tenants == ("sample_project",)
 
 
 pytestmark = pytest.mark.unit

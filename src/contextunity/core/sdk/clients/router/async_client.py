@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from contextunity.core import ContextToken
     from contextunity.core.router_pb2_grpc import RouterServiceAsyncStub
     from contextunity.core.sdk.models import UnitMetrics
+    from contextunity.core.sdk.types import TokenProviderFactory
 
     _RouterBase: TypeAlias = BaseServiceClient[RouterServiceAsyncStub]
 else:
@@ -55,13 +56,13 @@ class RouterClient(_RouterBase):
     def __init__(
         self,
         host: str | None = None,
-        token: ContextToken | None = None,
+        token: ContextToken | TokenProviderFactory | None = None,
     ) -> None:
         """Initialize the async RouterClient.
 
         Args:
             host: Optional explicit gRPC host address.
-            token: Authentication token for Router access.
+            token: Token object or lazy pre-signed bearer provider for Router access.
         """
         super().__init__(host=host, token=token)
 

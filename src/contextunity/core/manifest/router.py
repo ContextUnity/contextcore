@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import ClassVar, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from contextunity.core.types import JsonDict, is_json_value, is_object_dict
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 
 class RouterManifestModel(BaseModel):
@@ -27,9 +28,9 @@ def _validate_provider_qualified(value: str) -> str:
     Raises:
         ValueError: If parameter values are invalid.
     """
-    if "/" not in value:
-        raise ValueError(f"AI model '{value}' must be provider-qualified (e.g. provider/model).")
-    return value
+    from contextunity.core.model_reference import validate_model_reference
+
+    return validate_model_reference(value, field_name="AI model")
 
 
 class ToolkitOverride(RouterManifestModel):
@@ -222,6 +223,8 @@ class RouterEdge(RouterManifestModel):
 class RouterGraph(RouterManifestModel):
     """Configuration for a complete Router execution graph."""
 
+    _federated_tool_map: dict[str, str] = PrivateAttr(default_factory=dict)
+
     id: str | None = None
     goal: str | None = Field(
         default=None,
@@ -250,7 +253,14 @@ class RouterGraph(RouterManifestModel):
     nodes: list[RouterNode] | None = None
     edges: list[RouterEdge] | None = None
     config_ref: str | None = None
-    config: dict[str, object] | None = None
+    config: RouterGraphConfig | None = None
+    runtime: JsonDict | None = Field(
+        default=None,
+        description=(
+            "Opaque graph/template executor keys (wire JSON only). Kept separate "
+            "from typed ``config``; ArtifactGenerator must not fold these into config."
+        ),
+    )
     toolkits: list[str | ToolkitRef] | None = Field(
         None, description="List of Toolkit class names attached to this graph"
     )
@@ -261,6 +271,28 @@ class RouterGraph(RouterManifestModel):
         default=None,
         description="Optional tenant scope override for this graph (must be ⊆ project scope).",
     )
+
+    def set_federated_tool_map(self, tool_map: dict[str, str]) -> None:
+        """Store bootstrap-resolved tool names without exposing a manifest field."""
+        self._federated_tool_map = dict(tool_map)
+
+    @property
+    def federated_tool_map(self) -> dict[str, str]:
+        """Return bootstrap-resolved tool names for registration projection only."""
+        return dict(self._federated_tool_map)
+
+    @field_validator("runtime", mode="before")
+    @classmethod
+    def _runtime_must_be_json_object(cls, value: object) -> object:
+        """Reject non-wire values in the opaque runtime bag (JSON object only)."""
+        if value is None:
+            return value
+        if not is_object_dict(value):
+            raise ValueError("router.graph.*.runtime must be a JSON object")
+        for key, item in value.items():
+            if not is_json_value(item):
+                raise ValueError(f"router.graph.*.runtime[{key!r}] must be a JSON-serializable value")
+        return value
 
     @model_validator(mode="after")
     def validate_graph(self) -> Self:
@@ -365,6 +397,14 @@ class ModelsLLMPolicy(RouterManifestModel):
     """LLM model selection policy."""
 
     default: str
+    pinned_model: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Explicit RouterConductor catalog model pin. It remains authoritative "
+            "unless catalog policy, context, or budget rejects it."
+        ),
+    )
     secret_ref: str | None = None
     fallback: list[str] | None = None
     fallback_secret_refs: list[str] | None = None
@@ -382,6 +422,12 @@ class ModelsLLMPolicy(RouterManifestModel):
             str: The resulting string value.
         """
         return _validate_provider_qualified(value)
+
+    @field_validator("pinned_model", mode="after")
+    @classmethod
+    def val_pinned_model(cls, value: str | None) -> str | None:
+        """Require an executable catalog/model-registry key for explicit pins."""
+        return _validate_provider_qualified(value) if value is not None else None
 
     @field_validator("fallback", mode="after")
     @classmethod
@@ -512,15 +558,148 @@ class RouterPolicy(RouterManifestModel):
         return self
 
 
+class RouterSynapseLookupConfig(RouterManifestModel):
+    """Per-project or per-graph BrainSynapse lookup gate (``config.memory.synapse_lookup``)."""
+
+    enabled: bool | None = None
+
+
+class RouterAutoExtractGraphCompletionConfig(RouterManifestModel):
+    """Graph-completion auto-extract overrides."""
+
+    enabled: bool | None = None
+    hash_dedup: bool | None = None
+
+
+class RouterAutoExtractUserMessageConfig(RouterManifestModel):
+    """User-message auto-extract overrides."""
+
+    enabled: bool | None = None
+    cooldown_seconds: int | None = Field(default=None, ge=0)
+
+
+class RouterAutoExtractConfig(RouterManifestModel):
+    """``router.config.memory.auto_extract`` / graph override block (v1alpha8)."""
+
+    enabled: bool | None = None
+    graph_completion: RouterAutoExtractGraphCompletionConfig | None = None
+    user_message: RouterAutoExtractUserMessageConfig | None = None
+    min_messages: int | None = Field(default=None, ge=1)
+    max_facts_per_extraction: int | None = Field(default=None, ge=1, le=50)
+    max_cost_usd: float | None = Field(default=None, gt=0)
+    confidence_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    extraction_model: str | None = None
+
+    @field_validator("extraction_model")
+    @classmethod
+    def _validate_extraction_model(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        from contextunity.core.model_reference import validate_model_reference
+
+        return validate_model_reference(value, field_name="auto_extract.extraction_model")
+
+
+class RouterMemoryConfig(RouterManifestModel):
+    """``router.config.memory`` — public v1alpha8 memory domain (Phase 3).
+
+    Canonical keys only: ``inject``, ``depth``, ``synapse_*``, ``auto_extract``.
+    No ``pipeline.*`` fields.
+    """
+
+    inject: bool = False
+    depth: Literal["shallow", "standard", "deep", "research"] = "standard"
+    scope_path: str | None = None
+    synapse_min_q: float | None = Field(default=None, ge=0.0, le=1.0)
+    synapse_node_role: str | None = None
+    synapse_action_type: str | None = None
+    synapse_scope_path: str | None = None
+    synapse_lookup: RouterSynapseLookupConfig | None = None
+    auto_extract: RouterAutoExtractConfig | None = None
+
+
+class RouterGraphMemoryConfig(RouterManifestModel):
+    """Partial graph-level ``router.graph.*.config.memory`` override (v1alpha8)."""
+
+    inject: bool | None = None
+    depth: Literal["shallow", "standard", "deep", "research"] | None = None
+    scope_path: str | None = None
+    synapse_min_q: float | None = Field(default=None, ge=0.0, le=1.0)
+    synapse_node_role: str | None = None
+    synapse_action_type: str | None = None
+    synapse_scope_path: str | None = None
+    synapse_lookup: RouterSynapseLookupConfig | None = None
+    auto_extract: RouterAutoExtractConfig | None = None
+
+
+class RouterGraphConfig(RouterManifestModel):
+    """Typed graph ``config`` block; opaque executor keys belong in ``runtime``.
+
+    Registry scope: ``router.graph.*.config.memory`` is Phase 3 M04;
+    ``router.graph.*.config.policy`` is Phase 8+; no graph-level conductor
+    block is registered for v1alpha8 (M05 owns project-level
+    ``router.config.conductor`` only).
+    """
+
+    memory: RouterGraphMemoryConfig | None = None
+
+
+class RouterConductorConfig(RouterManifestModel):
+    """``router.config.conductor`` — cost-aware model selection (Phase 3 M05).
+
+    Explicit model pins stay under ``router.config.policy.models``; this block
+    owns CheapestViable gates, budget/quality floors, and token estimates.
+    Catalog path is **L0-only** (``router.yml`` / ``CU_ROUTER_CONDUCTOR_MODELS_CATALOG_PATH``);
+    it must not appear on project manifests (``extra=forbid`` rejects it).
+    Phase 5 may extend with Engram/Dream signals without moving pins here.
+    """
+
+    cost_aware_enabled: bool = False
+    quality_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    max_cost_usd: float | None = Field(default=None, gt=0)
+    default_safe_model: str | None = None
+    input_tokens_estimate: int = Field(default=500, ge=1)
+    output_tokens_estimate: int = Field(default=200, ge=1)
+
+    @field_validator("default_safe_model", mode="after")
+    @classmethod
+    def val_default_safe_model(cls, value: str | None) -> str | None:
+        """Require an executable catalog/model-registry key for the safe model."""
+        return _validate_provider_qualified(value) if value is not None else None
+
+
+class RouterConfigSection(RouterManifestModel):
+    """Typed ``router.config`` block (v1alpha8): policy + memory + conductor."""
+
+    policy: RouterPolicy
+    memory: RouterMemoryConfig | None = None
+    conductor: RouterConductorConfig | None = None
+
+
 class RouterSection(RouterManifestModel):
-    """The root configuration section for the Router service."""
+    """The root configuration section for the Router service (v1alpha8).
+
+    Public shape::
+
+        router:
+          config:
+            policy: { ... }
+            memory: { inject: false, depth: standard }
+            conductor: { cost_aware_enabled: false }
+          graph: { ... }
+    """
 
     default_graph: str | None = None
     toolkits: list[str | ToolkitRef] | None = Field(
         None, description="Global Toolkit class names attached to all graphs"
     )
     graph: dict[str, RouterGraph]
-    policy: RouterPolicy
+    config: RouterConfigSection
+
+    @property
+    def policy(self) -> RouterPolicy:
+        """Convenience accessor for ``config.policy`` (generators / runtime)."""
+        return self.config.policy
 
     @model_validator(mode="after")
     def auto_populate_graph_ids(self) -> Self:

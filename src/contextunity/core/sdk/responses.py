@@ -12,7 +12,7 @@ Convention:
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TypeAlias, TypedDict, TypeGuard
+from typing import Literal, TypeAlias, TypedDict, TypeGuard
 
 from contextunity.core.sdk.payload import get_str
 from contextunity.core.types import ContextUnitPayload, JsonDict
@@ -152,6 +152,7 @@ class ShieldStatsWireFields(TypedDict, total=False):
 
 GraphSearchResult: TypeAlias = ContextUnitPayload
 EpisodeStatsResult: TypeAlias = ContextUnitPayload
+MemoryLayerName: TypeAlias = Literal["episodic_events", "cells", "embedding_jobs"]
 
 
 class GraphSearchWireFields(TypedDict, total=False):
@@ -183,6 +184,8 @@ class EpisodeRecord(TypedDict, total=False):
     session_id: str
     metadata: JsonDict
     created_at: str
+    source_hash: str
+    graph_run_id: str
 
 
 class SynapseRecord(TypedDict, total=False):

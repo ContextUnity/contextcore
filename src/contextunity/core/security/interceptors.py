@@ -361,6 +361,13 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
             fresh_backend = _Ed(public_key_b64=pub_b64, kid=ret_kid)
             token = verify_token_string(token_str, fresh_backend)
             if token:
+                from .backend_resolver import cache_session_verifier
+
+                cache_session_verifier(
+                    shield_url=self._shield_url,
+                    kid=ret_kid,
+                    backend=fresh_backend,
+                )
                 logger.info(
                     "%s key-refresh retry succeeded for %s",
                     self._service_name,

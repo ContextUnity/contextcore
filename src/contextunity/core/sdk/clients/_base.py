@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from contextunity.core import ContextToken
     from contextunity.core.sdk.contextunit import ContextUnitProtoModule
     from contextunity.core.sdk.types import GrpcMetadata, TokenProviderFactory, UnaryContextUnitRpc
+    from contextunity.core.signing.protocols import AuthBackend
     from contextunity.core.types import ContextUnitPayload
 
 logger = get_contextunit_logger(__name__)
@@ -60,6 +61,7 @@ class BaseServiceClient(Generic[StubT]):
         host: str | None = None,
         token: ContextToken | TokenProviderFactory | None = None,
         tenant_id: str | None = None,
+        auth_backend: AuthBackend | None = None,
     ) -> None:
         """Initialize a new instance of BaseServiceClient.
 
@@ -67,6 +69,8 @@ class BaseServiceClient(Generic[StubT]):
             host (str | None): The host address of the service.
             token (ContextToken | TokenProviderFactory | None): The security token for authentication.
             tenant_id (str | None): The tenant id parameter.
+            auth_backend: Optional client-owned signing backend. Autonomous
+                services should pass this explicitly in shared-process runtimes.
         """
         from contextunity.core import contextunit_pb2
         from contextunity.core.config import get_core_config
@@ -92,6 +96,7 @@ class BaseServiceClient(Generic[StubT]):
 
         self._token: ContextToken | None = None
         self._token_factory: TokenProviderFactory | None = None
+        self._auth_backend = auth_backend
         if isinstance(token, _CT):
             self._token = token
         elif isinstance(token, TokenProviderFactoryProtocol):
@@ -117,7 +122,7 @@ class BaseServiceClient(Generic[StubT]):
         if isinstance(resolved, str):
             return (("authorization", f"Bearer {resolved}"),)
 
-        backend = get_signing_backend()
+        backend = self._auth_backend or get_signing_backend()
         return create_grpc_metadata_with_token(resolved, backend=backend)
 
     async def _call_unary(

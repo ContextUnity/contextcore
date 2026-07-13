@@ -17,7 +17,7 @@ def test_bootstrap_metadata_prefers_global_signing_backend():
 
     with patch("contextunity.core.signing.get_signing_backend", return_value=session):
         meta = _bootstrap_metadata(
-            project_id="nszu",
+            project_id="sample_project",
             backend=None,
             token_id_suffix="shield-sync",
             permissions=("shield:secrets:write",),
@@ -27,7 +27,7 @@ def test_bootstrap_metadata_prefers_global_signing_backend():
     session.create_grpc_metadata.assert_called_once()
     sent_token = session.create_grpc_metadata.call_args.args[0]
     assert sent_token.permissions == ("shield:secrets:write",)
-    assert sent_token.allowed_tenants == ("nszu",)
+    assert sent_token.allowed_tenants == ("sample_project",)
 
 
 @pytest.mark.unit
@@ -57,7 +57,7 @@ def test_put_secrets_to_shield_writes_each_allowed_tenant(monkeypatch):
     )
 
     synced = client.put_secrets_to_shield(
-        "nszu",
+        "sample_project",
         {"planner/model_secret_ref": "api-key"},
         "shield:50054",
         None,
@@ -105,7 +105,7 @@ def test_put_prompts_to_shield_writes_project_path_in_each_tenant(monkeypatch):
     )
 
     synced = client.put_prompts_to_shield(
-        "nszu",
+        "sample_project",
         {"planner": "Canonical prompt"},
         "shield:50054",
         None,
@@ -114,11 +114,52 @@ def test_put_prompts_to_shield_writes_project_path_in_each_tenant(monkeypatch):
 
     assert synced == ["tenant-a:planner", "tenant-b:planner"]
     assert [payload["path"] for payload in captured] == [
-        "nszu/prompts/planner",
-        "nszu/prompts/planner",
+        "sample_project/prompts/planner",
+        "sample_project/prompts/planner",
     ]
     assert [payload["tenant_id"] for payload in captured] == ["tenant-a", "tenant-b"]
     assert all(payload["value"] == "Canonical prompt" for payload in captured)
     assert metadata_calls[0]["allowed_tenants"] == ("tenant-a", "tenant-b")
     assert metadata_calls[0]["permissions"] == ("shield:secrets:write",)
+    channel.close.assert_called_once()
+
+
+def test_put_prompts_to_shield_writes_graph_scoped_path(monkeypatch):
+    from contextunity.core import ContextUnit
+    from contextunity.core.sdk.bootstrap import client
+
+    captured: list[dict[str, object]] = []
+
+    class Stub:
+        def __init__(self, channel):
+            self.channel = channel
+
+        def PutSecret(self, request, *, metadata, timeout):
+            _ = (metadata, timeout)
+            captured.append(dict(ContextUnit.from_protobuf(request).payload))
+            return object()
+
+    channel = MagicMock()
+    monkeypatch.setattr("contextunity.core.grpc_utils.create_channel_sync", lambda _url: channel)
+    monkeypatch.setattr("contextunity.core.shield_pb2_grpc.ShieldServiceStub", Stub)
+    monkeypatch.setattr(
+        client,
+        "_bootstrap_metadata",
+        lambda **kwargs: (("authorization", "Bearer token"),),
+    )
+
+    synced = client.put_prompts_to_shield(
+        "sample_project",
+        {"main/planner": "Graph-scoped prompt"},
+        "shield:50054",
+        None,
+        allowed_tenants=("tenant-a",),
+    )
+
+    assert synced == ["tenant-a:main/planner"]
+    assert captured[0]["path"] == "sample_project/prompts/main/planner"
+    tags = captured[0]["tags"]
+    assert isinstance(tags, dict)
+    assert tags.get("graph_key") == "main"
+    assert tags.get("node") == "planner"
     channel.close.assert_called_once()

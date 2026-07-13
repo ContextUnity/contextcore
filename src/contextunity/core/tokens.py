@@ -463,41 +463,7 @@ def mint_service_token(
 
 # ── Caller-aware Brain service token ────────────────────────────
 
-from .permissions import Permissions  # noqa: E402
-
-# Minimum permissions per caller → Brain.
-# Each service gets exactly what it needs (principle of least privilege).
-_BRAIN_PERMISSION_MAP: dict[str, tuple[str, ...]] = {
-    "router": (
-        Permissions.BRAIN_READ,
-        Permissions.BRAIN_WRITE,
-        Permissions.MEMORY_READ,
-        Permissions.MEMORY_WRITE,
-        Permissions.TRACE_WRITE,
-        Permissions.WORKER_EXECUTE,
-    ),
-    "worker": (
-        Permissions.BRAIN_READ,
-        Permissions.BRAIN_WRITE,
-        Permissions.MEMORY_READ,
-        Permissions.MEMORY_WRITE,
-        Permissions.TRACE_WRITE,
-        Permissions.WORKER_EXECUTE,
-    ),
-    "view": (
-        Permissions.BRAIN_READ,
-        Permissions.MEMORY_READ,
-        Permissions.TRACE_READ,
-    ),
-    "commerce": (
-        Permissions.BRAIN_READ,
-        Permissions.BRAIN_WRITE,
-        Permissions.MEMORY_READ,
-        Permissions.TRACE_WRITE,
-        Permissions.WORKER_EXECUTE,
-        Permissions.ROUTER_EXECUTE,
-    ),
-}
+from .permissions import brain_caller_permissions  # noqa: E402
 
 
 def get_brain_service_token(
@@ -527,11 +493,7 @@ def get_brain_service_token(
         token = get_brain_service_token("router")
         client = BrainClient(host=endpoint, token=token)
     """
-    permissions = _BRAIN_PERMISSION_MAP.get(caller)
-    if permissions is None:
-        raise ConfigurationError(
-            f"Unknown Brain service caller: {caller!r}. Known callers: {sorted(_BRAIN_PERMISSION_MAP)}"
-        )
+    permissions = brain_caller_permissions(caller)
     return mint_service_token(
         f"{caller}-brain-service",
         permissions=permissions,

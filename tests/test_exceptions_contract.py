@@ -24,6 +24,7 @@ _EXCEPTION_MODULES = [
     "contextunity.core.sdk.toolkit",
     "contextunity.router.core.exceptions",
     "contextunity.router.modules.models.types",
+    "contextunity.router.conductor.catalog",
     "contextunity.brain.core.exceptions",
     "contextunity.shield.exceptions",
     "contextunity.worker.core.exceptions",

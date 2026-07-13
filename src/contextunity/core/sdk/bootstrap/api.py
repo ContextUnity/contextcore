@@ -353,12 +353,11 @@ def _resolve_toolkits(manifest: ContextUnityProject) -> None:
                     pass
 
         if resolved_graph_tools:
-            graph_config = dict(graph.config or {})
-            graph_config["federated_tool_map"] = {
+            tool_map = {
                 logical_name: resolved_name
                 for logical_name, (resolved_name, _toolkit_name) in resolved_graph_tools.items()
             }
-            graph.config = graph_config
+            graph.set_federated_tool_map(tool_map)
 
         # Inject resolver metadata into graph nodes that bind toolkit tools.
         for node in graph.nodes or []:

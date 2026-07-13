@@ -80,7 +80,11 @@ class TestExpandPermissions:
                     Permissions.TRACE_WRITE,
                 ],
             ),
-            (Permissions.MEMORY_WRITE, [Permissions.MEMORY_READ]),
+            (
+                Permissions.MEMORY_WRITE,
+                [Permissions.MEMORY_READ, Permissions.BRAIN_WRITE, Permissions.BRAIN_READ],
+            ),
+            (Permissions.MEMORY_READ, [Permissions.BRAIN_READ]),
             (Permissions.BRAIN_WRITE, [Permissions.BRAIN_READ]),
             (Permissions.ADMIN_TRACE, [Permissions.TRACE_READ]),
             (
@@ -93,7 +97,14 @@ class TestExpandPermissions:
                 ],
             ),
         ],
-        ids=["admin-all", "memory-write", "brain-write", "admin-trace", "graph-dispatcher"],
+        ids=[
+            "admin-all",
+            "memory-write",
+            "memory-read",
+            "brain-write",
+            "admin-trace",
+            "graph-dispatcher",
+        ],
     )
     def test_inheritance_expansion(self, input_perm, expected_children) -> None:
         """Parent permission expands to include all children."""

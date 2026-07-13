@@ -54,9 +54,9 @@ WorkerBindings = WorkerBindingsBundle
 
 @runtime_checkable
 class TokenProviderFactory(Protocol):
-    """Lazy factory that mints a fresh ``ContextToken`` per gRPC call."""
+    """Lazy provider for a fresh token object or pre-signed bearer per call."""
 
-    def __call__(self) -> ContextToken: ...
+    def __call__(self) -> ContextToken | str: ...
 
 
 @runtime_checkable

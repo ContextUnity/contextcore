@@ -5,7 +5,9 @@ Defines the `v1alpha Target Schema` and `Migration Overlay` strictly enforcing t
 
 from typing import ClassVar, Literal, Self
 
+from contextunity.core.exceptions import ConfigurationError
 from contextunity.core.manifest import router as _router
+from contextunity.core.tenant_policy import validate_tenant_id
 from contextunity.core.types import WireValue
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -21,6 +23,11 @@ RouterNode = _router.RouterNode
 RouterNodeMeta = _router.RouterNodeMeta
 RouterNodeType = _router.RouterNodeType
 RouterPolicy = _router.RouterPolicy
+RouterGraphConfig = _router.RouterGraphConfig
+RouterGraphMemoryConfig = _router.RouterGraphMemoryConfig
+RouterMemoryConfig = _router.RouterMemoryConfig
+RouterConductorConfig = _router.RouterConductorConfig
+RouterConfigSection = _router.RouterConfigSection
 RouterSection = _router.RouterSection
 ToolkitOverride = _router.ToolkitOverride
 ToolkitRef = _router.ToolkitRef
@@ -52,6 +59,18 @@ class ProjectSection(ManifestModel):
     allowed_tenants: list[str] | None = None
     ownership: ProjectOwnership | None = None
 
+    @model_validator(mode="after")
+    def validate_tenant_scope(self) -> Self:
+        """Reject reserved tenant names in project-owned manifest scope."""
+        try:
+            validate_tenant_id(self.id, allow_reserved=False)
+            if self.allowed_tenants is not None:
+                for tenant_id in self.allowed_tenants:
+                    validate_tenant_id(tenant_id, allow_reserved=False)
+        except ConfigurationError as exc:
+            raise ValueError(str(exc)) from exc
+        return self
+
 
 class ServiceEnablement(ManifestModel):
     """Flags for whether a specific ContextUnity service is enabled."""
@@ -73,12 +92,6 @@ class ServicesSection(ManifestModel):
 # -----------------------------------------------------------------------------
 
 
-class BrainEmbedding(ManifestModel):
-    """Specifies the embedding model configuration for the Brain service."""
-
-    model: str = "all-MiniLM-L6-v2"
-
-
 class BrainStoragePolicy(ManifestModel):
     """Defines the retention and storage rules for the Brain service."""
 
@@ -91,7 +104,6 @@ class BrainSection(ManifestModel):
     tenant_scope: Literal["single", "multi"]
     capabilities: list[str]
     knowledge_domains: list[str] | None = None
-    embedding: BrainEmbedding | None = None
     storage_policy: BrainStoragePolicy | None = None
 
 
@@ -205,6 +217,7 @@ class RouterRegistrationBundle(ManifestModel):
     graph: dict[str, WireValue] = Field(default_factory=dict)
     services: dict[str, WireValue] = Field(default_factory=dict)
     policy: dict[str, WireValue] = Field(default_factory=dict)
+    conductor: dict[str, WireValue] = Field(default_factory=dict)
     secrets: dict[str, str] | None = None
 
     @property
@@ -315,7 +328,7 @@ class ContextUnityProject(ManifestModel):
     v1alpha Target Schema for stable Canonical ContextUnity project integration.
     """
 
-    apiVersion: Literal["contextunity/v1alpha7"]
+    apiVersion: Literal["contextunity/v1alpha8"]
     kind: Literal["ContextUnityProject"]
 
     project: ProjectSection
@@ -425,7 +438,7 @@ class ContextUnityMigrationOverlay(ManifestModel):
     Separated strictly to preserve the purity of canonical v1alpha config.
     """
 
-    apiVersion: Literal["contextunity/v1alpha7"]
+    apiVersion: Literal["contextunity/v1alpha8"]
     kind: Literal["ContextUnityMigrationOverlay"]
     target_ref: str
     project: OverlayProject

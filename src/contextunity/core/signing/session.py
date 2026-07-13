@@ -8,8 +8,6 @@ from typing import TYPE_CHECKING
 from contextunity.core.logging import get_contextunit_logger
 from contextunity.core.sdk.types import GrpcMetadata
 
-from .hmac import HmacBackend
-
 if TYPE_CHECKING:
     from contextunity.core.tokens import ContextToken
 
@@ -24,7 +22,6 @@ class SessionTokenBackend:
     _kid: str
     _expires_at: float
     _shield_url: str
-    _hmac_backend: HmacBackend
 
     def __init__(
         self,
@@ -33,14 +30,12 @@ class SessionTokenBackend:
         kid: str,
         expires_at: float,
         shield_url: str,
-        hmac_backend: HmacBackend,
     ) -> None:
         self._project_id = project_id
         self._token = session_token
         self._kid = kid
         self._expires_at = expires_at
         self._shield_url = shield_url
-        self._hmac_backend = hmac_backend
 
     @property
     def algorithm(self) -> str:
@@ -56,16 +51,16 @@ class SessionTokenBackend:
 
     def get_auth_metadata(self) -> GrpcMetadata:
         if time.time() > self._expires_at - 300:
-            try:
-                from contextunity.core.signing import _request_session_token
+            from contextunity.core.signing import _request_session_token
 
-                new_token, new_kid, new_exp = _request_session_token(
-                    self._project_id, self._shield_url, self._hmac_backend
-                )
-                self.update_token(new_token, new_kid, new_exp)
-                logger.debug("Successfully refreshed session token for %s", self._project_id)
-            except Exception as e:
-                logger.error("Failed to refresh session token: %s", e)
+            new_token, new_kid, new_exp = _request_session_token(
+                self._project_id,
+                self._shield_url,
+                None,
+                renewal_token=self._token,
+            )
+            self.update_token(new_token, new_kid, new_exp)
+            logger.debug("Successfully refreshed session token for %s", self._project_id)
 
         return (("authorization", f"Bearer {self._token}"),)
 
@@ -80,8 +75,9 @@ class SessionTokenBackend:
         new_token, _, _ = _request_session_token(
             self._project_id,
             self._shield_url,
-            self._hmac_backend,
+            None,
             requested_token=token,
+            renewal_token=self._token,
         )
         return (("authorization", f"Bearer {new_token}"),)
 

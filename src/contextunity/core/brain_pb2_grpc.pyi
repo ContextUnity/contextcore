@@ -76,6 +76,34 @@ class BrainServiceStub:
     Request payload: {tenant_id, content, filters?}
     Response payload: {content, metadata, score}
     """
+    UpsertCell: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Phase 3: Canonical BrainCell API
+    Upsert a canonical BrainCell over current knowledge storage.
+    Request payload: {tenant_id?, cell_id?, cell_kind, content, metadata?, scope_path?,
+      content_hash?, source_type?, source_ref?, confidence?, visibility?, user_id?}
+    Response payload: {id, tenant_id, cell_kind, source_type, scope_path, content_hash, confidence, visibility, created_at, updated_at}
+    """
+    QueryCells: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Query canonical BrainCells by text/scope/source/metadata.
+    Request payload: {tenant_id?, query_text?, cell_kind?, source_type?, scope_path?,
+      metadata_filter?, limit?, user_id?}
+    Response payload stream: {id, tenant_id, cell_kind, content, metadata, score?, source_type, source_ref, scope_path, content_hash, confidence, visibility}
+    """
+    GetCell: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Get one BrainCell by id.
+    Request payload: {tenant_id?, cell_id}
+    Response payload: {id, tenant_id, cell_kind, content, metadata, source_type, source_ref, scope_path, content_hash, confidence, visibility, created_at, updated_at}
+    """
+    EnqueueCellEmbedding: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Durable asynchronous embedding enrichment. Payloads contain references
+    and status only; Brain keeps cell text/provider calls internal.
+    """
+    ClaimCellEmbeddingJobs: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    EmbedClaimedCell: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    FailCellEmbeddingJob: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    GetCellEmbeddingStatus: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    GetEmbeddingCapability: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Cheap gate/storage readiness preflight. Does not load or call the provider."""
     AddEpisode: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """=========================================
     Episodic & Entity Memory
@@ -89,14 +117,10 @@ class BrainServiceStub:
     Request payload: {tenant_id, user_id, limit?}
     Response payload: {id, content, metadata, created_at}
     """
-    UpsertFact: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Upsert user fact
-    Request payload: {user_id, tenant_id, key, value, confidence?, source_id?}
-    """
-    GetUserFacts: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Get all facts for a user
-    Request payload: {tenant_id, user_id}
-    Response payload: {fact_key, fact_value, confidence, updated_at}
+    GetOldEpisodes: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Get episodes older than N days (retention / synthesis)
+    Request payload: {tenant_id, older_than_days?, limit?}
+    Response payload: {id, user_id, content, metadata, created_at, source_hash?, graph_run_id?}
     """
     GetEpisodeStats: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """Get episode count and date range for a tenant
@@ -150,6 +174,11 @@ class BrainServiceStub:
     """Read one or more records by UUID(s) — STRICTLY BATCHED
     Request payload: {ids: [UUID, ...]}
     Response payload: {records: [{id, content, metadata, scope_path, created_at}]}
+    """
+    PruneExpiredBlackboard: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Prune expired Blackboard records for one tenant.
+    Request payload: {tenant_id}
+    Response payload: {deleted_count, tenant_id}
     """
     RecordSynapse: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """=========================================
@@ -317,6 +346,34 @@ class BrainServiceAsyncStub(BrainServiceStub):
     Request payload: {tenant_id, content, filters?}
     Response payload: {content, metadata, score}
     """
+    UpsertCell: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Phase 3: Canonical BrainCell API
+    Upsert a canonical BrainCell over current knowledge storage.
+    Request payload: {tenant_id?, cell_id?, cell_kind, content, metadata?, scope_path?,
+      content_hash?, source_type?, source_ref?, confidence?, visibility?, user_id?}
+    Response payload: {id, tenant_id, cell_kind, source_type, scope_path, content_hash, confidence, visibility, created_at, updated_at}
+    """
+    QueryCells: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Query canonical BrainCells by text/scope/source/metadata.
+    Request payload: {tenant_id?, query_text?, cell_kind?, source_type?, scope_path?,
+      metadata_filter?, limit?, user_id?}
+    Response payload stream: {id, tenant_id, cell_kind, content, metadata, score?, source_type, source_ref, scope_path, content_hash, confidence, visibility}
+    """
+    GetCell: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Get one BrainCell by id.
+    Request payload: {tenant_id?, cell_id}
+    Response payload: {id, tenant_id, cell_kind, content, metadata, source_type, source_ref, scope_path, content_hash, confidence, visibility, created_at, updated_at}
+    """
+    EnqueueCellEmbedding: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Durable asynchronous embedding enrichment. Payloads contain references
+    and status only; Brain keeps cell text/provider calls internal.
+    """
+    ClaimCellEmbeddingJobs: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    EmbedClaimedCell: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    FailCellEmbeddingJob: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    GetCellEmbeddingStatus: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    GetEmbeddingCapability: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Cheap gate/storage readiness preflight. Does not load or call the provider."""
     AddEpisode: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """=========================================
     Episodic & Entity Memory
@@ -330,14 +387,10 @@ class BrainServiceAsyncStub(BrainServiceStub):
     Request payload: {tenant_id, user_id, limit?}
     Response payload: {id, content, metadata, created_at}
     """
-    UpsertFact: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Upsert user fact
-    Request payload: {user_id, tenant_id, key, value, confidence?, source_id?}
-    """
-    GetUserFacts: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Get all facts for a user
-    Request payload: {tenant_id, user_id}
-    Response payload: {fact_key, fact_value, confidence, updated_at}
+    GetOldEpisodes: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Get episodes older than N days (retention / synthesis)
+    Request payload: {tenant_id, older_than_days?, limit?}
+    Response payload: {id, user_id, content, metadata, created_at, source_hash?, graph_run_id?}
     """
     GetEpisodeStats: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """Get episode count and date range for a tenant
@@ -391,6 +444,11 @@ class BrainServiceAsyncStub(BrainServiceStub):
     """Read one or more records by UUID(s) — STRICTLY BATCHED
     Request payload: {ids: [UUID, ...]}
     Response payload: {records: [{id, content, metadata, scope_path, created_at}]}
+    """
+    PruneExpiredBlackboard: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Prune expired Blackboard records for one tenant.
+    Request payload: {tenant_id}
+    Response payload: {deleted_count, tenant_id}
     """
     RecordSynapse: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """=========================================
@@ -587,6 +645,84 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         """
 
     @_abc_1.abstractmethod
+    def UpsertCell(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Phase 3: Canonical BrainCell API
+        Upsert a canonical BrainCell over current knowledge storage.
+        Request payload: {tenant_id?, cell_id?, cell_kind, content, metadata?, scope_path?,
+          content_hash?, source_type?, source_ref?, confidence?, visibility?, user_id?}
+        Response payload: {id, tenant_id, cell_kind, source_type, scope_path, content_hash, confidence, visibility, created_at, updated_at}
+        """
+
+    @_abc_1.abstractmethod
+    def QueryCells(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_abc.Iterator[_contextunit_pb2.ContextUnit], _abc.AsyncIterator[_contextunit_pb2.ContextUnit]]:
+        """Query canonical BrainCells by text/scope/source/metadata.
+        Request payload: {tenant_id?, query_text?, cell_kind?, source_type?, scope_path?,
+          metadata_filter?, limit?, user_id?}
+        Response payload stream: {id, tenant_id, cell_kind, content, metadata, score?, source_type, source_ref, scope_path, content_hash, confidence, visibility}
+        """
+
+    @_abc_1.abstractmethod
+    def GetCell(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Get one BrainCell by id.
+        Request payload: {tenant_id?, cell_id}
+        Response payload: {id, tenant_id, cell_kind, content, metadata, source_type, source_ref, scope_path, content_hash, confidence, visibility, created_at, updated_at}
+        """
+
+    @_abc_1.abstractmethod
+    def EnqueueCellEmbedding(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Durable asynchronous embedding enrichment. Payloads contain references
+        and status only; Brain keeps cell text/provider calls internal.
+        """
+
+    @_abc_1.abstractmethod
+    def ClaimCellEmbeddingJobs(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def EmbedClaimedCell(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def FailCellEmbeddingJob(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def GetCellEmbeddingStatus(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def GetEmbeddingCapability(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Cheap gate/storage readiness preflight. Does not load or call the provider."""
+
+    @_abc_1.abstractmethod
     def AddEpisode(
         self,
         request: _contextunit_pb2.ContextUnit,
@@ -612,24 +748,14 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         """
 
     @_abc_1.abstractmethod
-    def UpsertFact(
-        self,
-        request: _contextunit_pb2.ContextUnit,
-        context: _ServicerContext,
-    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
-        """Upsert user fact
-        Request payload: {user_id, tenant_id, key, value, confidence?, source_id?}
-        """
-
-    @_abc_1.abstractmethod
-    def GetUserFacts(
+    def GetOldEpisodes(
         self,
         request: _contextunit_pb2.ContextUnit,
         context: _ServicerContext,
     ) -> _typing.Union[_abc.Iterator[_contextunit_pb2.ContextUnit], _abc.AsyncIterator[_contextunit_pb2.ContextUnit]]:
-        """Get all facts for a user
-        Request payload: {tenant_id, user_id}
-        Response payload: {fact_key, fact_value, confidence, updated_at}
+        """Get episodes older than N days (retention / synthesis)
+        Request payload: {tenant_id, older_than_days?, limit?}
+        Response payload: {id, user_id, content, metadata, created_at, source_hash?, graph_run_id?}
         """
 
     @_abc_1.abstractmethod
@@ -731,6 +857,17 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         """Read one or more records by UUID(s) — STRICTLY BATCHED
         Request payload: {ids: [UUID, ...]}
         Response payload: {records: [{id, content, metadata, scope_path, created_at}]}
+        """
+
+    @_abc_1.abstractmethod
+    def PruneExpiredBlackboard(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Prune expired Blackboard records for one tenant.
+        Request payload: {tenant_id}
+        Response payload: {deleted_count, tenant_id}
         """
 
     @_abc_1.abstractmethod

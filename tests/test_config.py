@@ -142,7 +142,7 @@ class TestProjectBootstrapConfig:
     def _manifest_with_node_secrets() -> ContextUnityProject:
         return ContextUnityProject.model_validate(
             {
-                "apiVersion": "contextunity/v1alpha7",
+                "apiVersion": "contextunity/v1alpha8",
                 "kind": "ContextUnityProject",
                 "project": {"id": "proj", "name": "Project"},
                 "services": {"router": {"enabled": True}},
@@ -164,7 +164,9 @@ class TestProjectBootstrapConfig:
                             ],
                         }
                     },
-                    "policy": {"models": {"llm": {"default": "openai/gpt-5-mini"}}},
+                    "config": {
+                        "policy": {"models": {"llm": {"default": "openai/gpt-5-mini"}}},
+                    },
                 },
             }
         )
@@ -180,7 +182,7 @@ class TestProjectBootstrapConfig:
     def test_resolve_secrets_warns_on_node_name_collision(self, monkeypatch, caplog) -> None:
         manifest = ContextUnityProject.model_validate(
             {
-                "apiVersion": "contextunity/v1alpha7",
+                "apiVersion": "contextunity/v1alpha8",
                 "kind": "ContextUnityProject",
                 "project": {"id": "proj", "name": "Project"},
                 "services": {"router": {"enabled": True}},
@@ -216,7 +218,9 @@ class TestProjectBootstrapConfig:
                             ],
                         },
                     },
-                    "policy": {"models": {"llm": {"default": "openai/gpt-5-mini"}}},
+                    "config": {
+                        "policy": {"models": {"llm": {"default": "openai/gpt-5-mini"}}},
+                    },
                 },
             }
         )
@@ -231,7 +235,7 @@ class TestProjectBootstrapConfig:
     def test_resolve_secrets_includes_policy_langfuse_refs(self, monkeypatch) -> None:
         manifest = ContextUnityProject.model_validate(
             {
-                "apiVersion": "contextunity/v1alpha7",
+                "apiVersion": "contextunity/v1alpha8",
                 "kind": "ContextUnityProject",
                 "project": {"id": "proj", "name": "Project"},
                 "services": {"router": {"enabled": True}},
@@ -242,12 +246,14 @@ class TestProjectBootstrapConfig:
                             "template": "yaml:demo",
                         },
                     },
-                    "policy": {
-                        "models": {"llm": {"default": "openai/gpt-5-mini"}},
-                        "langfuse": {
-                            "tracing_enabled": True,
-                            "public_key_ref": "LF_PUB",
-                            "secret_key_ref": "LF_SEC",
+                    "config": {
+                        "policy": {
+                            "models": {"llm": {"default": "openai/gpt-5-mini"}},
+                            "langfuse": {
+                                "tracing_enabled": True,
+                                "public_key_ref": "LF_PUB",
+                                "secret_key_ref": "LF_SEC",
+                            },
                         },
                     },
                 },
@@ -264,18 +270,20 @@ class TestProjectBootstrapConfig:
     def test_resolve_secrets_skips_langfuse_when_tracing_disabled(self, monkeypatch) -> None:
         manifest = ContextUnityProject.model_validate(
             {
-                "apiVersion": "contextunity/v1alpha7",
+                "apiVersion": "contextunity/v1alpha8",
                 "kind": "ContextUnityProject",
                 "project": {"id": "proj", "name": "Project"},
                 "services": {"router": {"enabled": True}},
                 "router": {
                     "default_graph": "g1",
                     "graph": {"g1": {"template": "yaml:demo"}},
-                    "policy": {
-                        "models": {"llm": {"default": "openai/gpt-5-mini"}},
-                        "langfuse": {
-                            "tracing_enabled": False,
-                            "public_key_ref": "LF_PUB",
+                    "config": {
+                        "policy": {
+                            "models": {"llm": {"default": "openai/gpt-5-mini"}},
+                            "langfuse": {
+                                "tracing_enabled": False,
+                                "public_key_ref": "LF_PUB",
+                            },
                         },
                     },
                 },

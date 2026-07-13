@@ -6,6 +6,7 @@ from collections.abc import Mapping
 
 from contextunity.core.logging import get_contextunit_logger
 from contextunity.core.manifest import ArtifactGenerator, ContextUnityProject
+from contextunity.core.permissions import service_session_permissions
 from contextunity.core.sdk.bootstrap.manifest import load_manifest
 from contextunity.core.sdk.config import ProjectBootstrapConfig
 from contextunity.core.types import JsonDict, is_json_dict, is_object_list
@@ -37,21 +38,14 @@ def _derive_permissions(manifest_dict: Mapping[str, object]) -> list[str]:
     if not is_json_dict(manifest_dict):
         return []
 
-    service_permissions_map = {
-        "brain": ["brain:read", "brain:write", "trace:read", "trace:write", "memory:read", "memory:write"],
-        "router": ["router:execute", "tools:register", "privacy:*"],
-        "worker": ["worker:execute", "worker:schedule"],
-        "shield": ["shield:secrets:read", "shield:secrets:write"],
-    }
-
     permissions: set[str] = set()
     services = _json_dict(manifest_dict.get("services")) or {}
 
-    for service, perms in service_permissions_map.items():
+    for service in ("brain", "router", "worker", "shield"):
         if service == "shield":
-            permissions.update(perms)
+            permissions.update(service_session_permissions(service))
         elif _service_enabled(services, service):
-            permissions.update(perms)
+            permissions.update(service_session_permissions(service))
 
     router = _json_dict(manifest_dict.get("router")) or {}
     graph = _json_dict(router.get("graph")) or {}

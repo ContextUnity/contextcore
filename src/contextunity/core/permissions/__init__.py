@@ -31,6 +31,7 @@ from .policy import (
     ToolRisk,
     ToolScope,
 )
+from .services import brain_caller_permissions, service_session_permissions
 from .validation import validate_attenuation_permissions
 
 __all__ = [
@@ -44,6 +45,7 @@ __all__ = [
     "ToolScope",
     "UserNamespace",
     "check_tool_scope",
+    "brain_caller_permissions",
     "expand_permissions",
     "extract_tool_names",
     "has_graph_access",
@@ -51,5 +53,6 @@ __all__ = [
     "has_registration_access",
     "has_tool_access",
     "has_tool_scope_access",
+    "service_session_permissions",
     "validate_attenuation_permissions",
 ]

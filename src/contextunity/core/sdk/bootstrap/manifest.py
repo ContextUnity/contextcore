@@ -426,37 +426,49 @@ def sign_prompt_integrity(
 
 
 def extract_node_prompts(manifest_dict: JsonDict) -> dict[str, str]:
-    """Return ``{node_name: prompt_text}`` for every prompted router graph node.
+    """Return prompt texts keyed for Shield publish.
 
-    Mirrors the graph traversal in :func:`sign_prompt_integrity`. Used in Shield
-    mode to publish the canonical prompts to Shield (``put_prompts_to_shield``),
-    so the Router can load the runtime prompt from Shield instead of trusting a
-    local manifest copy or recomputing an HMAC with a router-local secret.
+    Keys are the path suffix after ``{project_id}/prompts/``:
+
+    - Multi-graph map: ``{graph_key}/{node_name}`` → full path
+      ``{project_id}/prompts/{graph_key}/{node_name}``.
+    - Legacy top-level ``graph.nodes``: ``{node_name}`` (flat path, dual-read
+      at runtime still works).
+
+    Same node name in two graphs is allowed and does not collide.
     """
     graph = _router_graph(manifest_dict)
     if graph is None:
         return {}
 
-    graph_entries: list[tuple[JsonDict, list[JsonDict]]] = []
+    # (graph_key_or_None, config, nodes)
+    graph_entries: list[tuple[str | None, JsonDict, list[JsonDict]]] = []
     if "nodes" in graph:
-        graph_entries.append((dict(get_json_dict(graph, "config")), get_json_dict_list(graph, "nodes")))
+        graph_entries.append((None, dict(get_json_dict(graph, "config")), get_json_dict_list(graph, "nodes")))
     else:
-        for entry in graph.values():
-            entry_dict = _as_json_dict(entry)
+        for graph_key in sorted(graph):
+            entry_dict = _as_json_dict(graph.get(graph_key))
             if entry_dict is not None and "nodes" in entry_dict:
                 graph_entries.append(
-                    (dict(get_json_dict(entry_dict, "config")), get_json_dict_list(entry_dict, "nodes"))
+                    (
+                        graph_key,
+                        dict(get_json_dict(entry_dict, "config")),
+                        get_json_dict_list(entry_dict, "nodes"),
+                    )
                 )
 
     prompts: dict[str, str] = {}
-    for config, nodes in graph_entries:
+    for graph_key, config, nodes in graph_entries:
         for node in nodes:
             node_name = get_str(node, "name")
             if not node_name:
                 continue
             prompt_value = get_str(config, f"{node_name}_prompt")
-            if prompt_value:
-                prompts[node_name] = prompt_value
+            if not prompt_value:
+                continue
+            # Path suffix under {project_id}/prompts/
+            key = f"{graph_key}/{node_name}" if graph_key else node_name
+            prompts[key] = prompt_value
     return prompts
 
 

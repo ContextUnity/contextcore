@@ -48,6 +48,34 @@ service BrainService {
     // Response payload: {content, metadata, score}
     rpc QueryMemory(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
+    // Phase 3: Canonical BrainCell API
+    // Upsert a canonical BrainCell over current knowledge storage.
+    // Request payload: {tenant_id?, cell_id?, cell_kind, content, metadata?, scope_path?,
+    //   content_hash?, source_type?, source_ref?, confidence?, visibility?, user_id?}
+    // Response payload: {id, tenant_id, cell_kind, source_type, scope_path, content_hash, confidence, visibility, created_at, updated_at}
+    rpc UpsertCell(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Query canonical BrainCells by text/scope/source/metadata.
+    // Request payload: {tenant_id?, query_text?, cell_kind?, source_type?, scope_path?,
+    //   metadata_filter?, limit?, user_id?}
+    // Response payload stream: {id, tenant_id, cell_kind, content, metadata, score?, source_type, source_ref, scope_path, content_hash, confidence, visibility}
+    rpc QueryCells(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
+
+    // Get one BrainCell by id.
+    // Request payload: {tenant_id?, cell_id}
+    // Response payload: {id, tenant_id, cell_kind, content, metadata, source_type, source_ref, scope_path, content_hash, confidence, visibility, created_at, updated_at}
+    rpc GetCell(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Durable asynchronous embedding enrichment. Payloads contain references
+    // and status only; Brain keeps cell text/provider calls internal.
+    rpc EnqueueCellEmbedding(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc ClaimCellEmbeddingJobs(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc EmbedClaimedCell(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc FailCellEmbeddingJob(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc GetCellEmbeddingStatus(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    // Cheap gate/storage readiness preflight. Does not load or call the provider.
+    rpc GetEmbeddingCapability(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
     // =========================================
     // NewsEngine Operations
     // =========================================
@@ -66,14 +94,10 @@ service BrainService {
     // Response payload: {id, content, metadata, created_at}
     rpc GetRecentEpisodes(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
-    // Upsert user fact
-    // Request payload: {user_id, tenant_id, key, value, confidence?, source_id?}
-    rpc UpsertFact(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
-
-    // Get all facts for a user
-    // Request payload: {tenant_id, user_id}
-    // Response payload: {fact_key, fact_value, confidence, updated_at}
-    rpc GetUserFacts(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
+    // Get episodes older than N days (retention / synthesis)
+    // Request payload: {tenant_id, older_than_days?, limit?}
+    // Response payload: {id, user_id, content, metadata, created_at, source_hash?, graph_run_id?}
+    rpc GetOldEpisodes(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // Get episode count and date range for a tenant
     // Request payload: {tenant_id}
@@ -127,6 +151,11 @@ service BrainService {
     // Request payload: {ids: [UUID, ...]}
     // Response payload: {records: [{id, content, metadata, scope_path, created_at}]}
     rpc ReadBlackboard(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Prune expired Blackboard records for one tenant.
+    // Request payload: {tenant_id}
+    // Response payload: {deleted_count, tenant_id}
+    rpc PruneExpiredBlackboard(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // =========================================
     // BrainSynapse Operations (Flat Memory Phase B)

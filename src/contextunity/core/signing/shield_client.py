@@ -37,11 +37,12 @@ def parse_issue_session_token_response(resp_dict: ContextUnitPayload) -> tuple[s
 def request_session_token(
     project_id: str,
     shield_url: str,
-    hmac_backend: HmacBackend,
+    hmac_backend: HmacBackend | None,
     required_services: dict[str, bool] | None = None,
     requested_token: ContextToken | None = None,
+    renewal_token: str | None = None,
 ) -> tuple[str, str, float]:
-    """Request a signed session token from Shield via gRPC."""
+    """Request a signed session token using bootstrap HMAC or a parent session."""
     from contextunity.core import contextunit_pb2, shield_pb2_grpc
     from contextunity.core.grpc_utils import create_channel_sync
     from contextunity.core.sdk.contextunit import ContextUnit as PydanticUnit
@@ -49,7 +50,15 @@ def request_session_token(
     channel = create_channel_sync(shield_url)
     try:
         stub = shield_pb2_grpc.ShieldServiceStub(channel)
-        metadata = hmac_backend.get_auth_metadata()
+        if renewal_token:
+            metadata = (("authorization", f"Bearer {renewal_token}"),)
+        elif hmac_backend is not None:
+            metadata = hmac_backend.get_auth_metadata()
+        else:
+            raise SecurityError(
+                message="Shield session issuance requires bootstrap HMAC or a parent session token",
+                code="SHIELD_AUTH_REQUIRED",
+            )
 
         payload: ContextUnitPayload = {"project_id": project_id}
         if requested_token is not None:

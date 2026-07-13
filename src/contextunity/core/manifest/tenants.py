@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextunity.core.exceptions import ConfigurationError, SecurityError
+from contextunity.core.tenant_policy import validate_tenant_id
 from contextunity.core.types import is_object_list
 
 from .models import ProjectSection, RouterRegistrationBundle
@@ -22,11 +23,11 @@ def resolve_project_allowed_tenants(project: ProjectSection) -> list[str]:
         Non-empty list of tenant ids usable as security scope for this project.
     """
     if project.allowed_tenants:
-        tenants = [tenant for tenant in project.allowed_tenants if tenant]
+        tenants = [validate_tenant_id(tenant, allow_reserved=False) for tenant in project.allowed_tenants]
         if tenants:
             return tenants
     if project.id:
-        return [project.id]
+        return [validate_tenant_id(project.id, allow_reserved=False)]
     raise ConfigurationError(message="Project section must define 'id' for tenant scope resolution")
 
 
@@ -51,7 +52,7 @@ def resolve_bundle_allowed_tenants(bundle: dict[str, object]) -> list[str]:
         allowed: list[str] = []
         for item in allowed_raw:
             if isinstance(item, str) and item:
-                allowed.append(item)
+                allowed.append(validate_tenant_id(item, allow_reserved=False))
         if allowed:
             return allowed
 
@@ -70,7 +71,7 @@ def parse_allowed_tenants_field(raw: object) -> list[str] | None:
     tenants: list[str] = []
     for item in raw:
         if isinstance(item, str) and item:
-            tenants.append(item)
+            tenants.append(validate_tenant_id(item, allow_reserved=False))
     return tenants or None
 
 

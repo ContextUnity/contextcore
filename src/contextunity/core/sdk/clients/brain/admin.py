@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from contextunity.core.sdk.payload import get_json_dict, get_json_dict_list
+from contextunity.core.sdk.responses import MemoryLayerName
 from contextunity.core.types import ContextUnitPayload, JsonDict
 
 if TYPE_CHECKING:
@@ -75,7 +76,7 @@ class BrainAdminMixin(_MixinBase):
         self,
         *,
         tenant_id: str | None = None,
-        layer: str | None = None,
+        layer: MemoryLayerName | None = None,
     ) -> JsonDict:
         """Cross-tenant memory layer stats."""
         wire: ContextUnitPayload = {}

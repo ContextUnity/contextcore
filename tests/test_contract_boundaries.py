@@ -170,7 +170,7 @@ def test_struct_data_value_field_rebuilds_without_jsonvalue_in_scope():
 
 
 def test_router_model_request_accepts_recursive_metadata():
-    """End-to-end guard on the real model that crashed the nszu analytics graph."""
+    """End-to-end guard on the real model that crashed the sample_project analytics graph."""
     pytest.importorskip("contextunity.router")
     from contextunity.router.modules.models.types import ModelRequest, TextPart
 
