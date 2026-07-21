@@ -51,10 +51,10 @@ class BrainServiceStub:
     def __new__(cls, channel: _grpc.Channel) -> _Self: ...
     @_typing.overload
     def __new__(cls, channel: _aio.Channel) -> BrainServiceAsyncStub: ...
-    Search: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Semantic/Hybrid search
-    Request payload: {tenant_id, query_text, limit?, source_types?}
-    Response payload: {id, content, score, source_type, metadata}
+    SearchCells: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Canonical BrainCell semantic/hybrid search.
+    Request payload: {tenant_id?, query_text, limit?, min_score?, source_types?, scope_path?, user_id?}
+    Response payload: {id, tenant_id, cell_kind, content, score, vector_score?, text_score?, source_type, source_ref?, scope_path?, content_hash?, confidence, visibility, metadata}
     """
     GraphSearch: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """Graph Traversal
@@ -66,15 +66,10 @@ class BrainServiceStub:
     Request payload: {tenant_id, source_type, source_id, relation, target_type, target_id}
     Response payload: {success}
     """
-    Upsert: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Upsert content (generic)
-    Request payload: {tenant_id, content, source_type, metadata?}
+    IngestDocument: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Explicit document ingestion with enrichment/chunking semantics.
+    Request payload: {tenant_id?, content, source_type, metadata?, user_id?}
     Response payload: {id, success}
-    """
-    QueryMemory: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Query memory (hybrid search with provenance)
-    Request payload: {tenant_id, content, filters?}
-    Response payload: {content, metadata, score}
     """
     UpsertCell: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """Phase 3: Canonical BrainCell API
@@ -94,6 +89,12 @@ class BrainServiceStub:
     Request payload: {tenant_id?, cell_id}
     Response payload: {id, tenant_id, cell_kind, content, metadata, source_type, source_ref, scope_path, content_hash, confidence, visibility, created_at, updated_at}
     """
+    DeleteDocumentationCells: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Atomically delete bounded, exact documentation cells only when every
+    supplied id/content_hash target still matches in the resolved tenant.
+    Request payload: {tenant_id?, targets:[{cell_id, content_hash}]}
+    Response payload: {status: deleted|conflict, deleted_count, expected_count}
+    """
     EnqueueCellEmbedding: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """Durable asynchronous embedding enrichment. Payloads contain references
     and status only; Brain keeps cell text/provider calls internal.
@@ -104,34 +105,27 @@ class BrainServiceStub:
     GetCellEmbeddingStatus: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     GetEmbeddingCapability: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """Cheap gate/storage readiness preflight. Does not load or call the provider."""
-    AddEpisode: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    AppendConversationRecord: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """=========================================
-    Episodic & Entity Memory
+    Conversation History
     =========================================
 
-    Add conversation episode
-    Request payload: {user_id, tenant_id, session_id?, content, metadata?}
+    Append one immutable conversation record with canonical hashes and idempotency.
     """
-    GetRecentEpisodes: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Get recent episodes for a user
-    Request payload: {tenant_id, user_id, limit?}
-    Response payload: {id, content, metadata, created_at}
-    """
-    GetOldEpisodes: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Get episodes older than N days (retention / synthesis)
-    Request payload: {tenant_id, older_than_days?, limit?}
-    Response payload: {id, user_id, content, metadata, created_at, source_hash?, graph_run_id?}
-    """
-    GetEpisodeStats: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Get episode count and date range for a tenant
-    Request payload: {tenant_id}
-    Response payload: {total, oldest, newest, tenant_id}
-    """
-    RetentionCleanup: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Delete old episodes for a tenant, optionally restricted to explicit IDs
-    Request payload: {tenant_id, older_than_days, episode_ids?}
-    Response payload: {deleted_count}
-    """
+    QueryConversationHistory: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Run one bounded recent/older/session/trace-related projection."""
+    GetConversationHistoryStats: _grpc.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]
+    """Return content-free tenant statistics."""
+    ApplyConversationRetention: _grpc.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]
+    """Apply explicit, evidence-backed Conversation History retention."""
+    ApplyExecutionTraceRetention: _grpc.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]
+    """Apply age-based terminal Execution Trace retention."""
     LogTrace: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """=========================================
     Agent Traces
@@ -148,18 +142,53 @@ class BrainServiceStub:
     Response payload: {id, agent_id, graph_name, tool_calls, token_usage,
       timing_ms, security_flags, metadata, created_at}
     """
-    UpsertTaxonomy: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    ReserveExecutionTraceArtifact: _grpc.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]
+    """Protected per-provider-attempt model-I/O artifact lifecycle. Payloads are
+    closed ContextUnit contracts; immutable Trace JSON stores refs only.
+    """
+    FinalizeExecutionTraceArtifact: _grpc.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]
+    GetExecutionTraceArtifact: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    ArchiveExecutionTraceArtifact: _grpc.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]
+    RestoreExecutionTraceArtifact: _grpc.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]
+    PurgeExecutionTraceArtifact: _grpc.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]
+    ReportFaultOccurrence: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """=========================================
-    Taxonomy Operations
+    UniversalDebugBus
     =========================================
 
-    Upsert taxonomy entry
-    Request payload: {tenant_id, domain, name, path, keywords?, metadata?}
+    Tenant-scoped negative-experience evidence only. Occurrences/cases are
+    separate from Execution Trace; no generic event API is introduced.
+    Request payload: {occurrence: FaultOccurrence}; response: {case: DebugCase}.
     """
-    GetTaxonomy: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Get taxonomy entries
-    Request payload: {tenant_id, domain?}
-    Response payload: {domain, name, path, keywords, metadata}
+    ReportMitigationAttempt: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Request payload: {attempt: MitigationAttempt}; response: {case: DebugCase}."""
+    ReportRecoveryEvidence: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Request payload: {evidence: RecoveryEvidence}; response: {case: DebugCase}."""
+    ResolveDebugCase: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Request payload: {case_id, expected_case_revision, resolution_id}; response: {case: DebugCase}."""
+    ReopenDebugCase: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Request payload: {case_id, trigger_occurrence_id, expected_case_revision}; response: {case: DebugCase}."""
+    GetDebugCase: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Request payload: {case_id, tenant_id?}; response: {case: DebugCase}.
+    Any tenant request is checked against verified caller authority.
+    """
+    QueryDebugCases: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Request payload: {query: DebugCaseQuery}; tenant comes only from verified context.
+    One {case: DebugCase} per bounded response.
+    """
+    QueryRecurringFaults: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Request payload: {query: DebugCaseQuery}; recurrence requires fault_count >= 2.
+    Tenant comes only from verified context; one {case: DebugCase} per response.
     """
     WriteBlackboard: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """=========================================
@@ -207,6 +236,13 @@ class BrainServiceStub:
       status?, metadata_patch?}
     Response payload: {id, q_action, q_hypothesis, q_relevance, q_composite, updated_at}
     """
+    ReportOutcomeObservation: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Store one immutable delayed outcome and let Brain resolve eligible learning.
+    Request: {observation: {trace_id, graph_run_id, verdict_digest,
+      observation_kind, source_authority, source_ref, occurred_at, idempotency_key}}
+    Response: {observation_id, trace_id, graph_run_id, policy_version,
+      decision, applied_synapse_ids}
+    """
     MatchDuckDB: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """=========================================
     DuckDB Operations
@@ -250,14 +286,14 @@ class BrainServiceStub:
     Response payload: {analytics: {...}}
     """
     AdminGetMemoryLayerStats: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Cross-tenant memory layer stats (episodes, knowledge node counts).
+    """Cross-tenant Conversation History, BrainCell, and embedding-job counts.
     Requires admin:read.
     tenant_id is optional only when token has admin:all; otherwise required.
     Request payload: {layer?, tenant_id?}
     Response payload: {layer_stats: {...}}
     """
     AdminGetFilterOptions: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Distinct filter values from agent_traces (for admin UI dropdowns).
+    """Distinct filter values from execution traces (for admin UI dropdowns).
     Requires admin:read.
     tenant_id is optional only when token has admin:all; otherwise required.
     Request payload: {tenant_id?}
@@ -269,20 +305,6 @@ class BrainServiceStub:
     tenant_id is optional only when token has admin:all; otherwise required.
     Request payload: {session_id, tenant_id?}
     Response payload: {traces: [...]}
-    """
-    AdminGetRelatedEpisodes: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Fetch episodic_events related to a trace by trace_id (cross-tenant).
-    Requires admin:read.
-    Tenant scope is resolved from the trace's own tenant_id (by-id lookup).
-    Request payload: {trace_id}
-    Response payload: {episodes: [...]}
-    """
-    AdminSearchEpisodes: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
-    """Cross-tenant episodic event search with pagination.
-    Requires admin:read.
-    tenant_id is optional only when token has admin:all; otherwise required.
-    Request payload: {tenant_id?, user_id?, session_id?, hours?, limit?, offset?}
-    Response payload: {events: [...], total: int}
     """
     AdminGetCells: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """List cells with optional tenant/kind filter (cross-tenant).
@@ -321,10 +343,10 @@ class BrainServiceAsyncStub(BrainServiceStub):
     """
 
     def __init__(self, channel: _aio.Channel) -> None: ...
-    Search: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Semantic/Hybrid search
-    Request payload: {tenant_id, query_text, limit?, source_types?}
-    Response payload: {id, content, score, source_type, metadata}
+    SearchCells: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Canonical BrainCell semantic/hybrid search.
+    Request payload: {tenant_id?, query_text, limit?, min_score?, source_types?, scope_path?, user_id?}
+    Response payload: {id, tenant_id, cell_kind, content, score, vector_score?, text_score?, source_type, source_ref?, scope_path?, content_hash?, confidence, visibility, metadata}
     """
     GraphSearch: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """Graph Traversal
@@ -336,15 +358,10 @@ class BrainServiceAsyncStub(BrainServiceStub):
     Request payload: {tenant_id, source_type, source_id, relation, target_type, target_id}
     Response payload: {success}
     """
-    Upsert: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Upsert content (generic)
-    Request payload: {tenant_id, content, source_type, metadata?}
+    IngestDocument: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Explicit document ingestion with enrichment/chunking semantics.
+    Request payload: {tenant_id?, content, source_type, metadata?, user_id?}
     Response payload: {id, success}
-    """
-    QueryMemory: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Query memory (hybrid search with provenance)
-    Request payload: {tenant_id, content, filters?}
-    Response payload: {content, metadata, score}
     """
     UpsertCell: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """Phase 3: Canonical BrainCell API
@@ -364,6 +381,12 @@ class BrainServiceAsyncStub(BrainServiceStub):
     Request payload: {tenant_id?, cell_id}
     Response payload: {id, tenant_id, cell_kind, content, metadata, source_type, source_ref, scope_path, content_hash, confidence, visibility, created_at, updated_at}
     """
+    DeleteDocumentationCells: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Atomically delete bounded, exact documentation cells only when every
+    supplied id/content_hash target still matches in the resolved tenant.
+    Request payload: {tenant_id?, targets:[{cell_id, content_hash}]}
+    Response payload: {status: deleted|conflict, deleted_count, expected_count}
+    """
     EnqueueCellEmbedding: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """Durable asynchronous embedding enrichment. Payloads contain references
     and status only; Brain keeps cell text/provider calls internal.
@@ -374,34 +397,25 @@ class BrainServiceAsyncStub(BrainServiceStub):
     GetCellEmbeddingStatus: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     GetEmbeddingCapability: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """Cheap gate/storage readiness preflight. Does not load or call the provider."""
-    AddEpisode: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    AppendConversationRecord: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """=========================================
-    Episodic & Entity Memory
+    Conversation History
     =========================================
 
-    Add conversation episode
-    Request payload: {user_id, tenant_id, session_id?, content, metadata?}
+    Append one immutable conversation record with canonical hashes and idempotency.
     """
-    GetRecentEpisodes: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Get recent episodes for a user
-    Request payload: {tenant_id, user_id, limit?}
-    Response payload: {id, content, metadata, created_at}
-    """
-    GetOldEpisodes: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Get episodes older than N days (retention / synthesis)
-    Request payload: {tenant_id, older_than_days?, limit?}
-    Response payload: {id, user_id, content, metadata, created_at, source_hash?, graph_run_id?}
-    """
-    GetEpisodeStats: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Get episode count and date range for a tenant
-    Request payload: {tenant_id}
-    Response payload: {total, oldest, newest, tenant_id}
-    """
-    RetentionCleanup: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Delete old episodes for a tenant, optionally restricted to explicit IDs
-    Request payload: {tenant_id, older_than_days, episode_ids?}
-    Response payload: {deleted_count}
-    """
+    QueryConversationHistory: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Run one bounded recent/older/session/trace-related projection."""
+    GetConversationHistoryStats: _aio.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]  # type: ignore[assignment]
+    """Return content-free tenant statistics."""
+    ApplyConversationRetention: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Apply explicit, evidence-backed Conversation History retention."""
+    ApplyExecutionTraceRetention: _aio.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]  # type: ignore[assignment]
+    """Apply age-based terminal Execution Trace retention."""
     LogTrace: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """=========================================
     Agent Traces
@@ -418,18 +432,53 @@ class BrainServiceAsyncStub(BrainServiceStub):
     Response payload: {id, agent_id, graph_name, tool_calls, token_usage,
       timing_ms, security_flags, metadata, created_at}
     """
-    UpsertTaxonomy: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    ReserveExecutionTraceArtifact: _aio.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]  # type: ignore[assignment]
+    """Protected per-provider-attempt model-I/O artifact lifecycle. Payloads are
+    closed ContextUnit contracts; immutable Trace JSON stores refs only.
+    """
+    FinalizeExecutionTraceArtifact: _aio.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]  # type: ignore[assignment]
+    GetExecutionTraceArtifact: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    ArchiveExecutionTraceArtifact: _aio.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]  # type: ignore[assignment]
+    RestoreExecutionTraceArtifact: _aio.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]  # type: ignore[assignment]
+    PurgeExecutionTraceArtifact: _aio.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]  # type: ignore[assignment]
+    ReportFaultOccurrence: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """=========================================
-    Taxonomy Operations
+    UniversalDebugBus
     =========================================
 
-    Upsert taxonomy entry
-    Request payload: {tenant_id, domain, name, path, keywords?, metadata?}
+    Tenant-scoped negative-experience evidence only. Occurrences/cases are
+    separate from Execution Trace; no generic event API is introduced.
+    Request payload: {occurrence: FaultOccurrence}; response: {case: DebugCase}.
     """
-    GetTaxonomy: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Get taxonomy entries
-    Request payload: {tenant_id, domain?}
-    Response payload: {domain, name, path, keywords, metadata}
+    ReportMitigationAttempt: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Request payload: {attempt: MitigationAttempt}; response: {case: DebugCase}."""
+    ReportRecoveryEvidence: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Request payload: {evidence: RecoveryEvidence}; response: {case: DebugCase}."""
+    ResolveDebugCase: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Request payload: {case_id, expected_case_revision, resolution_id}; response: {case: DebugCase}."""
+    ReopenDebugCase: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Request payload: {case_id, trigger_occurrence_id, expected_case_revision}; response: {case: DebugCase}."""
+    GetDebugCase: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Request payload: {case_id, tenant_id?}; response: {case: DebugCase}.
+    Any tenant request is checked against verified caller authority.
+    """
+    QueryDebugCases: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Request payload: {query: DebugCaseQuery}; tenant comes only from verified context.
+    One {case: DebugCase} per bounded response.
+    """
+    QueryRecurringFaults: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Request payload: {query: DebugCaseQuery}; recurrence requires fault_count >= 2.
+    Tenant comes only from verified context; one {case: DebugCase} per response.
     """
     WriteBlackboard: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """=========================================
@@ -477,6 +526,13 @@ class BrainServiceAsyncStub(BrainServiceStub):
       status?, metadata_patch?}
     Response payload: {id, q_action, q_hypothesis, q_relevance, q_composite, updated_at}
     """
+    ReportOutcomeObservation: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Store one immutable delayed outcome and let Brain resolve eligible learning.
+    Request: {observation: {trace_id, graph_run_id, verdict_digest,
+      observation_kind, source_authority, source_ref, occurred_at, idempotency_key}}
+    Response: {observation_id, trace_id, graph_run_id, policy_version,
+      decision, applied_synapse_ids}
+    """
     MatchDuckDB: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """=========================================
     DuckDB Operations
@@ -520,14 +576,14 @@ class BrainServiceAsyncStub(BrainServiceStub):
     Response payload: {analytics: {...}}
     """
     AdminGetMemoryLayerStats: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Cross-tenant memory layer stats (episodes, knowledge node counts).
+    """Cross-tenant Conversation History, BrainCell, and embedding-job counts.
     Requires admin:read.
     tenant_id is optional only when token has admin:all; otherwise required.
     Request payload: {layer?, tenant_id?}
     Response payload: {layer_stats: {...}}
     """
     AdminGetFilterOptions: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Distinct filter values from agent_traces (for admin UI dropdowns).
+    """Distinct filter values from execution traces (for admin UI dropdowns).
     Requires admin:read.
     tenant_id is optional only when token has admin:all; otherwise required.
     Request payload: {tenant_id?}
@@ -539,20 +595,6 @@ class BrainServiceAsyncStub(BrainServiceStub):
     tenant_id is optional only when token has admin:all; otherwise required.
     Request payload: {session_id, tenant_id?}
     Response payload: {traces: [...]}
-    """
-    AdminGetRelatedEpisodes: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Fetch episodic_events related to a trace by trace_id (cross-tenant).
-    Requires admin:read.
-    Tenant scope is resolved from the trace's own tenant_id (by-id lookup).
-    Request payload: {trace_id}
-    Response payload: {episodes: [...]}
-    """
-    AdminSearchEpisodes: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
-    """Cross-tenant episodic event search with pagination.
-    Requires admin:read.
-    tenant_id is optional only when token has admin:all; otherwise required.
-    Request payload: {tenant_id?, user_id?, session_id?, hours?, limit?, offset?}
-    Response payload: {events: [...], total: int}
     """
     AdminGetCells: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """List cells with optional tenant/kind filter (cross-tenant).
@@ -590,14 +632,14 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
     """
 
     @_abc_1.abstractmethod
-    def Search(
+    def SearchCells(
         self,
         request: _contextunit_pb2.ContextUnit,
         context: _ServicerContext,
     ) -> _typing.Union[_abc.Iterator[_contextunit_pb2.ContextUnit], _abc.AsyncIterator[_contextunit_pb2.ContextUnit]]:
-        """Semantic/Hybrid search
-        Request payload: {tenant_id, query_text, limit?, source_types?}
-        Response payload: {id, content, score, source_type, metadata}
+        """Canonical BrainCell semantic/hybrid search.
+        Request payload: {tenant_id?, query_text, limit?, min_score?, source_types?, scope_path?, user_id?}
+        Response payload: {id, tenant_id, cell_kind, content, score, vector_score?, text_score?, source_type, source_ref?, scope_path?, content_hash?, confidence, visibility, metadata}
         """
 
     @_abc_1.abstractmethod
@@ -623,25 +665,14 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         """
 
     @_abc_1.abstractmethod
-    def Upsert(
+    def IngestDocument(
         self,
         request: _contextunit_pb2.ContextUnit,
         context: _ServicerContext,
     ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
-        """Upsert content (generic)
-        Request payload: {tenant_id, content, source_type, metadata?}
+        """Explicit document ingestion with enrichment/chunking semantics.
+        Request payload: {tenant_id?, content, source_type, metadata?, user_id?}
         Response payload: {id, success}
-        """
-
-    @_abc_1.abstractmethod
-    def QueryMemory(
-        self,
-        request: _contextunit_pb2.ContextUnit,
-        context: _ServicerContext,
-    ) -> _typing.Union[_abc.Iterator[_contextunit_pb2.ContextUnit], _abc.AsyncIterator[_contextunit_pb2.ContextUnit]]:
-        """Query memory (hybrid search with provenance)
-        Request payload: {tenant_id, content, filters?}
-        Response payload: {content, metadata, score}
         """
 
     @_abc_1.abstractmethod
@@ -678,6 +709,18 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         """Get one BrainCell by id.
         Request payload: {tenant_id?, cell_id}
         Response payload: {id, tenant_id, cell_kind, content, metadata, source_type, source_ref, scope_path, content_hash, confidence, visibility, created_at, updated_at}
+        """
+
+    @_abc_1.abstractmethod
+    def DeleteDocumentationCells(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Atomically delete bounded, exact documentation cells only when every
+        supplied id/content_hash target still matches in the resolved tenant.
+        Request payload: {tenant_id?, targets:[{cell_id, content_hash}]}
+        Response payload: {status: deleted|conflict, deleted_count, expected_count}
         """
 
     @_abc_1.abstractmethod
@@ -723,62 +766,49 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         """Cheap gate/storage readiness preflight. Does not load or call the provider."""
 
     @_abc_1.abstractmethod
-    def AddEpisode(
+    def AppendConversationRecord(
         self,
         request: _contextunit_pb2.ContextUnit,
         context: _ServicerContext,
     ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
         """=========================================
-        Episodic & Entity Memory
+        Conversation History
         =========================================
 
-        Add conversation episode
-        Request payload: {user_id, tenant_id, session_id?, content, metadata?}
+        Append one immutable conversation record with canonical hashes and idempotency.
         """
 
     @_abc_1.abstractmethod
-    def GetRecentEpisodes(
+    def QueryConversationHistory(
         self,
         request: _contextunit_pb2.ContextUnit,
         context: _ServicerContext,
     ) -> _typing.Union[_abc.Iterator[_contextunit_pb2.ContextUnit], _abc.AsyncIterator[_contextunit_pb2.ContextUnit]]:
-        """Get recent episodes for a user
-        Request payload: {tenant_id, user_id, limit?}
-        Response payload: {id, content, metadata, created_at}
-        """
+        """Run one bounded recent/older/session/trace-related projection."""
 
     @_abc_1.abstractmethod
-    def GetOldEpisodes(
-        self,
-        request: _contextunit_pb2.ContextUnit,
-        context: _ServicerContext,
-    ) -> _typing.Union[_abc.Iterator[_contextunit_pb2.ContextUnit], _abc.AsyncIterator[_contextunit_pb2.ContextUnit]]:
-        """Get episodes older than N days (retention / synthesis)
-        Request payload: {tenant_id, older_than_days?, limit?}
-        Response payload: {id, user_id, content, metadata, created_at, source_hash?, graph_run_id?}
-        """
-
-    @_abc_1.abstractmethod
-    def GetEpisodeStats(
+    def GetConversationHistoryStats(
         self,
         request: _contextunit_pb2.ContextUnit,
         context: _ServicerContext,
     ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
-        """Get episode count and date range for a tenant
-        Request payload: {tenant_id}
-        Response payload: {total, oldest, newest, tenant_id}
-        """
+        """Return content-free tenant statistics."""
 
     @_abc_1.abstractmethod
-    def RetentionCleanup(
+    def ApplyConversationRetention(
         self,
         request: _contextunit_pb2.ContextUnit,
         context: _ServicerContext,
     ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
-        """Delete old episodes for a tenant, optionally restricted to explicit IDs
-        Request payload: {tenant_id, older_than_days, episode_ids?}
-        Response payload: {deleted_count}
-        """
+        """Apply explicit, evidence-backed Conversation History retention."""
+
+    @_abc_1.abstractmethod
+    def ApplyExecutionTraceRetention(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Apply age-based terminal Execution Trace retention."""
 
     @_abc_1.abstractmethod
     def LogTrace(
@@ -809,28 +839,120 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         """
 
     @_abc_1.abstractmethod
-    def UpsertTaxonomy(
+    def ReserveExecutionTraceArtifact(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Protected per-provider-attempt model-I/O artifact lifecycle. Payloads are
+        closed ContextUnit contracts; immutable Trace JSON stores refs only.
+        """
+
+    @_abc_1.abstractmethod
+    def FinalizeExecutionTraceArtifact(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def GetExecutionTraceArtifact(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def ArchiveExecutionTraceArtifact(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def RestoreExecutionTraceArtifact(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def PurgeExecutionTraceArtifact(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def ReportFaultOccurrence(
         self,
         request: _contextunit_pb2.ContextUnit,
         context: _ServicerContext,
     ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
         """=========================================
-        Taxonomy Operations
+        UniversalDebugBus
         =========================================
 
-        Upsert taxonomy entry
-        Request payload: {tenant_id, domain, name, path, keywords?, metadata?}
+        Tenant-scoped negative-experience evidence only. Occurrences/cases are
+        separate from Execution Trace; no generic event API is introduced.
+        Request payload: {occurrence: FaultOccurrence}; response: {case: DebugCase}.
         """
 
     @_abc_1.abstractmethod
-    def GetTaxonomy(
+    def ReportMitigationAttempt(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Request payload: {attempt: MitigationAttempt}; response: {case: DebugCase}."""
+
+    @_abc_1.abstractmethod
+    def ReportRecoveryEvidence(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Request payload: {evidence: RecoveryEvidence}; response: {case: DebugCase}."""
+
+    @_abc_1.abstractmethod
+    def ResolveDebugCase(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Request payload: {case_id, expected_case_revision, resolution_id}; response: {case: DebugCase}."""
+
+    @_abc_1.abstractmethod
+    def ReopenDebugCase(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Request payload: {case_id, trigger_occurrence_id, expected_case_revision}; response: {case: DebugCase}."""
+
+    @_abc_1.abstractmethod
+    def GetDebugCase(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Request payload: {case_id, tenant_id?}; response: {case: DebugCase}.
+        Any tenant request is checked against verified caller authority.
+        """
+
+    @_abc_1.abstractmethod
+    def QueryDebugCases(
         self,
         request: _contextunit_pb2.ContextUnit,
         context: _ServicerContext,
     ) -> _typing.Union[_abc.Iterator[_contextunit_pb2.ContextUnit], _abc.AsyncIterator[_contextunit_pb2.ContextUnit]]:
-        """Get taxonomy entries
-        Request payload: {tenant_id, domain?}
-        Response payload: {domain, name, path, keywords, metadata}
+        """Request payload: {query: DebugCaseQuery}; tenant comes only from verified context.
+        One {case: DebugCase} per bounded response.
+        """
+
+    @_abc_1.abstractmethod
+    def QueryRecurringFaults(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_abc.Iterator[_contextunit_pb2.ContextUnit], _abc.AsyncIterator[_contextunit_pb2.ContextUnit]]:
+        """Request payload: {query: DebugCaseQuery}; recurrence requires fault_count >= 2.
+        Tenant comes only from verified context; one {case: DebugCase} per response.
         """
 
     @_abc_1.abstractmethod
@@ -916,6 +1038,19 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         """
 
     @_abc_1.abstractmethod
+    def ReportOutcomeObservation(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Store one immutable delayed outcome and let Brain resolve eligible learning.
+        Request: {observation: {trace_id, graph_run_id, verdict_digest,
+          observation_kind, source_authority, source_ref, occurred_at, idempotency_key}}
+        Response: {observation_id, trace_id, graph_run_id, policy_version,
+          decision, applied_synapse_ids}
+        """
+
+    @_abc_1.abstractmethod
     def MatchDuckDB(
         self,
         request: _contextunit_pb2.ContextUnit,
@@ -993,7 +1128,7 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         request: _contextunit_pb2.ContextUnit,
         context: _ServicerContext,
     ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
-        """Cross-tenant memory layer stats (episodes, knowledge node counts).
+        """Cross-tenant Conversation History, BrainCell, and embedding-job counts.
         Requires admin:read.
         tenant_id is optional only when token has admin:all; otherwise required.
         Request payload: {layer?, tenant_id?}
@@ -1006,7 +1141,7 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         request: _contextunit_pb2.ContextUnit,
         context: _ServicerContext,
     ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
-        """Distinct filter values from agent_traces (for admin UI dropdowns).
+        """Distinct filter values from execution traces (for admin UI dropdowns).
         Requires admin:read.
         tenant_id is optional only when token has admin:all; otherwise required.
         Request payload: {tenant_id?}
@@ -1024,32 +1159,6 @@ class BrainServiceServicer(metaclass=_abc_1.ABCMeta):
         tenant_id is optional only when token has admin:all; otherwise required.
         Request payload: {session_id, tenant_id?}
         Response payload: {traces: [...]}
-        """
-
-    @_abc_1.abstractmethod
-    def AdminGetRelatedEpisodes(
-        self,
-        request: _contextunit_pb2.ContextUnit,
-        context: _ServicerContext,
-    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
-        """Fetch episodic_events related to a trace by trace_id (cross-tenant).
-        Requires admin:read.
-        Tenant scope is resolved from the trace's own tenant_id (by-id lookup).
-        Request payload: {trace_id}
-        Response payload: {episodes: [...]}
-        """
-
-    @_abc_1.abstractmethod
-    def AdminSearchEpisodes(
-        self,
-        request: _contextunit_pb2.ContextUnit,
-        context: _ServicerContext,
-    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
-        """Cross-tenant episodic event search with pagination.
-        Requires admin:read.
-        tenant_id is optional only when token has admin:all; otherwise required.
-        Request payload: {tenant_id?, user_id?, session_id?, hours?, limit?, offset?}
-        Response payload: {events: [...], total: int}
         """
 
     @_abc_1.abstractmethod

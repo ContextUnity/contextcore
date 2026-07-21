@@ -81,6 +81,11 @@ class ProjectBootstrapConfig(BaseModel):
     worker_url: str = Field(default="", description="contextunity.worker gRPC URL")
     shield_url: str = Field(default="", description="contextunity.shield gRPC URL")
 
+    # Mandatory closed ToolExecutorStream protocol bounds (project-side C0).
+    delivery_resume_window_seconds: int = Field(default=300, ge=1, le=86_400)
+    delivery_max_cache_entries: int = Field(default=1024, ge=1, le=100_000)
+    delivery_max_message_bytes: int = Field(default=256 * 1024, ge=1024, le=4 * 1024 * 1024)
+
     def get_auth_backend(self, shield_enabled: bool = False) -> AuthBackend:
         """Get the authentication backend based on config.
 
@@ -131,11 +136,20 @@ class ProjectBootstrapConfig(BaseModel):
             url = get_env(env_var, "")
             env_values[field] = url or default
 
+        delivery_env = {
+            "delivery_resume_window_seconds": get_env("CU_FEDERATED_DELIVERY_RESUME_WINDOW_SECONDS", ""),
+            "delivery_max_cache_entries": get_env("CU_FEDERATED_DELIVERY_MAX_CACHE_ENTRIES", ""),
+            "delivery_max_message_bytes": get_env("CU_FEDERATED_DELIVERY_MAX_MESSAGE_BYTES", ""),
+        }
+        for field, value in delivery_env.items():
+            if value:
+                env_values[field] = value
+
         # Apply overrides last (explicit > env > defaults)
         env_values.update(overrides)
 
         try:
-            return cls(**env_values)
+            return cls.model_validate(env_values)
         except Exception as e:
             from contextunity.core.exceptions import ConfigurationError
 
@@ -146,8 +160,7 @@ class ProjectBootstrapConfig(BaseModel):
 
         Path convention:
           - Top-level (``manifest.secrets``):                         ``{env_var_name}``
-          - Policy Langfuse (``public_key_ref`` / etc.):              ``{env_var_name}``
-          - Per-node (``model_secret_ref``):                         ``{node_name}/model_secret_ref``
+                - Per-node (``model_secret_ref``):                         ``{node_name}/model_secret_ref``
           - Default model (policy):                                   ``{provider}/{model}``
           - Fallback models (policy):                                 ``{provider}/{model}``
 
@@ -227,22 +240,6 @@ class ProjectBootstrapConfig(BaseModel):
                         missing.append(f"{ref} (fallback {model})")
                     else:
                         secrets[model] = value
-
-            # 5. Langfuse (policy.langfuse): path suffix = env var name from each ref
-            lf_pol = policy.langfuse if policy else None
-            if lf_pol and lf_pol.tracing_enabled is not False:
-                for label, ref in (
-                    ("langfuse public_key_ref", lf_pol.public_key_ref),
-                    ("langfuse secret_key_ref", lf_pol.secret_key_ref),
-                    ("langfuse host_ref", lf_pol.host_ref),
-                ):
-                    if not ref:
-                        continue
-                    value = get_env(ref, "")
-                    if not value:
-                        missing.append(f"{ref} ({label})")
-                    else:
-                        secrets[ref] = value
 
         if missing:
             logger.warning(

@@ -11,7 +11,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import ClassVar, override
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class LogLevel(str, Enum):
@@ -65,6 +65,31 @@ class RedisConfig(BaseModel):
         return v
 
 
+class ServiceDegradationConfig(BaseModel):
+    """Default-off C0 contract for the derived service-degradation plane."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = False
+    environment: str = Field(
+        default="",
+        pattern=r"^(?:|[a-z][a-z0-9_-]{0,31})$",
+    )
+    snapshot_ttl_seconds: int = Field(default=60, ge=15, le=300)
+    refresh_interval_seconds: int = Field(default=10, ge=1, le=120)
+    connect_timeout_seconds: float = Field(default=0.5, ge=0.05, le=5.0)
+    io_timeout_seconds: float = Field(default=1.0, ge=0.05, le=5.0)
+    max_active_signals: int = Field(default=16, ge=1, le=32)
+    max_snapshot_bytes: int = Field(default=8192, ge=1024, le=65536)
+
+    @model_validator(mode="after")
+    def validate_refresh_window(self) -> "ServiceDegradationConfig":
+        """Require at least two refresh opportunities inside one snapshot TTL."""
+        if self.refresh_interval_seconds * 2 >= self.snapshot_ttl_seconds:
+            raise ValueError("service degradation refresh interval must be less than half the snapshot TTL")
+        return self
+
+
 class SharedSecurityConfig(BaseModel):
     """Security configuration for all ContextUnity services.
 
@@ -72,8 +97,8 @@ class SharedSecurityConfig(BaseModel):
 
     Token signing is ALWAYS active::
 
-        Open Source  → HmacBackend (CU_PROJECT_SECRET, stdlib only)
-        Enterprise   → SessionTokenBackend (Shield-signed, Ed25519)
+        No Shield  → HmacBackend (CU_PLATFORM_SECRET, stdlib only)
+        Shield     → SessionTokenBackend (Shield-signed, Ed25519)
     """
 
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="ignore")
@@ -87,13 +112,13 @@ class SharedSecurityConfig(BaseModel):
         default="data:write",
         description="Default write permission string",
     )
-    redis_secret_key: str = Field(
-        default="",
-        description="Deprecated. Redis no longer stores project key material.",
-    )
     project_secret: str = Field(
         default="",
-        description="Project HMAC secret for open-source token signing",
+        description="Per-project Shield bootstrap secret; temporary no-Shield alias only",
+    )
+    platform_secret: str = Field(
+        default="",
+        description="Shared platform HMAC root for no-Shield and local platform authority",
     )
 
 
@@ -128,6 +153,10 @@ class SharedConfig(BaseModel):
         default_factory=RedisConfig,
         description="Redis connection configuration",
     )
+    service_degradation: ServiceDegradationConfig = Field(
+        default_factory=ServiceDegradationConfig,
+        description="Default-off derived service-degradation projection",
+    )
 
     # Observability
     service_name: str | None = Field(
@@ -157,14 +186,19 @@ class SharedConfig(BaseModel):
     router_url: str = Field(default="localhost:50050", description="contextunity.router gRPC endpoint")
     brain_url: str = Field(default="localhost:50051", description="contextunity.brain gRPC endpoint")
     worker_url: str = Field(default="localhost:50052", description="contextunity.worker gRPC endpoint")
-    shield_url: str = Field(default="localhost:50054", description="contextunity.shield gRPC endpoint")
+    shield_url: str = Field(
+        default="", description="contextunity.shield gRPC endpoint (empty disables Shield authority)"
+    )
     temporal_host: str = Field(default="localhost:7233", description="Temporal server endpoint")
 
     # Bootstrap / Environment state
-    local_mode: bool = Field(default=False, description="Local development mode (SQLite, no external deps)")
+    local_mode: bool = Field(
+        default=False,
+        description="CLI-owned runtime fact; never loaded from environment or service configuration",
+    )
     dev_mode: bool = Field(
         default=False,
-        description="Developer mode: hot-reload (CLI) and Forge auto-session when CU_PROJECT_SECRET is set",
+        description="Developer tooling mode such as hot-reload; never authentication authority",
     )
     manifest_path: str = Field(default="", description="Path to contextunity.project.yaml")
     enable_passbyref: bool = Field(

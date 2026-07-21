@@ -20,13 +20,22 @@ class CotStep(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class SearchResult(BaseModel):
-    """Result from Brain semantic search."""
+class CellSearchResult(BaseModel):
+    """Canonical ranked BrainCell semantic/hybrid search result."""
 
-    id: str = ""
-    content: str = ""
-    score: float = 0.0
-    source_type: str = ""
+    id: str
+    tenant_id: str
+    cell_kind: str
+    content: str
+    score: float = Field(ge=0.0)
+    vector_score: float | None = None
+    text_score: float | None = None
+    source_type: str
+    source_ref: str | None = None
+    scope_path: str | None = None
+    content_hash: str | None = None
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    visibility: str = "tenant"
     metadata: JsonDict = Field(default_factory=dict)
 
 
@@ -41,8 +50,6 @@ class UnitMetrics(BaseModel):
     # Observability — set by Router / client for deeper traceability
     network_ms: int = 0  # gRPC round-trip latency (measured by caller)
     wall_ms: int = 0  # Router-side wall-clock execution time
-    langfuse_trace_id: str = ""  # Langfuse/OTel 32-hex trace ID
-    langfuse_trace_url: str = ""  # Direct Langfuse dashboard link
 
 
 class SecurityScopes(BaseModel):
@@ -53,8 +60,8 @@ class SecurityScopes(BaseModel):
 
 
 __all__ = [
+    "CellSearchResult",
     "CotStep",
-    "SearchResult",
     "UnitMetrics",
     "SecurityScopes",
 ]

@@ -8,12 +8,20 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
+import grpc
 from contextunity.core.grpc_client_errors import wrap_client_error
-from contextunity.core.sdk.payload import copy_wire_payload, get_bool, get_float, get_json_dict, get_str
+from contextunity.core.sdk.payload import (
+    copy_wire_payload,
+    get_bool,
+    get_float,
+    get_json_dict,
+    get_optional_str,
+    get_str,
+)
 from contextunity.core.types import ContextUnitPayload, JsonDict
 
 from ...contextunit import ContextUnit
-from ...models import SearchResult
+from ...models import CellSearchResult
 
 if TYPE_CHECKING:
     from .base import BrainClientBase as _MixinBase
@@ -24,47 +32,55 @@ else:
 class KnowledgeMixin(_MixinBase):
     """Mixin with core knowledge operations via gRPC."""
 
-    async def search(
+    async def search_cells(
         self,
-        tenant_id: str,
+        *,
         query_text: str,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
         limit: int = 5,
+        min_score: float = 0.0,
         source_types: list[str] | None = None,
-    ) -> list[SearchResult]:
-        """Search for similar content in Brain.
-
-        Args:
-            tenant_id: Tenant identifier for isolation.
-            query_text: Search query text.
-            limit: Maximum number of results.
-            source_types: Filter by source types (e.g., ["news_fact", "document"]).
-
-        Returns:
-            List of SearchResult with content, score, and metadata.
-        """
-        unit = ContextUnit(
-            payload={
-                "tenant_id": tenant_id,
-                "query_text": query_text,
-                "limit": limit,
-                "source_types": source_types or [],
-            },
-            provenance=["sdk:brain_client:search"],
-        )
-
+        scope_path: str | None = None,
+        metadata_filter: JsonDict | None = None,
+    ) -> list[CellSearchResult]:
+        """Run canonical semantic/hybrid BrainCell retrieval."""
+        payload: ContextUnitPayload = {
+            "query_text": query_text,
+            "limit": limit,
+            "min_score": min_score,
+            "source_types": source_types or [],
+        }
+        if tenant_id is not None:
+            payload["tenant_id"] = tenant_id
+        if user_id is not None:
+            payload["user_id"] = user_id
+        if scope_path is not None:
+            payload["scope_path"] = scope_path
+        if metadata_filter:
+            payload["metadata_filter"] = metadata_filter
+        unit = ContextUnit(payload=payload, provenance=["sdk:brain_client:search_cells"])
         req = unit.to_protobuf(self._cu_pb2)
-        grpc_metadata = self._get_metadata()
-        results: list[SearchResult] = []
-        with wrap_client_error("Brain", "Search"):
-            async for response_pb in self._stub.Search(req, metadata=grpc_metadata):
+        results: list[CellSearchResult] = []
+        with wrap_client_error("Brain", "SearchCells"):
+            async for response_pb in self._stub.SearchCells(req, metadata=self._get_metadata()):
                 result = ContextUnit.from_protobuf(response_pb)
                 p = result.payload
                 results.append(
-                    SearchResult(
+                    CellSearchResult(
                         id=get_str(p, "id"),
+                        tenant_id=get_str(p, "tenant_id"),
+                        cell_kind=get_str(p, "cell_kind"),
                         content=get_str(p, "content"),
                         score=get_float(p, "score"),
+                        vector_score=(get_float(p, "vector_score") if p.get("vector_score") is not None else None),
+                        text_score=(get_float(p, "text_score") if p.get("text_score") is not None else None),
                         source_type=get_str(p, "source_type"),
+                        source_ref=get_optional_str(p, "source_ref"),
+                        scope_path=get_optional_str(p, "scope_path"),
+                        content_hash=get_optional_str(p, "content_hash"),
+                        confidence=get_float(p, "confidence", 0.5),
+                        visibility=get_str(p, "visibility", "tenant"),
                         metadata=get_json_dict(p, "metadata"),
                     )
                 )
@@ -72,43 +88,29 @@ class KnowledgeMixin(_MixinBase):
                     break
         return results
 
-    async def upsert(
+    async def ingest_document(
         self,
-        tenant_id: str,
+        *,
         content: str,
         source_type: str,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
         metadata: JsonDict | None = None,
-        doc_id: str | None = None,
     ) -> str:
-        """Upsert content to Brain.
-
-        Args:
-            tenant_id: Tenant identifier.
-            content: Content to store.
-            source_type: Type of source (e.g., "document", "news_fact").
-            metadata: Additional metadata.
-            doc_id: Optional deterministic document ID for true upsert
-                    (overwrites existing node with same ID via ON CONFLICT).
-                    If None, a random UUID is generated.
-
-        Returns:
-            The ID of the stored item.
-        """
-        unit = ContextUnit(
-            payload={
-                "tenant_id": tenant_id,
-                "content": content,
-                "source_type": source_type,
-                "metadata": metadata or {},
-            },
-            provenance=["sdk:brain_client:upsert"],
-            unit_id=UUID(doc_id) if doc_id else uuid4(),
-        )
-
+        """Run Brain's explicit document enrichment and ingestion pipeline."""
+        payload: ContextUnitPayload = {
+            "content": content,
+            "source_type": source_type,
+            "metadata": metadata or {},
+        }
+        if tenant_id is not None:
+            payload["tenant_id"] = tenant_id
+        if user_id is not None:
+            payload["user_id"] = user_id
+        unit = ContextUnit(payload=payload, provenance=["sdk:brain_client:ingest_document"])
         req = unit.to_protobuf(self._cu_pb2)
-        grpc_metadata = self._get_metadata()
-        with wrap_client_error("Brain", "Upsert"):
-            response_pb = await self._stub.Upsert(req, metadata=grpc_metadata)
+        with wrap_client_error("Brain", "IngestDocument"):
+            response_pb = await self._stub.IngestDocument(req, metadata=self._get_metadata())
         result = ContextUnit.from_protobuf(response_pb)
         return get_str(result.payload, "id")
 
@@ -324,8 +326,35 @@ class KnowledgeMixin(_MixinBase):
             payload["user_id"] = user_id
         unit = ContextUnit(payload=payload, provenance=["sdk:brain_client:get_cell"])
         req = unit.to_protobuf(self._cu_pb2)
-        with wrap_client_error("Brain", "GetCell"):
+        try:
             response_pb = await self._stub.GetCell(req, metadata=self._get_metadata())
+        except grpc.RpcError as error:
+            if error.code() == grpc.StatusCode.NOT_FOUND:
+                return None
+            with wrap_client_error("Brain", "GetCell"):
+                raise
+        return copy_wire_payload(ContextUnit.from_protobuf(response_pb).payload)
+
+    async def delete_documentation_cells(
+        self,
+        *,
+        targets: list[JsonDict],
+        tenant_id: str | None = None,
+    ) -> ContextUnitPayload:
+        """Atomically delete exact documentation cells or return a version conflict."""
+        payload: ContextUnitPayload = {"targets": targets}
+        if tenant_id is not None:
+            payload["tenant_id"] = tenant_id
+        unit = ContextUnit(
+            payload=payload,
+            provenance=["sdk:brain_client:delete_documentation_cells"],
+        )
+        req = unit.to_protobuf(self._cu_pb2)
+        with wrap_client_error("Brain", "DeleteDocumentationCells"):
+            response_pb = await self._stub.DeleteDocumentationCells(
+                req,
+                metadata=self._get_metadata(),
+            )
         return copy_wire_payload(ContextUnit.from_protobuf(response_pb).payload)
 
 

@@ -13,10 +13,34 @@ import secrets
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import TypeAlias
 
 from .exceptions import ConfigurationError
 from .sdk import ContextUnit, SecurityScopes
 from .types import JsonValue
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectBound:
+    """Signed authority bound to one exact manifest project id."""
+
+    project_id: str
+
+    def __post_init__(self) -> None:
+        project_id = self.project_id.strip()
+        if not project_id:
+            raise ValueError("ProjectBound requires a non-empty project_id")
+        if ":" in project_id:
+            raise ValueError("ProjectBound project_id must not contain the kid delimiter ':'")
+        object.__setattr__(self, "project_id", project_id)
+
+
+@dataclass(frozen=True, slots=True)
+class PlatformBound:
+    """Explicit signed platform authority; never inferred from a null project."""
+
+
+ProjectBinding: TypeAlias = ProjectBound | PlatformBound
 
 
 @dataclass(frozen=True)
@@ -41,6 +65,7 @@ class ContextToken:
     """
 
     token_id: str
+    project_binding: ProjectBinding | None = None
     permissions: tuple[str, ...] = ()
     allowed_tenants: tuple[str, ...] = ()
     exp_unix: float | None = None
@@ -175,6 +200,7 @@ class TokenBuilder:
         user_ctx: dict[str, JsonValue],
         permissions: Iterable[str],
         ttl_s: float,
+        project_binding: ProjectBinding | None = None,
         allowed_tenants: Iterable[str] | None = None,
         user_id: str | None = None,
         agent_id: str | None = None,
@@ -190,6 +216,7 @@ class TokenBuilder:
             user_ctx: A dictionary containing user execution context details (reserved for future datalog facts).
             permissions: Capability strings representing granted permissions (e.g., `["catalog:read", "product:write"]`).
             ttl_s: Time-to-live duration in seconds.
+            project_binding: Signed project or platform authority carried by the token.
             allowed_tenants: Tenant identifiers this token is restricted to. Empty grants
                 no tenant access unless ``permissions`` includes ``admin:all``.
             user_id: The unique identity of the human user initiating the request. This field is the immutable source
@@ -210,6 +237,7 @@ class TokenBuilder:
 
         return ContextToken(
             token_id=token_id,
+            project_binding=project_binding,
             permissions=tuple(permissions),
             allowed_tenants=tuple(allowed_tenants or ()),
             exp_unix=exp_unix,
@@ -291,6 +319,7 @@ class TokenBuilder:
 
         return ContextToken(
             token_id=token.token_id,
+            project_binding=token.project_binding,
             permissions=perms,
             allowed_tenants=tenants,
             exp_unix=exp_unix,
@@ -365,7 +394,10 @@ class TokenBuilder:
 
 import threading  # noqa: E402
 
-_service_token_cache: dict[tuple[str, tuple[str, ...], tuple[str, ...]], ContextToken] = {}
+_service_token_cache: dict[
+    tuple[str, tuple[str, ...], tuple[str, ...], ProjectBinding | None],
+    ContextToken,
+] = {}
 _service_token_lock = threading.Lock()
 
 _DEFAULT_SERVICE_TTL = 3600  # 1 hour
@@ -409,6 +441,7 @@ def mint_service_token(
     permissions: Iterable[str],
     ttl_s: float = _DEFAULT_SERVICE_TTL,
     allowed_tenants: Iterable[str] = (),
+    project_binding: ProjectBinding | None = None,
 ) -> ContextToken:
     """Mint or return a cached service-to-service ContextToken.
 
@@ -441,7 +474,7 @@ def mint_service_token(
     """
     tenants = _tenant_scope_tuple(allowed_tenants)
     permission_tuple = tuple(permissions)
-    cache_key = (token_id, permission_tuple, tenants)
+    cache_key = (token_id, permission_tuple, tenants, project_binding)
 
     with _service_token_lock:
         _purge_expired_service_tokens()
@@ -451,6 +484,7 @@ def mint_service_token(
 
         token = ContextToken(
             token_id=token_id,
+            project_binding=project_binding,
             permissions=permission_tuple,
             allowed_tenants=tenants,
             exp_unix=time.time() + ttl_s,
@@ -470,6 +504,7 @@ def get_brain_service_token(
     caller: str,
     *,
     allowed_tenants: Iterable[str] = (),
+    project_binding: ProjectBinding | None = None,
 ) -> ContextToken:
     """Return a cached service→Brain ContextToken with caller-appropriate permissions.
 
@@ -494,11 +529,32 @@ def get_brain_service_token(
         client = BrainClient(host=endpoint, token=token)
     """
     permissions = brain_caller_permissions(caller)
+    if project_binding is None:
+        from .authz.context import get_auth_context
+
+        auth_context = get_auth_context()
+        if auth_context is not None:
+            project_binding = auth_context.project_binding
+        else:
+            from .sdk.identity import get_project_id
+
+            project_id = get_project_id()
+            if project_id:
+                project_binding = ProjectBound(project_id)
     return mint_service_token(
         f"{caller}-brain-service",
         permissions=permissions,
         allowed_tenants=allowed_tenants,
+        project_binding=project_binding,
     )
 
 
-__all__ = ["ContextToken", "TokenBuilder", "mint_service_token", "get_brain_service_token"]
+__all__ = [
+    "ContextToken",
+    "PlatformBound",
+    "ProjectBinding",
+    "ProjectBound",
+    "TokenBuilder",
+    "mint_service_token",
+    "get_brain_service_token",
+]

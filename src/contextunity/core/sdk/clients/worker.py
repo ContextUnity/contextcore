@@ -11,6 +11,10 @@ from typing import TYPE_CHECKING, ClassVar
 from uuid import UUID
 
 from contextunity.core.grpc_client_errors import wrap_client_error
+from contextunity.core.sdk.execution_trace_artifacts import (
+    ExecutionTraceArtifactArchiveReceipt,
+    ProtectedExecutionTraceArtifactEnvelope,
+)
 from contextunity.core.sdk.payload import copy_wire_payload
 from contextunity.core.sdk.types import UnaryContextUnitRpc
 from contextunity.core.types import ContextUnitPayload, JsonValue
@@ -219,6 +223,48 @@ class WorkerClient(_WorkerBase):
             rpc_name="ExecuteCode",
         )
         return copy_wire_payload(payload)
+
+    async def archive_execution_trace_artifact(
+        self,
+        envelope: ProtectedExecutionTraceArtifactEnvelope,
+        *,
+        offload_profile_id: str,
+        source_revision: int,
+    ) -> ExecutionTraceArtifactArchiveReceipt:
+        """Store one opaque protected envelope and return a URI-free receipt."""
+        payload = await self._call_unary(
+            self._stub.ArchiveExecutionTraceArtifact,
+            {
+                "envelope": envelope.model_dump(mode="json"),
+                "offload_profile_id": offload_profile_id,
+                "source_revision": source_revision,
+            },
+            rpc_name="ArchiveExecutionTraceArtifact",
+        )
+        return ExecutionTraceArtifactArchiveReceipt.model_validate(payload)
+
+    async def restore_execution_trace_artifact(
+        self,
+        receipt: ExecutionTraceArtifactArchiveReceipt,
+    ) -> ProtectedExecutionTraceArtifactEnvelope:
+        """Restore and validate one exact archived protected envelope."""
+        payload = await self._call_unary(
+            self._stub.RestoreExecutionTraceArtifact,
+            {"receipt": receipt.model_dump(mode="json")},
+            rpc_name="RestoreExecutionTraceArtifact",
+        )
+        return ProtectedExecutionTraceArtifactEnvelope.model_validate(payload)
+
+    async def purge_execution_trace_artifact_archive(
+        self,
+        receipt: ExecutionTraceArtifactArchiveReceipt,
+    ) -> None:
+        """Delete one exact archived ciphertext object."""
+        _ = await self._call_unary(
+            self._stub.PurgeExecutionTraceArtifactArchive,
+            {"receipt": receipt.model_dump(mode="json")},
+            rpc_name="PurgeExecutionTraceArtifactArchive",
+        )
 
 
 __all__ = ["WorkerClient"]

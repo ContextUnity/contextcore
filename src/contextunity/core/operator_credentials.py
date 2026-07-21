@@ -45,9 +45,10 @@ REMOTE_CREDENTIAL_KINDS: frozenset[str] = frozenset({KIND_SHIELD_SESSION})
 class CredentialProfile(TypedDict):
     token: str
     kind: str
-    project_id: str
     exp_unix: float
     minted_at: str
+    project_id: NotRequired[str]
+    binding: NotRequired[str]
     target: NotRequired[str]
     brain_url: NotRequired[str]
     allowed_tenants: NotRequired[list[str]]
@@ -119,12 +120,12 @@ def _parse_profile_entry(entry: object) -> CredentialProfile | None:
     token = entry.get("token")
     kind = entry.get("kind")
     project_id = entry.get("project_id")
+    binding = entry.get("binding")
     exp_unix = entry.get("exp_unix")
     minted_at = entry.get("minted_at")
     if not (
         isinstance(token, str)
         and isinstance(kind, str)
-        and isinstance(project_id, str)
         and isinstance(exp_unix, (int, float))
         and isinstance(minted_at, str)
     ):
@@ -132,10 +133,13 @@ def _parse_profile_entry(entry: object) -> CredentialProfile | None:
     profile = CredentialProfile(
         token=token,
         kind=kind,
-        project_id=project_id,
         exp_unix=float(exp_unix),
         minted_at=minted_at,
     )
+    if isinstance(project_id, str) and project_id.strip():
+        profile["project_id"] = project_id.strip()
+    if isinstance(binding, str) and binding in {"platform", "project"}:
+        profile["binding"] = binding
     target = entry.get("target")
     if isinstance(target, str) and target.strip():
         profile["target"] = target.strip()

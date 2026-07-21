@@ -90,6 +90,36 @@ class RouterServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
+        self.GetFaultSpoolStatus = channel.unary_unary(
+            "/contextunity.router.RouterService/GetFaultSpoolStatus",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.ListFaultSpoolRecords = channel.unary_unary(
+            "/contextunity.router.RouterService/ListFaultSpoolRecords",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.ReplayFaultSpool = channel.unary_unary(
+            "/contextunity.router.RouterService/ReplayFaultSpool",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.DiscardFaultSpoolRecord = channel.unary_unary(
+            "/contextunity.router.RouterService/DiscardFaultSpoolRecord",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.PurgeFaultSpoolTerminalRecords = channel.unary_unary(
+            "/contextunity.router.RouterService/PurgeFaultSpoolTerminalRecords",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
 
 
 class RouterServiceServicer(object):
@@ -106,7 +136,7 @@ class RouterServiceServicer(object):
         """Execute a single turn of an agent
         Request payload: {agent_id, input, config?}
         Tenant/user identity is derived from ContextToken (SPOT).
-        Response payload: {output, wall_ms?, langfuse_trace_id?, langfuse_trace_url?}
+        Response payload: {output, wall_ms?}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -186,16 +216,12 @@ class RouterServiceServicer(object):
         Project connects once and acts as remote executor for its tools.
         Uses existing gRPC connection — no new ports needed.
 
-        Flow:
-        1. Project → Router: {"action": "ready", "project_id": "nszu",
-        "tools": ["execute_medical_sql"]}
-        2. Router → Project: {"action": "execute", "tool": "execute_medical_sql",
-        "request_id": "abc", "args": {"sql": "SELECT ..."}}
-        3. Project → Router: {"action": "result", "request_id": "abc",
-        "columns": [...], "rows": [...], "row_count": N}
-        4. On error:
-        Project → Router: {"action": "error", "request_id": "abc",
-        "error": "timeout"}
+        Closed payload protocol: contextunity.tool-delivery/v1.
+        Project sends ExecutorReady, AcceptedAck, FinalDeliveryReceipt and heartbeat.
+        Router sends ExecutorRegistered, DeliveryRequest, DeliveryStatusRequest and keepalive.
+        Unknown versions, directions and legacy action maps fail closed. AcceptedAck does
+        not prove an effect was uncommitted; replay requires an adapter-authoritative
+        not_started receipt with replay_safe=true and the same idempotency identity.
 
         Security: Requires a ContextToken with "stream:executor" or
         "stream:executor:{project_id}" permission.
@@ -254,8 +280,42 @@ class RouterServiceServicer(object):
 
         Secrets are NEVER included in the response (sanitized server-side).
         Security: Requires "router:introspect" permission.
-        In CU_LOCAL_MODE, HMAC tokens are accepted even when Shield is primary.
+        In CLI-owned local runtime, platform HMAC is admitted on declared local surfaces.
         """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def GetFaultSpoolStatus(self, request, context):
+        """Router-local FaultSpool operator surface. Responses never contain tenant IDs,
+        fault payloads, raw exceptions, or filesystem paths. The caller reaches only
+        this Router instance's spool; Worker spools are not addressable here.
+        Security: status requires admin:read; replay/disposition require admin:write.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ListFaultSpoolRecords(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ReplayFaultSpool(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def DiscardFaultSpoolRecord(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def PurgeFaultSpoolTerminalRecords(self, request, context):
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
@@ -300,6 +360,31 @@ def add_RouterServiceServicer_to_server(servicer, server):
         ),
         "IntrospectRegistrations": grpc.unary_unary_rpc_method_handler(
             servicer.IntrospectRegistrations,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "GetFaultSpoolStatus": grpc.unary_unary_rpc_method_handler(
+            servicer.GetFaultSpoolStatus,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ListFaultSpoolRecords": grpc.unary_unary_rpc_method_handler(
+            servicer.ListFaultSpoolRecords,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ReplayFaultSpool": grpc.unary_unary_rpc_method_handler(
+            servicer.ReplayFaultSpool,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "DiscardFaultSpoolRecord": grpc.unary_unary_rpc_method_handler(
+            servicer.DiscardFaultSpoolRecord,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "PurgeFaultSpoolTerminalRecords": grpc.unary_unary_rpc_method_handler(
+            servicer.PurgeFaultSpoolTerminalRecords,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -547,6 +632,156 @@ class RouterService(object):
             request,
             target,
             "/contextunity.router.RouterService/IntrospectRegistrations",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def GetFaultSpoolStatus(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.router.RouterService/GetFaultSpoolStatus",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ListFaultSpoolRecords(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.router.RouterService/ListFaultSpoolRecords",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ReplayFaultSpool(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.router.RouterService/ReplayFaultSpool",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def DiscardFaultSpoolRecord(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.router.RouterService/DiscardFaultSpoolRecord",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def PurgeFaultSpoolTerminalRecords(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.router.RouterService/PurgeFaultSpoolTerminalRecords",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,

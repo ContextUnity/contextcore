@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextunity.core.config.models import SharedSecurityConfig
 from contextunity.core.exceptions import ConfigurationError
 from contextunity.core.permissions import service_session_permissions
-from contextunity.core.tokens import ContextToken
+from contextunity.core.tokens import ContextToken, ProjectBound
 
 from .hmac import HmacBackend
 from .registry import set_signing_backend
@@ -16,6 +16,7 @@ def configure_service_signing_backend(
     security: SharedSecurityConfig,
     *,
     project_id: str,
+    local_mode: bool,
     shield_enabled: bool,
     shield_url: str,
     service_name: str,
@@ -56,6 +57,7 @@ def configure_service_signing_backend(
             required_services={service_name: True},
             requested_token=ContextToken(
                 token_id=f"{service_name}-bootstrap",
+                project_binding=ProjectBound(project_id),
                 permissions=service_session_permissions(service_name),
                 allowed_tenants=allowed_tenants,
                 agent_id=f"service:{service_name}",
@@ -69,11 +71,24 @@ def configure_service_signing_backend(
             shield_url=shield_url,
         )
     else:
-        secret = security.project_secret.strip()
+        from contextunity.core.auth_posture import (
+            resolve_auth_runtime_posture,
+            resolve_platform_hmac_secret,
+        )
+
+        posture = resolve_auth_runtime_posture(
+            local_mode=local_mode,
+            shield_enabled=False,
+        )
+        secret = resolve_platform_hmac_secret(
+            posture,
+            platform_secret=security.platform_secret,
+            project_secret=security.project_secret,
+        )
         if not secret:
             raise ConfigurationError(
-                "CU_PROJECT_SECRET is required for local HMAC service authentication",
-                code="MISSING_PROJECT_SECRET",
+                "CU_PLATFORM_SECRET is required for no-Shield HMAC service authentication",
+                code="MISSING_PLATFORM_SECRET",
             )
         backend = HmacBackend(project_id=project_id, project_secret=secret)
 

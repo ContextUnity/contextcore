@@ -22,7 +22,7 @@ from .factory import (
     reset_core_config,
 )
 from .loader import SYSTEM_CONFIG_DIR, load_config_file, read_service_file
-from .models import LogLevel, ServiceConfig, SharedConfig, SharedSecurityConfig
+from .models import LogLevel, ServiceConfig, ServiceDegradationConfig, SharedConfig, SharedSecurityConfig
 from .paths import (
     DEFAULT_OPERATOR_FALLBACK_DIRS,
     default_operator_fallback_dirs,
@@ -36,6 +36,7 @@ __all__ = [
     "SharedConfig",
     "SharedSecurityConfig",
     "ServiceConfig",
+    "ServiceDegradationConfig",
     "LogLevel",
     # Factory
     "load_service_config",

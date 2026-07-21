@@ -401,8 +401,12 @@ class TestExtractToolNames:
             ((Permissions.ADMIN_ALL,), frozenset({"*"})),
             ((Permissions.BRAIN_READ, Permissions.MEMORY_WRITE), frozenset()),
             (
-                (Permissions.tool("recall_facts"), Permissions.tool("remember_episode"), Permissions.BRAIN_READ),
-                frozenset({"recall_facts", "remember_episode"}),
+                (
+                    Permissions.tool("recall_facts"),
+                    Permissions.tool("remember_conversation"),
+                    Permissions.BRAIN_READ,
+                ),
+                frozenset({"recall_facts", "remember_conversation"}),
             ),
         ],
         ids=["concrete-names", "wildcard", "admin-all", "no-tools", "builder-produced"],

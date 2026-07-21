@@ -25,7 +25,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Literal
 
-from ..tokens import ContextToken
+from ..tokens import ContextToken, PlatformBound, ProjectBinding, ProjectBound
 
 # ── ContextVar for async-safe propagation ────────────────────────
 
@@ -86,7 +86,8 @@ class VerifiedAuthContext:
     Attributes:
         token: The cryptographically verified ``ContextToken``.
         token_string: Raw serialized token string (for forwarding to downstream services).
-        project_id: Project extracted from the token's kid (e.g. ``"nszu"``).
+        project_binding: Signed binding resolved after cryptographic verification.
+        project_id: Exact project id for ``ProjectBound``; ``None`` for platform authority.
         caller_kind: Classification of the caller.
         effective_permissions: Post-expansion permission set (inheritance resolved).
         effective_tenants: Tenant IDs from the token.
@@ -95,6 +96,7 @@ class VerifiedAuthContext:
 
     token: ContextToken
     token_string: str
+    project_binding: ProjectBinding | None = None
     project_id: str | None = None
     caller_kind: Literal["project", "service", "user", "admin"] = "project"
     effective_permissions: tuple[str, ...] = ()
@@ -107,7 +109,7 @@ class VerifiedAuthContext:
         token: ContextToken,
         token_string: str,
         *,
-        project_id: str | None = None,
+        project_binding: ProjectBinding | None = None,
         caller_kind: Literal["project", "service", "user", "admin"] | None = None,
         active_tenant: str | None = None,
     ) -> VerifiedAuthContext:
@@ -118,7 +120,7 @@ class VerifiedAuthContext:
         Args:
             token: Verified ContextToken.
             token_string: Raw token string for forwarding.
-            project_id: Project ID from kid (optional).
+            project_binding: Post-verification binding. Defaults to the signed token field.
             caller_kind: Override caller classification (auto-detected if None).
             active_tenant: Explicit target tenant (optional).
         """
@@ -138,9 +140,15 @@ class VerifiedAuthContext:
         else:
             kind = caller_kind
 
+        binding = project_binding if project_binding is not None else token.project_binding
+        project_id = binding.project_id if isinstance(binding, ProjectBound) else None
+        if isinstance(binding, PlatformBound) and kind == "project":
+            kind = "admin" if token.has_permission("admin:all") else "user"
+
         return cls(
             token=token,
             token_string=token_string,
+            project_binding=binding,
             project_id=project_id,
             caller_kind=kind,
             effective_permissions=effective_permissions,

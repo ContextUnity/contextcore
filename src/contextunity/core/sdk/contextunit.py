@@ -144,8 +144,8 @@ class ContextUnit(BaseModel):
         unit = ContextUnit(
             payload={"tenant_id": "abc", "query_text": "climate solutions"},
         )
-        response_pb = await stub.Search(unit.to_protobuf(contextunit_pb2))
-        result = ContextUnit.from_protobuf(response_pb)
+        async for response_pb in stub.SearchCells(unit.to_protobuf(contextunit_pb2)):
+            result = ContextUnit.from_protobuf(response_pb)
     """
 
     unit_id: UUID = Field(default_factory=uuid4)

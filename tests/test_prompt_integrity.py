@@ -1,5 +1,7 @@
 """Tests for contextunity.core.prompt_integrity — signing and content-addressable versioning."""
 
+from copy import deepcopy
+
 import pytest
 from contextunity.core.sdk.prompt_integrity import compute_prompt_version, sign_prompt, verify_prompt
 from contextunity.core.signing import HmacBackend
@@ -129,7 +131,10 @@ class TestSignPromptIntegrityFailClosed:
         monkeypatch.setattr(
             cfg,
             "get_core_config",
-            lambda: SimpleNamespace(security=SimpleNamespace(project_secret=secret)),
+            lambda: SimpleNamespace(
+                local_mode=False,
+                security=SimpleNamespace(platform_secret=secret, project_secret=""),
+            ),
         )
 
     def test_prompts_without_secret_raise(self, monkeypatch):
@@ -137,7 +142,7 @@ class TestSignPromptIntegrityFailClosed:
         from contextunity.core.sdk.bootstrap.manifest import sign_prompt_integrity
 
         self._patch_secret(monkeypatch, "")
-        with pytest.raises(ConfigurationError, match="CU_PROJECT_SECRET"):
+        with pytest.raises(ConfigurationError, match="CU_PLATFORM_SECRET"):
             sign_prompt_integrity(self._manifest_with_prompt(), "proj-1")
 
     def test_no_prompts_without_secret_is_noop(self, monkeypatch):
@@ -145,8 +150,11 @@ class TestSignPromptIntegrityFailClosed:
 
         self._patch_secret(monkeypatch, "")
         manifest = {"router": {"graph": {"nodes": [{"name": "planner"}], "config": {}}}}
-        # No signable prompt present → nothing to sign, must not raise.
+        before = deepcopy(manifest)
+
         sign_prompt_integrity(manifest, "proj-1")
+
+        assert manifest == before
 
     def test_prompts_with_secret_are_signed(self, monkeypatch):
         from contextunity.core.sdk.bootstrap.manifest import sign_prompt_integrity

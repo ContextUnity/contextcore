@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import grpc
 import pytest
 
-os.environ["CU_PROJECT_SECRET"] = "test_secret"
+os.environ["CU_PLATFORM_SECRET"] = "test_secret"
 from contextunity.core.permissions import Permissions
 from contextunity.core.security import (
     ServicePermissionInterceptor,
@@ -26,12 +26,12 @@ from contextunity.core.tokens import ContextToken
 
 
 @pytest.fixture(autouse=True)
-def _project_secret(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Guarantee ``get_core_config().security.project_secret == "test_secret"``
+def _platform_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Guarantee ``get_core_config().security.platform_secret == "test_secret"``
     for every test in this file — not just when ``get_core_config()``'s
     process-wide singleton happens to still be uncached.
 
-    The module-level ``os.environ["CU_PROJECT_SECRET"] = "test_secret"``
+    The module-level ``os.environ["CU_PLATFORM_SECRET"] = "test_secret"``
     above only works if it runs *before* the first ``get_core_config()``
     call anywhere in the test session — env vars are read once, at
     construction time, and cached indefinitely afterward. If any other test
@@ -40,14 +40,32 @@ def _project_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     depends on collection/execution order and is not guaranteed — every test
     here that signs with ``HmacBackend("test_proj", "test_secret")`` and
     relies on verification resolving the *same* secret via
-    ``build_verifier_backend()``'s ``get_core_config().security.project_secret``
+    ``build_verifier_backend()``'s ``get_core_config().security.platform_secret``
     lookup fails with "HMAC signature verification failed", intermittently,
     depending on pytest-randomly's collection order. Found as a rare
     (~1-in-10 to 1-in-20 full-suite runs) flake.
     """
     from contextunity.core.config import get_core_config
 
-    monkeypatch.setattr(get_core_config().security, "project_secret", "test_secret")
+    security = get_core_config().security
+    monkeypatch.setattr(security, "platform_secret", "test_secret")
+    monkeypatch.setattr(security, "project_secret", "")
+
+
+def _enable_redis_for_revocation(
+    monkeypatch: pytest.MonkeyPatch,
+    config: object,
+    *,
+    url: str = "redis://localhost:6379/0",
+) -> None:
+    """Opt into Redis revocation path under unit isolation (REDIS_ENABLED=0).
+
+    ``is_token_revoked`` uses ``config.redis.url if config.redis.enabled else ""``.
+    Setting only ``url`` is a no-op when unit conftest left ``enabled=False``.
+    """
+    redis = getattr(config, "redis")
+    monkeypatch.setattr(redis, "enabled", True)
+    monkeypatch.setattr(redis, "url", url)
 
 
 # ── check_permission ────────────────────────────────────────────
@@ -129,7 +147,7 @@ class TestMaskTokenId:
 class TestHttpTokenVerification:
     """Tests for verified HTTP token extraction helpers."""
 
-    def test_build_verifier_backend_from_token_string_uses_project_secret(self, monkeypatch):
+    def test_build_verifier_backend_from_token_string_uses_platform_secret(self, monkeypatch):
         from contextunity.core.signing import HmacBackend
 
         backend = HmacBackend("test_proj", "test_secret")
@@ -142,7 +160,7 @@ class TestHttpTokenVerification:
 
         from contextunity.core.config import get_core_config
 
-        monkeypatch.setattr(get_core_config().security, "project_secret", "test_secret")
+        monkeypatch.setattr(get_core_config().security, "platform_secret", "test_secret")
 
         verifier = build_verifier_backend_from_token_string(token_str)
         assert verifier is not None
@@ -179,7 +197,7 @@ class TestHttpTokenVerification:
 
 # Test RPC map
 _TEST_RPC_MAP = {
-    "Search": Permissions.BRAIN_READ,
+    "SearchCells": Permissions.BRAIN_READ,
     "IngestDocument": Permissions.BRAIN_WRITE,
 }
 
@@ -231,6 +249,11 @@ _METADATA_KINDS = ("list", "tuple", "aio_metadata")
 class TestServicePermissionInterceptor:
     """Tests for the unified ServicePermissionInterceptor."""
 
+    def test_local_platform_hmac_is_fail_closed_by_default(self):
+        interceptor = ServicePermissionInterceptor(_TEST_RPC_MAP, service_name="Test")
+
+        assert interceptor._allow_local_platform_hmac is False
+
     @pytest.mark.asyncio
     async def test_health_check_skipped(self):
         """Health check RPCs bypass security even when enforced."""
@@ -272,13 +295,13 @@ class TestServicePermissionInterceptor:
                 grpc.StatusCode.PERMISSION_DENIED,
             ),
             (
-                "/test.Service/Search",
+                "/test.Service/SearchCells",
                 lambda: None,  # No token
                 "no token",
                 grpc.StatusCode.UNAUTHENTICATED,
             ),
             (
-                "/test.Service/Search",
+                "/test.Service/SearchCells",
                 lambda: ContextToken(token_id="wrong", permissions=(Permissions.TRACE_WRITE,)),
                 "missing permission: brain:read",
                 grpc.StatusCode.PERMISSION_DENIED,
@@ -337,7 +360,7 @@ class TestServicePermissionInterceptor:
         async def _continuation(details):
             return "handler"
 
-        details = _make_handler_call_details("/test.Service/Search", metadata)
+        details = _make_handler_call_details("/test.Service/SearchCells", metadata)
         result = await interceptor.intercept_service(_continuation, details)
         assert result == "handler", f"valid token denied for metadata kind={metadata_kind}"
 
@@ -386,7 +409,7 @@ class TestServicePermissionInterceptor:
 
         interceptor._build_denial_handler = AsyncMock(return_value="mock_denial_handler")
 
-        details = _make_handler_call_details("/test.Service/Search", metadata)
+        details = _make_handler_call_details("/test.Service/SearchCells", metadata)
         result = await interceptor.intercept_service(_continuation, details)
 
         assert result == "mock_denial_handler"
@@ -415,7 +438,7 @@ class TestServicePermissionInterceptor:
         async def _continuation(details):
             return "handler"
 
-        details = _make_handler_call_details("/test.Service/Search", metadata)
+        details = _make_handler_call_details("/test.Service/SearchCells", metadata)
         result = await interceptor.intercept_service(_continuation, details)
         assert result == "handler"
 
@@ -456,7 +479,7 @@ class TestServicePermissionInterceptor:
         from contextunity.core.config import get_core_config
 
         config = get_core_config()
-        monkeypatch.setattr(config.redis, "url", "redis://localhost:6379/0")
+        _enable_redis_for_revocation(monkeypatch, config)
 
         token = ContextToken(
             token_id=token_id,
@@ -468,7 +491,7 @@ class TestServicePermissionInterceptor:
         async def _continuation(details):
             return "handler"
 
-        details = _make_handler_call_details("/test.Service/Search", metadata)
+        details = _make_handler_call_details("/test.Service/SearchCells", metadata)
         result = await interceptor.intercept_service(_continuation, details)
 
         assert result == expected_result
@@ -548,7 +571,7 @@ class TestServicePermissionInterceptor:
         from contextunity.core.config import get_core_config
 
         config = get_core_config()
-        monkeypatch.setattr(config.redis, "url", "redis://localhost:6379/0")
+        _enable_redis_for_revocation(monkeypatch, config)
 
         token = ContextToken(
             token_id="revocable",
@@ -582,7 +605,7 @@ class TestServicePermissionInterceptor:
         from contextunity.core.config import get_core_config
 
         config = get_core_config()
-        monkeypatch.setattr(config.redis, "url", "redis://localhost:6379/0")
+        _enable_redis_for_revocation(monkeypatch, config)
 
         token = ContextToken(
             token_id="revocable",
@@ -641,7 +664,7 @@ class TestServicePermissionInterceptor:
         from contextunity.core.config import get_core_config
 
         config = get_core_config()
-        monkeypatch.setattr(config.redis, "url", "redis://localhost:6379/0")
+        _enable_redis_for_revocation(monkeypatch, config)
 
         token = ContextToken(
             token_id="session:proj-x:1000000000",
@@ -671,7 +694,7 @@ class TestServicePermissionInterceptor:
         from contextunity.core.config import get_core_config
 
         config = get_core_config()
-        monkeypatch.setattr(config.redis, "url", "redis://localhost:6379/0")
+        _enable_redis_for_revocation(monkeypatch, config)
 
         token = ContextToken(
             token_id="session:proj-y:2000000000",
@@ -708,7 +731,7 @@ class TestServicePermissionInterceptor:
         from contextunity.core.config import get_core_config
 
         config = get_core_config()
-        monkeypatch.setattr(config.redis, "url", "redis://localhost:6379/0")
+        _enable_redis_for_revocation(monkeypatch, config)
 
         # Both the bump (1000.900) and the token issue time (1000.950) truncate
         # to the same token_id timestamp "1000" via int(now) — the bug this
@@ -763,7 +786,7 @@ class TestServicePermissionInterceptor:
         from contextunity.core.config import get_core_config
 
         config = get_core_config()
-        monkeypatch.setattr(config.redis, "url", "redis://localhost:6379/0")
+        _enable_redis_for_revocation(monkeypatch, config)
 
         token = ContextToken(
             token_id="session:proj-z:1000000000",
@@ -836,15 +859,15 @@ class TestMetadataNormalization:
 class TestHmacFallbackSemantics:
     """Verify HMAC secret resolution in _build_verifier_backend.
 
-    v1alpha7 HMAC verification:
-      - HMAC bootstrap tokens use CU_PROJECT_SECRET directly
-      - missing CU_PROJECT_SECRET rejects
+    No-Shield HMAC verification:
+      - HMAC tokens use CU_PLATFORM_SECRET
+      - missing CU_PLATFORM_SECRET rejects
       - no discovery project-key store exists in the verifier path
     """
 
     @pytest.mark.asyncio
     async def test_hmac_uses_env_secret(self, monkeypatch):
-        """HMAC tokens resolve from CU_PROJECT_SECRET."""
+        """HMAC tokens resolve from CU_PLATFORM_SECRET."""
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
             service_name="Test",
@@ -853,7 +876,7 @@ class TestHmacFallbackSemantics:
         from contextunity.core.config import get_core_config
 
         config = get_core_config()
-        monkeypatch.setattr(config.security, "project_secret", "dev-secret-123")
+        monkeypatch.setattr(config.security, "platform_secret", "dev-secret-123")
 
         token_str = "unregistered-proj:hmac-v1.fakepayload.fakesig"
         backend = await interceptor._build_verifier_backend(token_str)
@@ -865,7 +888,7 @@ class TestHmacFallbackSemantics:
 
     @pytest.mark.asyncio
     async def test_hmac_without_env_secret_rejects(self, monkeypatch):
-        """Missing CU_PROJECT_SECRET rejects HMAC tokens."""
+        """Missing CU_PLATFORM_SECRET rejects HMAC tokens."""
         interceptor = ServicePermissionInterceptor(
             _TEST_RPC_MAP,
             service_name="Test",
@@ -874,7 +897,7 @@ class TestHmacFallbackSemantics:
         from contextunity.core.config import get_core_config
 
         config = get_core_config()
-        monkeypatch.setattr(config.security, "project_secret", "")
+        monkeypatch.setattr(config.security, "platform_secret", "")
 
         token_str = "registered-proj:hmac-v1.fakepayload.fakesig"
         backend = await interceptor._build_verifier_backend(token_str)

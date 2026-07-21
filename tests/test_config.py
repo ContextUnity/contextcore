@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 from contextunity.core import LogLevel, SharedConfig
-from contextunity.core.config import get_core_config, reset_core_config
+from contextunity.core.config import get_core_config, load_service_config, reset_core_config
+from contextunity.core.exceptions import ConfigurationError
 from contextunity.core.manifest.models import ContextUnityProject
 from contextunity.core.sdk.config import ProjectBootstrapConfig
 
@@ -23,13 +24,13 @@ class TestSharedConfig:
         assert config.router_url == "localhost:50050"
         assert config.brain_url == "localhost:50051"
         assert config.worker_url == "localhost:50052"
-        assert config.shield_url == "localhost:50054"
+        assert config.shield_url == ""
 
     def test_local_mode_preserves_config(self) -> None:
         """Test that local_mode does not override explicit config values."""
         config = SharedConfig(local_mode=True)
         # shield keeps default — local_mode does not force anything
-        assert config.shield_url == "localhost:50054"
+        assert config.shield_url == ""
         # Redis keeps its default (enabled=True) unless explicitly disabled
         assert config.redis.enabled is True
 
@@ -91,7 +92,7 @@ class TestSharedConfig:
     def test_extra_fields_forbidden(self) -> None:
         """Test that extra fields are forbidden."""
         with pytest.raises(Exception):  # Pydantic validation error
-            SharedConfig(extra_field="value")  # type: ignore[call-arg]
+            SharedConfig.model_validate({"extra_field": "value"})
 
 
 class TestGetCoreConfig:
@@ -99,11 +100,14 @@ class TestGetCoreConfig:
 
     def test_load_defaults(self, monkeypatch) -> None:
         """Test loading config with no environment variables."""
+        # Drop unit-isolation REDIS_ENABLED=0 so product defaults are visible.
+        monkeypatch.delenv("REDIS_ENABLED", raising=False)
         monkeypatch.delenv("REDIS_URL", raising=False)
         monkeypatch.delenv("LOG_LEVEL", raising=False)
         monkeypatch.delenv("CU_LOCAL_MODE", raising=False)
-        # Suppress YAML file reading to test pure defaults
+        # Suppress local files and dotenv loading to test pure product defaults.
         monkeypatch.setattr("contextunity.core.config.factory.read_service_file", lambda *_a, **_kw: None)
+        monkeypatch.setattr("contextunity.core.config.factory.load_dotenv_chain", lambda: None)
         reset_core_config()
         try:
             config = get_core_config()
@@ -119,6 +123,8 @@ class TestGetCoreConfig:
     def test_load_from_env(self, monkeypatch) -> None:
         """Test loading config from environment variables."""
         monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+        # Explicit enable — root conftest isolates unit runs with REDIS_ENABLED=0.
+        monkeypatch.setenv("REDIS_ENABLED", "1")
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
         monkeypatch.setenv("SERVICE_NAME", "test-service")
         monkeypatch.setenv("SERVICE_VERSION", "1.0.0")
@@ -133,6 +139,22 @@ class TestGetCoreConfig:
             assert config.service_version == "1.0.0"
         finally:
             reset_core_config()
+
+    def test_cu_local_mode_environment_cannot_activate_service_runtime(self, monkeypatch) -> None:
+        monkeypatch.setenv("CU_LOCAL_MODE", "1")
+        monkeypatch.setattr("contextunity.core.config.factory.read_service_file", lambda *_a, **_kw: None)
+        reset_core_config()
+        try:
+            assert get_core_config().local_mode is False
+        finally:
+            reset_core_config()
+
+    def test_service_config_rejects_local_mode_from_file(self, tmp_path) -> None:
+        config_path = tmp_path / "service.yml"
+        config_path.write_text("local_mode: true\n", encoding="utf-8")
+
+        with pytest.raises(ConfigurationError, match="CLI-owned runtime fact"):
+            load_service_config(SharedConfig, "test", config_path=str(config_path))
 
 
 class TestProjectBootstrapConfig:
@@ -231,69 +253,6 @@ class TestProjectBootstrapConfig:
 
         assert secrets["planner/model_secret_ref"] == "secret-b"
         assert "Per-node secret collision at planner/model_secret_ref" in caplog.text
-
-    def test_resolve_secrets_includes_policy_langfuse_refs(self, monkeypatch) -> None:
-        manifest = ContextUnityProject.model_validate(
-            {
-                "apiVersion": "contextunity/v1alpha8",
-                "kind": "ContextUnityProject",
-                "project": {"id": "proj", "name": "Project"},
-                "services": {"router": {"enabled": True}},
-                "router": {
-                    "default_graph": "g1",
-                    "graph": {
-                        "g1": {
-                            "template": "yaml:demo",
-                        },
-                    },
-                    "config": {
-                        "policy": {
-                            "models": {"llm": {"default": "openai/gpt-5-mini"}},
-                            "langfuse": {
-                                "tracing_enabled": True,
-                                "public_key_ref": "LF_PUB",
-                                "secret_key_ref": "LF_SEC",
-                            },
-                        },
-                    },
-                },
-            }
-        )
-        monkeypatch.setenv("LF_PUB", "pk-test")
-        monkeypatch.setenv("LF_SEC", "sk-test")
-
-        secrets = ProjectBootstrapConfig().resolve_secrets(manifest)
-
-        assert secrets["LF_PUB"] == "pk-test"
-        assert secrets["LF_SEC"] == "sk-test"
-
-    def test_resolve_secrets_skips_langfuse_when_tracing_disabled(self, monkeypatch) -> None:
-        manifest = ContextUnityProject.model_validate(
-            {
-                "apiVersion": "contextunity/v1alpha8",
-                "kind": "ContextUnityProject",
-                "project": {"id": "proj", "name": "Project"},
-                "services": {"router": {"enabled": True}},
-                "router": {
-                    "default_graph": "g1",
-                    "graph": {"g1": {"template": "yaml:demo"}},
-                    "config": {
-                        "policy": {
-                            "models": {"llm": {"default": "openai/gpt-5-mini"}},
-                            "langfuse": {
-                                "tracing_enabled": False,
-                                "public_key_ref": "LF_PUB",
-                            },
-                        },
-                    },
-                },
-            }
-        )
-        monkeypatch.delenv("LF_PUB", raising=False)
-
-        secrets = ProjectBootstrapConfig().resolve_secrets(manifest)
-
-        assert "LF_PUB" not in secrets
 
 
 class TestServiceConfigRegistry:

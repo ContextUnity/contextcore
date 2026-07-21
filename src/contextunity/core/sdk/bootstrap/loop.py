@@ -75,6 +75,9 @@ def bootstrap_loop(
     backend: AuthBackend | None = None,
     prompts: dict[str, str] | None = None,
     allowed_tenants: tuple[str, ...] = (),
+    delivery_resume_window_seconds: int = 300,
+    delivery_max_cache_entries: int = 1024,
+    delivery_max_message_bytes: int = 256 * 1024,
 ) -> None:
     """Main bootstrap loop: [Shield token] → [Shield sync] → register → stream loop.
 
@@ -94,6 +97,9 @@ def bootstrap_loop(
         backend: The authentication backend.
         prompts: Canonical node prompts to publish to Shield.
         allowed_tenants: Tenant scopes declared by the project manifest.
+        delivery_resume_window_seconds: Project idempotency/status retention window.
+        delivery_max_cache_entries: Maximum in-memory terminal delivery records.
+        delivery_max_message_bytes: Maximum serialized delivery message size.
     """
     import time
 
@@ -272,6 +278,10 @@ def bootstrap_loop(
         tool_handler=tool_handler,
         register_fn=re_register,
         backend=backend,
+        allowed_tenants=allowed_tenants,
+        resume_window_seconds=delivery_resume_window_seconds,
+        max_cache_entries=delivery_max_cache_entries,
+        max_message_bytes=delivery_max_message_bytes,
     )
 
 

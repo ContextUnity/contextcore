@@ -6,6 +6,12 @@ from typing import TYPE_CHECKING
 
 from contextunity.core.sdk.payload import get_json_dict, get_json_dict_list
 from contextunity.core.sdk.responses import MemoryLayerName
+from contextunity.core.trace_inspection import (
+    TraceInspection,
+    TraceInspectionPage,
+    TraceTerminalStatus,
+    validate_trace_terminal_status,
+)
 from contextunity.core.types import ContextUnitPayload, JsonDict
 
 if TYPE_CHECKING:
@@ -32,30 +38,56 @@ class BrainAdminMixin(_MixinBase):
         tenant_id: str | None = None,
         service: str | None = None,
         agent_id: str | None = None,
-        status: str | None = None,
+        status: TraceTerminalStatus | str | None = None,
         hours: int | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> ContextUnitPayload:
-        """Cross-tenant trace search."""
+        """Cross-tenant trace search with only storage-backed filters."""
+        if service is not None:
+            raise ValueError("service filter is unsupported by canonical Trace storage")
         wire: ContextUnitPayload = {"limit": limit, "offset": offset}
         if tenant_id is not None:
             wire["tenant_id"] = tenant_id
-        if service is not None:
-            wire["service"] = service
         if agent_id is not None:
             wire["agent_id"] = agent_id
         if status is not None:
-            wire["status"] = status
+            wire["status"] = validate_trace_terminal_status(status)
         if hours is not None:
             wire["hours"] = hours
         return await self._admin_call("AdminSearchTraces", wire)
 
+    async def search_trace_inspections(
+        self,
+        *,
+        tenant_id: str | None = None,
+        agent_id: str | None = None,
+        status: TraceTerminalStatus | str | None = None,
+        hours: int | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> TraceInspectionPage:
+        """Search using the closed operator-safe Trace projection."""
+        payload = await self.admin_search_traces(
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            status=status,
+            hours=hours,
+            limit=limit,
+            offset=offset,
+        )
+        return TraceInspectionPage.model_validate(payload)
+
     async def admin_get_trace_details(self, trace_id: str) -> JsonDict | None:
-        """Get full trace details by ID."""
+        """Get legacy full trace details by ID for existing admin consumers."""
         result = await self._admin_call("AdminGetTraceDetails", {"trace_id": trace_id})
         trace = get_json_dict(result, "trace")
         return trace or None
+
+    async def get_trace_inspection(self, trace_id: str) -> TraceInspection | None:
+        """Get the closed operator-safe Trace projection by ID."""
+        trace = await self.admin_get_trace_details(trace_id)
+        return TraceInspection.model_validate(trace) if trace is not None else None
 
     async def admin_get_system_analytics(
         self,
@@ -88,7 +120,7 @@ class BrainAdminMixin(_MixinBase):
         return get_json_dict(result, "layer_stats")
 
     async def get_filter_options(self, *, tenant_id: str | None = None) -> JsonDict:
-        """Distinct filter values from agent_traces."""
+        """Distinct filter values from execution traces."""
         wire: ContextUnitPayload = {}
         if tenant_id is not None:
             wire["tenant_id"] = tenant_id
@@ -107,33 +139,6 @@ class BrainAdminMixin(_MixinBase):
             wire["tenant_id"] = tenant_id
         result = await self._admin_call("AdminGetSessionTraces", wire)
         return get_json_dict_list(result, "traces")
-
-    async def get_related_episodes(self, trace_id: str) -> list[JsonDict]:
-        """Fetch episodic_events related to a trace."""
-        result = await self._admin_call("AdminGetRelatedEpisodes", {"trace_id": trace_id})
-        return get_json_dict_list(result, "episodes")
-
-    async def search_episodes(
-        self,
-        *,
-        tenant_id: str | None = None,
-        user_id: str | None = None,
-        session_id: str | None = None,
-        hours: int | None = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> ContextUnitPayload:
-        """Cross-tenant episodic event search."""
-        wire: ContextUnitPayload = {"limit": limit, "offset": offset}
-        if tenant_id is not None:
-            wire["tenant_id"] = tenant_id
-        if user_id is not None:
-            wire["user_id"] = user_id
-        if session_id is not None:
-            wire["session_id"] = session_id
-        if hours is not None:
-            wire["hours"] = hours
-        return await self._admin_call("AdminSearchEpisodes", wire)
 
     async def get_cells(
         self,

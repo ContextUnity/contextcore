@@ -27,7 +27,7 @@ Workspace: `packages/core/` (`src/contextunity/core/`).
 2. **Strict Dependency Bound**: Heavy dependencies (e.g., encryption backends, KMS clients) must be loaded lazily to keep the core package load times minimal.
 3. **Protobuf Evolution Policy**: If you modify any `.proto` file in `protos/`, you MUST immediately run:
    ```bash
-   uv run python scripts/build_protos.py
+   cd packages/core && bash compile_protos.sh
    ```
    Never modify generated `*_pb2.py` or `*_pb2_grpc.py` files directly.
 4. **Exception Hierarchy**: All exceptions must inherit from `ContextUnityError`. Map all gRPC endpoints to standard codes using the centralized `ErrorRegistry`.
@@ -48,7 +48,7 @@ Choose at most **1 primary skill** based on the target task:
 | Exceptions, registry, config schemas | `core-contract-change` (also read **`contract-boundaries`** for type touches) |
 | Security interceptors / Authz | `security-implementation` |
 | Implementation loop (Red-Green after ACDD or small fix) | `tdd` |
-| File add/move/delete | `mempalace-files-changed` |
+| File add/move/delete | Code Map refresh/query; never sync source into MemPalace |
 
 ## Workflow Routing (Slash Commands)
 

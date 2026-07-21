@@ -71,6 +71,24 @@ class WorkerServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
+        self.ArchiveExecutionTraceArtifact = channel.unary_unary(
+            "/contextunity.worker.WorkerService/ArchiveExecutionTraceArtifact",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.RestoreExecutionTraceArtifact = channel.unary_unary(
+            "/contextunity.worker.WorkerService/RestoreExecutionTraceArtifact",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.PurgeExecutionTraceArtifactArchive = channel.unary_unary(
+            "/contextunity.worker.WorkerService/PurgeExecutionTraceArtifactArchive",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
 
 
 class WorkerServiceServicer(object):
@@ -124,6 +142,26 @@ class WorkerServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def ArchiveExecutionTraceArtifact(self, request, context):
+        """Brain-only encrypted Trace artifact cold-offload lifecycle. Worker receives
+        opaque Shield ciphertext and returns storage receipts without content keys.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def RestoreExecutionTraceArtifact(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def PurgeExecutionTraceArtifactArchive(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
 
 def add_WorkerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -144,6 +182,21 @@ def add_WorkerServiceServicer_to_server(servicer, server):
         ),
         "RegisterSchedules": grpc.unary_unary_rpc_method_handler(
             servicer.RegisterSchedules,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ArchiveExecutionTraceArtifact": grpc.unary_unary_rpc_method_handler(
+            servicer.ArchiveExecutionTraceArtifact,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "RestoreExecutionTraceArtifact": grpc.unary_unary_rpc_method_handler(
+            servicer.RestoreExecutionTraceArtifact,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "PurgeExecutionTraceArtifactArchive": grpc.unary_unary_rpc_method_handler(
+            servicer.PurgeExecutionTraceArtifactArchive,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -276,6 +329,96 @@ class WorkerService(object):
             request,
             target,
             "/contextunity.worker.WorkerService/RegisterSchedules",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ArchiveExecutionTraceArtifact(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.worker.WorkerService/ArchiveExecutionTraceArtifact",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def RestoreExecutionTraceArtifact(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.worker.WorkerService/RestoreExecutionTraceArtifact",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def PurgeExecutionTraceArtifactArchive(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.worker.WorkerService/PurgeExecutionTraceArtifactArchive",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,

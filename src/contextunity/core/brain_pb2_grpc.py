@@ -52,8 +52,8 @@ class BrainServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.Search = channel.unary_stream(
-            "/contextunity.brain.BrainService/Search",
+        self.SearchCells = channel.unary_stream(
+            "/contextunity.brain.BrainService/SearchCells",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
@@ -70,14 +70,8 @@ class BrainServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.Upsert = channel.unary_unary(
-            "/contextunity.brain.BrainService/Upsert",
-            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=contextunit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-        self.QueryMemory = channel.unary_stream(
-            "/contextunity.brain.BrainService/QueryMemory",
+        self.IngestDocument = channel.unary_unary(
+            "/contextunity.brain.BrainService/IngestDocument",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
@@ -96,6 +90,12 @@ class BrainServiceStub(object):
         )
         self.GetCell = channel.unary_unary(
             "/contextunity.brain.BrainService/GetCell",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.DeleteDocumentationCells = channel.unary_unary(
+            "/contextunity.brain.BrainService/DeleteDocumentationCells",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
@@ -136,32 +136,32 @@ class BrainServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.AddEpisode = channel.unary_unary(
-            "/contextunity.brain.BrainService/AddEpisode",
+        self.AppendConversationRecord = channel.unary_unary(
+            "/contextunity.brain.BrainService/AppendConversationRecord",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.GetRecentEpisodes = channel.unary_stream(
-            "/contextunity.brain.BrainService/GetRecentEpisodes",
+        self.QueryConversationHistory = channel.unary_stream(
+            "/contextunity.brain.BrainService/QueryConversationHistory",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.GetOldEpisodes = channel.unary_stream(
-            "/contextunity.brain.BrainService/GetOldEpisodes",
+        self.GetConversationHistoryStats = channel.unary_unary(
+            "/contextunity.brain.BrainService/GetConversationHistoryStats",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.GetEpisodeStats = channel.unary_unary(
-            "/contextunity.brain.BrainService/GetEpisodeStats",
+        self.ApplyConversationRetention = channel.unary_unary(
+            "/contextunity.brain.BrainService/ApplyConversationRetention",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.RetentionCleanup = channel.unary_unary(
-            "/contextunity.brain.BrainService/RetentionCleanup",
+        self.ApplyExecutionTraceRetention = channel.unary_unary(
+            "/contextunity.brain.BrainService/ApplyExecutionTraceRetention",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
@@ -178,14 +178,86 @@ class BrainServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.UpsertTaxonomy = channel.unary_unary(
-            "/contextunity.brain.BrainService/UpsertTaxonomy",
+        self.ReserveExecutionTraceArtifact = channel.unary_unary(
+            "/contextunity.brain.BrainService/ReserveExecutionTraceArtifact",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.GetTaxonomy = channel.unary_stream(
-            "/contextunity.brain.BrainService/GetTaxonomy",
+        self.FinalizeExecutionTraceArtifact = channel.unary_unary(
+            "/contextunity.brain.BrainService/FinalizeExecutionTraceArtifact",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.GetExecutionTraceArtifact = channel.unary_unary(
+            "/contextunity.brain.BrainService/GetExecutionTraceArtifact",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.ArchiveExecutionTraceArtifact = channel.unary_unary(
+            "/contextunity.brain.BrainService/ArchiveExecutionTraceArtifact",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.RestoreExecutionTraceArtifact = channel.unary_unary(
+            "/contextunity.brain.BrainService/RestoreExecutionTraceArtifact",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.PurgeExecutionTraceArtifact = channel.unary_unary(
+            "/contextunity.brain.BrainService/PurgeExecutionTraceArtifact",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.ReportFaultOccurrence = channel.unary_unary(
+            "/contextunity.brain.BrainService/ReportFaultOccurrence",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.ReportMitigationAttempt = channel.unary_unary(
+            "/contextunity.brain.BrainService/ReportMitigationAttempt",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.ReportRecoveryEvidence = channel.unary_unary(
+            "/contextunity.brain.BrainService/ReportRecoveryEvidence",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.ResolveDebugCase = channel.unary_unary(
+            "/contextunity.brain.BrainService/ResolveDebugCase",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.ReopenDebugCase = channel.unary_unary(
+            "/contextunity.brain.BrainService/ReopenDebugCase",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.GetDebugCase = channel.unary_unary(
+            "/contextunity.brain.BrainService/GetDebugCase",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.QueryDebugCases = channel.unary_stream(
+            "/contextunity.brain.BrainService/QueryDebugCases",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.QueryRecurringFaults = channel.unary_stream(
+            "/contextunity.brain.BrainService/QueryRecurringFaults",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
@@ -222,6 +294,12 @@ class BrainServiceStub(object):
         )
         self.UpdateSynapseQ = channel.unary_unary(
             "/contextunity.brain.BrainService/UpdateSynapseQ",
+            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+            response_deserializer=contextunit__pb2.ContextUnit.FromString,
+            _registered_method=True,
+        )
+        self.ReportOutcomeObservation = channel.unary_unary(
+            "/contextunity.brain.BrainService/ReportOutcomeObservation",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
@@ -274,18 +352,6 @@ class BrainServiceStub(object):
             response_deserializer=contextunit__pb2.ContextUnit.FromString,
             _registered_method=True,
         )
-        self.AdminGetRelatedEpisodes = channel.unary_unary(
-            "/contextunity.brain.BrainService/AdminGetRelatedEpisodes",
-            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=contextunit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
-        self.AdminSearchEpisodes = channel.unary_unary(
-            "/contextunity.brain.BrainService/AdminSearchEpisodes",
-            request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
-            response_deserializer=contextunit__pb2.ContextUnit.FromString,
-            _registered_method=True,
-        )
         self.AdminGetCells = channel.unary_unary(
             "/contextunity.brain.BrainService/AdminGetCells",
             request_serializer=contextunit__pb2.ContextUnit.SerializeToString,
@@ -320,10 +386,10 @@ class BrainServiceServicer(object):
     =========================================
     """
 
-    def Search(self, request, context):
-        """Semantic/Hybrid search
-        Request payload: {tenant_id, query_text, limit?, source_types?}
-        Response payload: {id, content, score, source_type, metadata}
+    def SearchCells(self, request, context):
+        """Canonical BrainCell semantic/hybrid search.
+        Request payload: {tenant_id?, query_text, limit?, min_score?, source_types?, scope_path?, user_id?}
+        Response payload: {id, tenant_id, cell_kind, content, score, vector_score?, text_score?, source_type, source_ref?, scope_path?, content_hash?, confidence, visibility, metadata}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -347,19 +413,10 @@ class BrainServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def Upsert(self, request, context):
-        """Upsert content (generic)
-        Request payload: {tenant_id, content, source_type, metadata?}
+    def IngestDocument(self, request, context):
+        """Explicit document ingestion with enrichment/chunking semantics.
+        Request payload: {tenant_id?, content, source_type, metadata?, user_id?}
         Response payload: {id, success}
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def QueryMemory(self, request, context):
-        """Query memory (hybrid search with provenance)
-        Request payload: {tenant_id, content, filters?}
-        Response payload: {content, metadata, score}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -390,6 +447,16 @@ class BrainServiceServicer(object):
         """Get one BrainCell by id.
         Request payload: {tenant_id?, cell_id}
         Response payload: {id, tenant_id, cell_kind, content, metadata, source_type, source_ref, scope_path, content_hash, confidence, visibility, created_at, updated_at}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def DeleteDocumentationCells(self, request, context):
+        """Atomically delete bounded, exact documentation cells only when every
+        supplied id/content_hash target still matches in the resolved tenant.
+        Request payload: {tenant_id?, targets:[{cell_id, content_hash}]}
+        Response payload: {status: deleted|conflict, deleted_count, expected_count}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -433,54 +500,41 @@ class BrainServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def AddEpisode(self, request, context):
+    def AppendConversationRecord(self, request, context):
         """=========================================
         NewsEngine Operations
         =========================================
 
         =========================================
-        Episodic & Entity Memory
+        Conversation History
         =========================================
 
-        Add conversation episode
-        Request payload: {user_id, tenant_id, session_id?, content, metadata?}
+        Append one immutable conversation record with canonical hashes and idempotency.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def GetRecentEpisodes(self, request, context):
-        """Get recent episodes for a user
-        Request payload: {tenant_id, user_id, limit?}
-        Response payload: {id, content, metadata, created_at}
-        """
+    def QueryConversationHistory(self, request, context):
+        """Run one bounded recent/older/session/trace-related projection."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def GetOldEpisodes(self, request, context):
-        """Get episodes older than N days (retention / synthesis)
-        Request payload: {tenant_id, older_than_days?, limit?}
-        Response payload: {id, user_id, content, metadata, created_at, source_hash?, graph_run_id?}
-        """
+    def GetConversationHistoryStats(self, request, context):
+        """Return content-free tenant statistics."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def GetEpisodeStats(self, request, context):
-        """Get episode count and date range for a tenant
-        Request payload: {tenant_id}
-        Response payload: {total, oldest, newest, tenant_id}
-        """
+    def ApplyConversationRetention(self, request, context):
+        """Apply explicit, evidence-backed Conversation History retention."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def RetentionCleanup(self, request, context):
-        """Delete old episodes for a tenant, optionally restricted to explicit IDs
-        Request payload: {tenant_id, older_than_days, episode_ids?}
-        Response payload: {deleted_count}
-        """
+    def ApplyExecutionTraceRetention(self, request, context):
+        """Apply age-based terminal Execution Trace retention."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
@@ -509,22 +563,100 @@ class BrainServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def UpsertTaxonomy(self, request, context):
-        """=========================================
-        Taxonomy Operations
-        =========================================
-
-        Upsert taxonomy entry
-        Request payload: {tenant_id, domain, name, path, keywords?, metadata?}
+    def ReserveExecutionTraceArtifact(self, request, context):
+        """Protected per-provider-attempt model-I/O artifact lifecycle. Payloads are
+        closed ContextUnit contracts; immutable Trace JSON stores refs only.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def GetTaxonomy(self, request, context):
-        """Get taxonomy entries
-        Request payload: {tenant_id, domain?}
-        Response payload: {domain, name, path, keywords, metadata}
+    def FinalizeExecutionTraceArtifact(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def GetExecutionTraceArtifact(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ArchiveExecutionTraceArtifact(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def RestoreExecutionTraceArtifact(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def PurgeExecutionTraceArtifact(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ReportFaultOccurrence(self, request, context):
+        """=========================================
+        UniversalDebugBus
+        =========================================
+
+        Tenant-scoped negative-experience evidence only. Occurrences/cases are
+        separate from Execution Trace; no generic event API is introduced.
+        Request payload: {occurrence: FaultOccurrence}; response: {case: DebugCase}.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ReportMitigationAttempt(self, request, context):
+        """Request payload: {attempt: MitigationAttempt}; response: {case: DebugCase}."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ReportRecoveryEvidence(self, request, context):
+        """Request payload: {evidence: RecoveryEvidence}; response: {case: DebugCase}."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ResolveDebugCase(self, request, context):
+        """Request payload: {case_id, expected_case_revision, resolution_id}; response: {case: DebugCase}."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ReopenDebugCase(self, request, context):
+        """Request payload: {case_id, trigger_occurrence_id, expected_case_revision}; response: {case: DebugCase}."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def GetDebugCase(self, request, context):
+        """Request payload: {case_id, tenant_id?}; response: {case: DebugCase}.
+        Any tenant request is checked against verified caller authority.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def QueryDebugCases(self, request, context):
+        """Request payload: {query: DebugCaseQuery}; tenant comes only from verified context.
+        One {case: DebugCase} per bounded response.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def QueryRecurringFaults(self, request, context):
+        """Request payload: {query: DebugCaseQuery}; recurrence requires fault_count >= 2.
+        Tenant comes only from verified context; one {case: DebugCase} per response.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -600,6 +732,17 @@ class BrainServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def ReportOutcomeObservation(self, request, context):
+        """Store one immutable delayed outcome and let Brain resolve eligible learning.
+        Request: {observation: {trace_id, graph_run_id, verdict_digest,
+        observation_kind, source_authority, source_ref, occurred_at, idempotency_key}}
+        Response: {observation_id, trace_id, graph_run_id, policy_version,
+        decision, applied_synapse_ids}
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
     def MatchDuckDB(self, request, context):
         """=========================================
         DuckDB Operations
@@ -663,7 +806,7 @@ class BrainServiceServicer(object):
         raise NotImplementedError("Method not implemented!")
 
     def AdminGetMemoryLayerStats(self, request, context):
-        """Cross-tenant memory layer stats (episodes, knowledge node counts).
+        """Cross-tenant Conversation History, BrainCell, and embedding-job counts.
         Requires admin:read.
         tenant_id is optional only when token has admin:all; otherwise required.
         Request payload: {layer?, tenant_id?}
@@ -674,7 +817,7 @@ class BrainServiceServicer(object):
         raise NotImplementedError("Method not implemented!")
 
     def AdminGetFilterOptions(self, request, context):
-        """Distinct filter values from agent_traces (for admin UI dropdowns).
+        """Distinct filter values from execution traces (for admin UI dropdowns).
         Requires admin:read.
         tenant_id is optional only when token has admin:all; otherwise required.
         Request payload: {tenant_id?}
@@ -690,28 +833,6 @@ class BrainServiceServicer(object):
         tenant_id is optional only when token has admin:all; otherwise required.
         Request payload: {session_id, tenant_id?}
         Response payload: {traces: [...]}
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def AdminGetRelatedEpisodes(self, request, context):
-        """Fetch episodic_events related to a trace by trace_id (cross-tenant).
-        Requires admin:read.
-        Tenant scope is resolved from the trace's own tenant_id (by-id lookup).
-        Request payload: {trace_id}
-        Response payload: {episodes: [...]}
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def AdminSearchEpisodes(self, request, context):
-        """Cross-tenant episodic event search with pagination.
-        Requires admin:read.
-        tenant_id is optional only when token has admin:all; otherwise required.
-        Request payload: {tenant_id?, user_id?, session_id?, hours?, limit?, offset?}
-        Response payload: {events: [...], total: int}
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -742,8 +863,8 @@ class BrainServiceServicer(object):
 
 def add_BrainServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-        "Search": grpc.unary_stream_rpc_method_handler(
-            servicer.Search,
+        "SearchCells": grpc.unary_stream_rpc_method_handler(
+            servicer.SearchCells,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -757,13 +878,8 @@ def add_BrainServiceServicer_to_server(servicer, server):
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
-        "Upsert": grpc.unary_unary_rpc_method_handler(
-            servicer.Upsert,
-            request_deserializer=contextunit__pb2.ContextUnit.FromString,
-            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
-        ),
-        "QueryMemory": grpc.unary_stream_rpc_method_handler(
-            servicer.QueryMemory,
+        "IngestDocument": grpc.unary_unary_rpc_method_handler(
+            servicer.IngestDocument,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -779,6 +895,11 @@ def add_BrainServiceServicer_to_server(servicer, server):
         ),
         "GetCell": grpc.unary_unary_rpc_method_handler(
             servicer.GetCell,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "DeleteDocumentationCells": grpc.unary_unary_rpc_method_handler(
+            servicer.DeleteDocumentationCells,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -812,28 +933,28 @@ def add_BrainServiceServicer_to_server(servicer, server):
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
-        "AddEpisode": grpc.unary_unary_rpc_method_handler(
-            servicer.AddEpisode,
+        "AppendConversationRecord": grpc.unary_unary_rpc_method_handler(
+            servicer.AppendConversationRecord,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
-        "GetRecentEpisodes": grpc.unary_stream_rpc_method_handler(
-            servicer.GetRecentEpisodes,
+        "QueryConversationHistory": grpc.unary_stream_rpc_method_handler(
+            servicer.QueryConversationHistory,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
-        "GetOldEpisodes": grpc.unary_stream_rpc_method_handler(
-            servicer.GetOldEpisodes,
+        "GetConversationHistoryStats": grpc.unary_unary_rpc_method_handler(
+            servicer.GetConversationHistoryStats,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
-        "GetEpisodeStats": grpc.unary_unary_rpc_method_handler(
-            servicer.GetEpisodeStats,
+        "ApplyConversationRetention": grpc.unary_unary_rpc_method_handler(
+            servicer.ApplyConversationRetention,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
-        "RetentionCleanup": grpc.unary_unary_rpc_method_handler(
-            servicer.RetentionCleanup,
+        "ApplyExecutionTraceRetention": grpc.unary_unary_rpc_method_handler(
+            servicer.ApplyExecutionTraceRetention,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -847,13 +968,73 @@ def add_BrainServiceServicer_to_server(servicer, server):
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
-        "UpsertTaxonomy": grpc.unary_unary_rpc_method_handler(
-            servicer.UpsertTaxonomy,
+        "ReserveExecutionTraceArtifact": grpc.unary_unary_rpc_method_handler(
+            servicer.ReserveExecutionTraceArtifact,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
-        "GetTaxonomy": grpc.unary_stream_rpc_method_handler(
-            servicer.GetTaxonomy,
+        "FinalizeExecutionTraceArtifact": grpc.unary_unary_rpc_method_handler(
+            servicer.FinalizeExecutionTraceArtifact,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "GetExecutionTraceArtifact": grpc.unary_unary_rpc_method_handler(
+            servicer.GetExecutionTraceArtifact,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ArchiveExecutionTraceArtifact": grpc.unary_unary_rpc_method_handler(
+            servicer.ArchiveExecutionTraceArtifact,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "RestoreExecutionTraceArtifact": grpc.unary_unary_rpc_method_handler(
+            servicer.RestoreExecutionTraceArtifact,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "PurgeExecutionTraceArtifact": grpc.unary_unary_rpc_method_handler(
+            servicer.PurgeExecutionTraceArtifact,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ReportFaultOccurrence": grpc.unary_unary_rpc_method_handler(
+            servicer.ReportFaultOccurrence,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ReportMitigationAttempt": grpc.unary_unary_rpc_method_handler(
+            servicer.ReportMitigationAttempt,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ReportRecoveryEvidence": grpc.unary_unary_rpc_method_handler(
+            servicer.ReportRecoveryEvidence,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ResolveDebugCase": grpc.unary_unary_rpc_method_handler(
+            servicer.ResolveDebugCase,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ReopenDebugCase": grpc.unary_unary_rpc_method_handler(
+            servicer.ReopenDebugCase,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "GetDebugCase": grpc.unary_unary_rpc_method_handler(
+            servicer.GetDebugCase,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "QueryDebugCases": grpc.unary_stream_rpc_method_handler(
+            servicer.QueryDebugCases,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "QueryRecurringFaults": grpc.unary_stream_rpc_method_handler(
+            servicer.QueryRecurringFaults,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -884,6 +1065,11 @@ def add_BrainServiceServicer_to_server(servicer, server):
         ),
         "UpdateSynapseQ": grpc.unary_unary_rpc_method_handler(
             servicer.UpdateSynapseQ,
+            request_deserializer=contextunit__pb2.ContextUnit.FromString,
+            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
+        ),
+        "ReportOutcomeObservation": grpc.unary_unary_rpc_method_handler(
+            servicer.ReportOutcomeObservation,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
@@ -927,16 +1113,6 @@ def add_BrainServiceServicer_to_server(servicer, server):
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
             response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
         ),
-        "AdminGetRelatedEpisodes": grpc.unary_unary_rpc_method_handler(
-            servicer.AdminGetRelatedEpisodes,
-            request_deserializer=contextunit__pb2.ContextUnit.FromString,
-            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
-        ),
-        "AdminSearchEpisodes": grpc.unary_unary_rpc_method_handler(
-            servicer.AdminSearchEpisodes,
-            request_deserializer=contextunit__pb2.ContextUnit.FromString,
-            response_serializer=contextunit__pb2.ContextUnit.SerializeToString,
-        ),
         "AdminGetCells": grpc.unary_unary_rpc_method_handler(
             servicer.AdminGetCells,
             request_deserializer=contextunit__pb2.ContextUnit.FromString,
@@ -975,7 +1151,7 @@ class BrainService(object):
     """
 
     @staticmethod
-    def Search(
+    def SearchCells(
         request,
         target,
         options=(),
@@ -990,7 +1166,7 @@ class BrainService(object):
         return grpc.experimental.unary_stream(
             request,
             target,
-            "/contextunity.brain.BrainService/Search",
+            "/contextunity.brain.BrainService/SearchCells",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,
@@ -1065,7 +1241,7 @@ class BrainService(object):
         )
 
     @staticmethod
-    def Upsert(
+    def IngestDocument(
         request,
         target,
         options=(),
@@ -1080,37 +1256,7 @@ class BrainService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextunity.brain.BrainService/Upsert",
-            contextunit__pb2.ContextUnit.SerializeToString,
-            contextunit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def QueryMemory(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_stream(
-            request,
-            target,
-            "/contextunity.brain.BrainService/QueryMemory",
+            "/contextunity.brain.BrainService/IngestDocument",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,
@@ -1201,6 +1347,36 @@ class BrainService(object):
             request,
             target,
             "/contextunity.brain.BrainService/GetCell",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def DeleteDocumentationCells(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/DeleteDocumentationCells",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,
@@ -1395,7 +1571,7 @@ class BrainService(object):
         )
 
     @staticmethod
-    def AddEpisode(
+    def AppendConversationRecord(
         request,
         target,
         options=(),
@@ -1410,7 +1586,7 @@ class BrainService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextunity.brain.BrainService/AddEpisode",
+            "/contextunity.brain.BrainService/AppendConversationRecord",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,
@@ -1425,7 +1601,7 @@ class BrainService(object):
         )
 
     @staticmethod
-    def GetRecentEpisodes(
+    def QueryConversationHistory(
         request,
         target,
         options=(),
@@ -1440,7 +1616,7 @@ class BrainService(object):
         return grpc.experimental.unary_stream(
             request,
             target,
-            "/contextunity.brain.BrainService/GetRecentEpisodes",
+            "/contextunity.brain.BrainService/QueryConversationHistory",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,
@@ -1455,37 +1631,7 @@ class BrainService(object):
         )
 
     @staticmethod
-    def GetOldEpisodes(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_stream(
-            request,
-            target,
-            "/contextunity.brain.BrainService/GetOldEpisodes",
-            contextunit__pb2.ContextUnit.SerializeToString,
-            contextunit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def GetEpisodeStats(
+    def GetConversationHistoryStats(
         request,
         target,
         options=(),
@@ -1500,7 +1646,7 @@ class BrainService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextunity.brain.BrainService/GetEpisodeStats",
+            "/contextunity.brain.BrainService/GetConversationHistoryStats",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,
@@ -1515,7 +1661,7 @@ class BrainService(object):
         )
 
     @staticmethod
-    def RetentionCleanup(
+    def ApplyConversationRetention(
         request,
         target,
         options=(),
@@ -1530,7 +1676,37 @@ class BrainService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextunity.brain.BrainService/RetentionCleanup",
+            "/contextunity.brain.BrainService/ApplyConversationRetention",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ApplyExecutionTraceRetention(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/ApplyExecutionTraceRetention",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,
@@ -1605,7 +1781,7 @@ class BrainService(object):
         )
 
     @staticmethod
-    def UpsertTaxonomy(
+    def ReserveExecutionTraceArtifact(
         request,
         target,
         options=(),
@@ -1620,7 +1796,7 @@ class BrainService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/contextunity.brain.BrainService/UpsertTaxonomy",
+            "/contextunity.brain.BrainService/ReserveExecutionTraceArtifact",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,
@@ -1635,7 +1811,337 @@ class BrainService(object):
         )
 
     @staticmethod
-    def GetTaxonomy(
+    def FinalizeExecutionTraceArtifact(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/FinalizeExecutionTraceArtifact",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def GetExecutionTraceArtifact(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/GetExecutionTraceArtifact",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ArchiveExecutionTraceArtifact(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/ArchiveExecutionTraceArtifact",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def RestoreExecutionTraceArtifact(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/RestoreExecutionTraceArtifact",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def PurgeExecutionTraceArtifact(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/PurgeExecutionTraceArtifact",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ReportFaultOccurrence(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/ReportFaultOccurrence",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ReportMitigationAttempt(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/ReportMitigationAttempt",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ReportRecoveryEvidence(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/ReportRecoveryEvidence",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ResolveDebugCase(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/ResolveDebugCase",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ReopenDebugCase(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/ReopenDebugCase",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def GetDebugCase(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/GetDebugCase",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def QueryDebugCases(
         request,
         target,
         options=(),
@@ -1650,7 +2156,37 @@ class BrainService(object):
         return grpc.experimental.unary_stream(
             request,
             target,
-            "/contextunity.brain.BrainService/GetTaxonomy",
+            "/contextunity.brain.BrainService/QueryDebugCases",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def QueryRecurringFaults(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            "/contextunity.brain.BrainService/QueryRecurringFaults",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,
@@ -1831,6 +2367,36 @@ class BrainService(object):
             request,
             target,
             "/contextunity.brain.BrainService/UpdateSynapseQ",
+            contextunit__pb2.ContextUnit.SerializeToString,
+            contextunit__pb2.ContextUnit.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ReportOutcomeObservation(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/contextunity.brain.BrainService/ReportOutcomeObservation",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,
@@ -2071,66 +2637,6 @@ class BrainService(object):
             request,
             target,
             "/contextunity.brain.BrainService/AdminGetSessionTraces",
-            contextunit__pb2.ContextUnit.SerializeToString,
-            contextunit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def AdminGetRelatedEpisodes(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            "/contextunity.brain.BrainService/AdminGetRelatedEpisodes",
-            contextunit__pb2.ContextUnit.SerializeToString,
-            contextunit__pb2.ContextUnit.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def AdminSearchEpisodes(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            "/contextunity.brain.BrainService/AdminSearchEpisodes",
             contextunit__pb2.ContextUnit.SerializeToString,
             contextunit__pb2.ContextUnit.FromString,
             options,

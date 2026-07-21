@@ -8,6 +8,7 @@ from systemd ``LoadCredential`` paths with env fallback.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 # ── Environment helpers ──────────────────────────────────────────────
 
@@ -61,6 +62,21 @@ def set_env_default(name: str, value: str) -> None:
         value: The default value to set.
     """
     _ = os.environ.setdefault(name, value)
+
+
+def load_dotenv_chain(*, max_parents: int = 8) -> None:
+    """Load the nearest ``.env`` from cwd or its parents without overriding env."""
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+
+    cwd = Path.cwd()
+    for directory in (cwd, *list(cwd.parents)[:max_parents]):
+        env_file = directory / ".env"
+        if env_file.is_file():
+            _ = load_dotenv(env_file, override=False)
+            return
 
 
 # ── Secret reading (Tier 1 — systemd-creds) ─────────────────────────

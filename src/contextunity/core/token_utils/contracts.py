@@ -5,13 +5,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Protocol, TypedDict, TypeGuard, runtime_checkable
 
-from contextunity.core.types import is_json_dict, is_object_dict
+from contextunity.core.types import JsonDict, is_json_dict, is_object_dict
 
 
 class TokenPayloadDict(TypedDict, total=False):
     """JSON payload embedded in a signed ContextToken."""
 
     token_id: str
+    project_binding: JsonDict
     permissions: list[str]
     allowed_tenants: list[str]
     exp_unix: float
@@ -37,6 +38,7 @@ class TokenSessionDict(TypedDict, total=False):
     """Session-stored token payload (Django/Flask)."""
 
     token_id: str
+    project_binding: JsonDict
     permissions: list[str]
     allowed_tenants: list[str]
     exp_unix: float

@@ -112,13 +112,6 @@ class TestClassifyExceptionScenarioTable:
     def test_external_api_429_is_upstream_fault(self):
         assert classify_exception(_FakeHttpError(429)) == "upstream_fault"
 
-    def test_tenant_mismatch_is_policy_fault(self):
-        # Real integration point covered in
-        # services/brain/tests/unit/test_synapse_payloads.py (SynapseTenantMismatchError);
-        # this fake proves the same "already-declared fault_class" rule without
-        # packages/core depending on a downstream service's exceptions.
-        assert classify_exception(_FakeTenantMismatchError()) == "policy_fault"
-
     def test_expired_ref_is_reference_fault(self):
         error = ReferenceExpiredError("ref expired", ref_kind="blackboard")
         assert classify_exception(error) == "reference_fault"

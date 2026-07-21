@@ -63,7 +63,11 @@ if token.can_read(unit.security):
 from contextunity.core import BrainClient
 
 client = BrainClient(host="localhost:50051")
-results = await client.search(tenant_id="my_app", query_text="How does PostgreSQL work?", limit=5)
+results = await client.search_cells(
+    tenant_id="my_app",
+    query_text="How does PostgreSQL work?",
+    limit=5,
+)
 ```
 
 ### Federated Toolkits
@@ -107,9 +111,9 @@ src/contextunity/core/
 |----------|-------------|
 | `LOG_LEVEL` | Logging level (default: INFO) |
 | `REDIS_URL` | Redis connection for discovery |
-| `CU_PROJECT_SECRET` | HMAC secret (Open Source mode) |
+| `CU_PLATFORM_SECRET` | Shared HMAC root when Shield is disabled |
+| `CU_PROJECT_SECRET` | Per-project Shield bootstrap secret; temporary no-Shield alias only |
 | `CU_SHIELD_GRPC_URL` | Shield endpoint (Enterprise mode) |
-| `REDIS_SECRET_KEY` | Deprecated; no longer used |
 | `OTEL_ENABLED` | OpenTelemetry toggle |
 
 ---
@@ -120,10 +124,12 @@ Security is always enforced — no toggle needed. Backend auto-detected at boots
 
 | Backend | Mode | Trigger |
 |---------|------|---------|
-| `HmacBackend` | Open Source | `CU_PROJECT_SECRET` set |
-| `SessionTokenBackend` | Enterprise | Shield enabled in manifest |
+| `HmacBackend` | No Shield | `CU_PLATFORM_SECRET` set |
+| `SessionTokenBackend` | Shield | Shield enabled in manifest |
 
-Bootstrap computes prompt versions in both modes. OSS mode signs prompt text with HMAC; Shield mode publishes canonical prompts to Shield and registers only prompt references plus versions with Router.
+Bootstrap computes prompt versions in both modes. No-Shield mode signs prompt
+text with the platform HMAC root; Shield mode publishes canonical prompts to
+Shield and registers only prompt references plus versions with Router.
 
 ---
 

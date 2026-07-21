@@ -114,7 +114,7 @@ class BrainClientBase(_BrainBase):
             from contextunity.core.authz.context import get_auth_context
 
             auth_ctx = get_auth_context()
-            if auth_ctx and auth_ctx.token_string:
+            if auth_ctx and auth_ctx.token_string and (self._token is None or self._token == auth_ctx.token):
                 return (("authorization", f"Bearer {auth_ctx.token_string}"),)
         except Exception:
             pass

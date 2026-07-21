@@ -105,11 +105,11 @@ from .permissions import (
 )
 from .sdk import (
     BrainClient,
+    CellSearchResult,
     ContextUnit,
     CotStep,
     FederatedToolCallContext,
     RouterClient,
-    SearchResult,
     SecurityScopes,
     ShieldClient,
     UnitMetrics,
@@ -142,7 +142,15 @@ from .token_utils import (
     parse_token_string,
     serialize_token,
 )
-from .tokens import ContextToken, TokenBuilder, get_brain_service_token, mint_service_token
+from .tokens import (
+    ContextToken,
+    PlatformBound,
+    ProjectBinding,
+    ProjectBound,
+    TokenBuilder,
+    get_brain_service_token,
+    mint_service_token,
+)
 
 __all__ = [
     # Logging
@@ -170,9 +178,9 @@ __all__ = [
     "ShieldClient",
     "WorkerClient",
     "SecurityScopes",
+    "CellSearchResult",
     "CotStep",
     "UnitMetrics",
-    "SearchResult",
     "FederatedToolCallContext",
     # Exceptions (infrastructure)
     "ContextUnityError",
@@ -192,6 +200,9 @@ __all__ = [
     "grpc_sync_error_handler",
     # Tokens
     "ContextToken",
+    "PlatformBound",
+    "ProjectBinding",
+    "ProjectBound",
     "TokenBuilder",
     "mint_service_token",
     # Permissions

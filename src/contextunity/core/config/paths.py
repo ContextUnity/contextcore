@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from contextunity.core.config.env import get_env
+from contextunity.core.config.env import get_env, load_dotenv_chain
 
 _CONFIG_DIR_ENV_KEYS: tuple[str, ...] = ("CU_CONFIG_DIR", "CONTEXTUNITY_CONFIG_DIR")
 _OPERATOR_PROFILE_ENV_KEYS: tuple[str, ...] = ("CU_OPERATOR_PROFILE", "CU_PROFILE")
@@ -26,12 +26,14 @@ DEFAULT_OPERATOR_FALLBACK_DIRS = default_operator_fallback_dirs()
 def resolve_config_dir(*, fallback_dirs: Sequence[Path] | None = None) -> Path:
     """Return the effective ContextUnity config/state directory.
 
-    Resolution order:
+    The nearest ``.env`` is loaded first (without overriding process env), then
+    resolution follows:
 
     1. ``CU_CONFIG_DIR`` or ``CONTEXTUNITY_CONFIG_DIR`` env
     2. First existing directory in ``fallback_dirs`` (default: CWD/.contextunity, ~/.contextunity)
     3. ``~/.contextunity`` (default when nothing exists yet)
     """
+    load_dotenv_chain()
     for key in _CONFIG_DIR_ENV_KEYS:
         raw = get_env(key)
         if raw:
@@ -46,11 +48,13 @@ def resolve_config_dir(*, fallback_dirs: Sequence[Path] | None = None) -> Path:
 def resolve_credentials_path(*, fallback_dirs: Sequence[Path] | None = None) -> Path:
     """Return the operator credentials file path.
 
-    Resolution order:
+    The nearest ``.env`` is loaded first (without overriding process env), then
+    resolution follows:
 
     1. ``CU_OPERATOR_CREDENTIALS`` env (explicit file)
     2. ``{resolve_config_dir()}/credentials.json``
     """
+    load_dotenv_chain()
     explicit = get_env("CU_OPERATOR_CREDENTIALS")
     if explicit:
         return Path(explicit).expanduser()

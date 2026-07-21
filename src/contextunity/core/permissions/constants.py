@@ -42,6 +42,7 @@ class Permissions:
     SHIELD_POLICY_WRITE: str = "shield:policy:write"
     SHIELD_SECRETS_READ: str = "shield:secrets:read"
     SHIELD_SECRETS_WRITE: str = "shield:secrets:write"
+    SHIELD_TRACE_ARTIFACT_PROTECT: str = "shield:trace_artifacts:protect"
     # Privacy is in-Router. ``secure_node`` attenuates request tokens down to
     # these scopes when manifest nodes enable PII masking.
     PRIVACY_ALL: str = "privacy:*"
@@ -52,6 +53,7 @@ class Permissions:
     WORKER_SCHEDULE: str = "worker:schedule"
     WORKER_EXECUTE: str = "worker:execute"
     WORKER_READ: str = "worker:read"
+    WORKER_TRACE_ARTIFACT_ARCHIVE: str = "worker:trace_artifacts:archive"
 
     # ── Graph Access ────────────────────────────────────
     GRAPH_RAG: str = "graph:rag"
@@ -64,8 +66,11 @@ class Permissions:
     # ── Memory & Trace ──────────────────────────────────
     MEMORY_READ: str = "memory:read"
     MEMORY_WRITE: str = "memory:write"
+    CONVERSATION_READ: str = "conversation:read"
     TRACE_WRITE: str = "trace:write"
     TRACE_READ: str = "trace:read"
+    TRACE_ARTIFACT_READ: str = "trace:artifacts:read"
+    TRACE_ARTIFACT_LIFECYCLE: str = "trace:artifacts:lifecycle"
 
     # ── Tool Access ─────────────────────────────────────
     # Common categories (shortcuts for well-known tools)

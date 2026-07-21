@@ -13,12 +13,29 @@ Environment variables (read only when ``GRPC_TLS_ENABLED=true``):
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import grpc
 import grpc.aio
 from contextunity.core.parsing import json_dumps
+from contextunity.core.service_health.config import resolve_service_degradation_config
+from contextunity.core.service_health.grpc import install_standard_health
+from contextunity.core.service_health.models import (
+    GRPC_HEALTH_SERVICE_NAMES,
+    ServiceHealthTarget,
+    ServiceName,
+    ServiceRuntimeIdentity,
+)
+from contextunity.core.service_health.publisher import ServiceDegradationPublisher
+from contextunity.core.service_health.redis import create_redis_degradation_store
+from contextunity.core.service_health.runtime import (
+    ServiceRuntimeHandle,
+    install_service_runtime_handle,
+    remove_service_runtime_handle,
+)
 from contextunity.core.types import AsyncShutdownHook, JsonDict
 
 from .logging import get_contextunit_logger
@@ -31,6 +48,7 @@ __all__ = [
     "create_channel_sync",
     "create_server_credentials",
     "graceful_shutdown",
+    "redis_register_host",
     "start_grpc_server",
     "tls_enabled",
 ]
@@ -180,7 +198,12 @@ _GRPC_OPTIONS = [
 ]
 
 
-def create_channel(target: str, config: SharedConfig | None = None) -> grpc.aio.Channel:
+def create_channel(
+    target: str,
+    config: SharedConfig | None = None,
+    *,
+    tls_server_name_override: str | None = None,
+) -> grpc.aio.Channel:
     """Create an async gRPC channel — TLS if configured, insecure otherwise.
 
     For mTLS, reads the effective config's CA certificate path, and optionally
@@ -190,6 +213,8 @@ def create_channel(target: str, config: SharedConfig | None = None) -> grpc.aio.
         target: gRPC target (``host:port``).
         config: Optional service config. Pass this from long-running services so
             channel TLS matches the service config.
+        tls_server_name_override: TLS authority permitted only when the caller
+            already validated and pinned ``target``.
 
     Returns:
         ``grpc.aio.Channel`` — either secure or insecure.
@@ -219,8 +244,11 @@ def create_channel(target: str, config: SharedConfig | None = None) -> grpc.aio.
             root_certificates=ca_cert,
         )
 
+    options = list(_GRPC_OPTIONS)
+    if tls_server_name_override is not None:
+        options.append(("grpc.ssl_target_name_override", tls_server_name_override))
     logger.debug("Creating TLS channel to %s (mTLS=%s)", target, bool(client_paths))
-    return grpc.aio.secure_channel(target, credentials, options=_GRPC_OPTIONS)
+    return grpc.aio.secure_channel(target, credentials, options=options)
 
 
 def create_channel_sync(target: str, config: SharedConfig | None = None) -> grpc.Channel:
@@ -380,7 +408,7 @@ def _guess_local_ipv4() -> str:
         return "127.0.0.1"
 
 
-def _redis_register_host(bind_host: str) -> str:
+def redis_register_host(bind_host: str) -> str:
     """Host for Redis discovery endpoint — never ``0.0.0.0``."""
     normalized = bind_host.strip()
     if normalized and normalized not in _UNIVERSAL_BIND_HOSTS:
@@ -390,7 +418,7 @@ def _redis_register_host(bind_host: str) -> str:
 
 async def start_grpc_server(
     server: grpc.aio.Server,
-    service_type: str,
+    service_type: ServiceName,
     port: int | str,
     *,
     host: str = "",
@@ -398,56 +426,31 @@ async def start_grpc_server(
     tenants: list[str] | None = None,
     redis_url: str | None = None,
     config: SharedConfig | None = None,
-):
-    """Bind port, start server, register in Redis for discovery.
-
-    Combines ``bind_server_port()`` + ``server.start()`` + ``register_service()``
-    into one call.  Replaces ~10 lines of boilerplate in every service.
-
-    All discovery settings come from ``SharedConfig`` (loaded from env):
-
-    - ``host`` → gRPC bind address (default ``"0.0.0.0"``)
-    - ``REDIS_URL`` → Redis for heartbeat registration
-
-    Redis registration never publishes a bind-all address (``0.0.0.0``); when
-    ``host`` is bind-all, a routable local IP is inferred automatically.
-
-    Services with their own config can override ``instance_name`` and ``tenants``.
-    Without overrides, defaults to instance ``"default"`` and no tenant filter.
-
-    Args:
-        server: The ``grpc.aio.Server`` to start.
-        service_type: Service key (``"router"``, ``"brain"``, etc.).
-        port: Port number.
-        host: Bind host override (from ``ServiceConfig.host``).
-        instance_name: Override instance name (from service config).
-        tenants: Override tenant list (from service config).
-        redis_url: Optional explicit Redis connection URL.
-        config: Optional service config. This is the preferred production path;
-            it keeps TLS/discovery aligned with the loaded service YAML.
-
-    Returns:
-        Heartbeat task (pass to ``graceful_shutdown``).
-
-    Example::
-
-        heartbeat = await start_grpc_server(server, "router", 50052,
-                                             host=cfg.host,
-                                             instance_name=cfg.instance_name,
-                                             tenants=cfg.tenants)
-        await graceful_shutdown(server, "Router", heartbeat_task=heartbeat)
-    """
+) -> ServiceRuntimeHandle:
+    """Start one gRPC runtime with official health and exact registry identity."""
     from .discovery import register_service
 
     config = _effective_config(config)
     _validate_mesh_tls_config(config, service_name=service_type)
-
-    # Use explicit overrides or hardcoded defaults
+    health_service = GRPC_HEALTH_SERVICE_NAMES.get(service_type)
+    if health_service is None:
+        raise ValueError(f"unsupported gRPC service runtime: {service_type}")
     instance_name = instance_name or "default"
-    if tenants is None:
-        tenants = []
+    tenants = tenants or []
+    projection = resolve_service_degradation_config(config)
+    environment = projection.environment if projection is not None else ("local" if config.local_mode else "default")
+    identity = ServiceRuntimeIdentity(
+        environment=environment,
+        service=service_type,
+        instance=instance_name,
+        runtime_id=uuid4(),
+        target=ServiceHealthTarget(
+            transport="grpc",
+            health_service=health_service,
+        ),
+    )
+    health = install_standard_health(server, service=service_type)
 
-    # Bind + start
     bind_host = host or getattr(config, "host", "0.0.0.0") or "0.0.0.0"
     bind_server_port(
         server,
@@ -458,9 +461,9 @@ async def start_grpc_server(
         config=config,
     )
     await server.start()
+    await health.set_serving()
 
-    # Register in Redis for service discovery (never publish 0.0.0.0)
-    advertised_host = _redis_register_host(bind_host)
+    advertised_host = redis_register_host(bind_host)
     endpoint = f"{advertised_host}:{port}"
     actual_redis_url = redis_url or (config.redis.url if config.redis.enabled else None)
     heartbeat_task = await register_service(
@@ -470,28 +473,32 @@ async def start_grpc_server(
         redis_url=actual_redis_url,
         tenants=tenants,
         metadata={"port": int(port)},
+        identity=identity,
     )
-
-    # Log discovered service mesh peers
-    try:
-        from .discovery import discover_services
-
-        if not actual_redis_url:
-            logger.warning("Service mesh: REDIS_URL not set — discovery DISABLED")
-        else:
-            peers = discover_services(redis_url=actual_redis_url)
-            if peers:
-                peer_list = ", ".join(f"{p.service}={p.endpoint}" for p in peers if p.service != service_type)
-                if peer_list:
-                    logger.debug("Service mesh: %s", peer_list)
-                else:
-                    logger.debug("Service mesh: no other services registered yet")
-            else:
-                logger.debug("Service mesh: Redis reachable, no peers yet (normal on first start)")
-    except Exception:
-        pass  # Don't fail startup over discovery logging
-
-    return heartbeat_task
+    publisher = None
+    if projection is not None and heartbeat_task is not None:
+        try:
+            store = await create_redis_degradation_store(projection)
+            publisher = ServiceDegradationPublisher(
+                identity=identity,
+                store=store,
+                max_active_signals=projection.max_active_signals,
+            )
+            publisher.start(refresh_interval_seconds=projection.refresh_interval_seconds)
+        except Exception as exc:
+            logger.warning(
+                "Service degradation projection disabled for %s: %s",
+                service_type,
+                type(exc).__name__,
+            )
+    handle = ServiceRuntimeHandle(
+        identity=identity,
+        health=health,
+        heartbeat_task=heartbeat_task,
+        publisher=publisher,
+    )
+    install_service_runtime_handle(handle)
+    return handle
 
 
 # ---------------------------------------------------------------------------
@@ -511,48 +518,58 @@ async def graceful_shutdown(
     server: grpc.aio.Server,
     service_name: str = "service",
     *,
+    runtime_handle: ServiceRuntimeHandle | None = None,
     heartbeat_task: asyncio.Task[None] | None = None,
     before_stop: AsyncShutdownHook | None = None,
     grace: float = 2,
 ) -> None:
-    """Wait for SIGINT/SIGTERM, then gracefully stop the gRPC server.
-
-    Registers signal handlers and blocks until a signal is received. Once received,
-    runs the `before_stop` hook, stops the gRPC server, and cancels the heartbeat task.
-
-    Args:
-        server: The running async gRPC server instance.
-        service_name: A human-readable service name used in log messages.
-        heartbeat_task: Optional heartbeat/registration task to cancel on shutdown.
-        before_stop: Optional asynchronous callback to run before server teardown.
-        grace: Grace period in seconds allowing in-flight requests to complete.
-    """
+    """Drain one runtime, fence its derived state, then stop the gRPC server."""
     import signal
 
     loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
     _shutdown_events.append(stop_event)
-
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
             _ = loop.add_signal_handler(sig, _global_signal_handler)
         except NotImplementedError:
-            pass  # Windows
+            pass
 
     _ = await stop_event.wait()
     logger.info("Shutdown signal received, stopping %s...", service_name)
-
-    # Pre-shutdown hook (e.g. drain bidi streams)
-    if before_stop:
-        try:
-            await before_stop()
-        except Exception as exc:
-            logger.warning("Pre-shutdown hook error: %s", exc)
+    try:
+        if runtime_handle is not None and runtime_handle.health is not None:
+            try:
+                await runtime_handle.health.set_not_serving()
+            except Exception as exc:
+                logger.warning("Failed to mark %s not serving: %s", service_name, type(exc).__name__)
+        if before_stop:
+            try:
+                await before_stop()
+            except Exception as exc:
+                logger.warning("Pre-shutdown hook error: %s", exc)
+        if runtime_handle is not None and runtime_handle.publisher is not None:
+            try:
+                await runtime_handle.publisher.close()
+            except Exception as exc:
+                logger.warning("Failed to close %s degradation publisher: %s", service_name, type(exc).__name__)
+        task = runtime_handle.heartbeat_task if runtime_handle is not None else heartbeat_task
+        if task is not None:
+            _ = task.cancel()
+            try:
+                with suppress(asyncio.CancelledError):
+                    await task
+            except Exception as exc:
+                logger.warning("Failed to close %s registry heartbeat: %s", service_name, type(exc).__name__)
+    finally:
+        if runtime_handle is not None:
+            _ = remove_service_runtime_handle(
+                runtime_handle.identity.service,
+                runtime_id=runtime_handle.identity.runtime_id,
+            )
+        if stop_event in _shutdown_events:
+            _shutdown_events.remove(stop_event)
 
     logger.info("Stopping %s gRPC server (%ss grace)...", service_name, grace)
     await server.stop(grace=grace)
-
-    if heartbeat_task:
-        _ = heartbeat_task.cancel()
-
     logger.info("%s server stopped.", service_name)

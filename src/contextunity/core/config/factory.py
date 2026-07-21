@@ -21,7 +21,7 @@ from typing import Generic, TypeVar
 from contextunity.core.types import ConfigFactory, ConfigMapping, JsonDict, is_json_dict, is_json_value
 from pydantic import BaseModel
 
-from .env import get_bool_env, get_env, read_credential
+from .env import get_bool_env, get_env, load_dotenv_chain, read_credential
 from .loader import load_config_file, read_service_file
 from .models import SharedConfig
 
@@ -45,10 +45,17 @@ SHARED_ENV_MAPPINGS: dict[str, str] = {
     # gRPC
     "GRPC_REUSE_PORT": "grpc_reuse_port",
     # Redis connection and TLS settings.
-    # NOTE: REDIS_SECRET_KEY is deprecated. Project HMAC/session secrets are
-    # resolved from CU_PROJECT_SECRET / CU_SHIELD_GRPC_URL, not stored in Redis.
     "REDIS_ENABLED": "redis.enabled",
     "REDIS_URL": "redis.url",
+    # Derived service-degradation projection (C0 only)
+    "CU_SERVICE_DEGRADATION_ENABLED": "service_degradation.enabled",
+    "CU_SERVICE_DEGRADATION_ENVIRONMENT": "service_degradation.environment",
+    "CU_SERVICE_DEGRADATION_SNAPSHOT_TTL_SECONDS": "service_degradation.snapshot_ttl_seconds",
+    "CU_SERVICE_DEGRADATION_REFRESH_INTERVAL_SECONDS": "service_degradation.refresh_interval_seconds",
+    "CU_SERVICE_DEGRADATION_CONNECT_TIMEOUT_SECONDS": "service_degradation.connect_timeout_seconds",
+    "CU_SERVICE_DEGRADATION_IO_TIMEOUT_SECONDS": "service_degradation.io_timeout_seconds",
+    "CU_SERVICE_DEGRADATION_MAX_ACTIVE_SIGNALS": "service_degradation.max_active_signals",
+    "CU_SERVICE_DEGRADATION_MAX_SNAPSHOT_BYTES": "service_degradation.max_snapshot_bytes",
     # Observability
     "SERVICE_NAME": "service_name",
     "SERVICE_VERSION": "service_version",
@@ -69,13 +76,13 @@ SHARED_ENV_MAPPINGS: dict[str, str] = {
     "TEMPORAL_HOST": "temporal_host",
     # Bootstrap
     "CU_MANIFEST_PATH": "manifest_path",
-    "CU_LOCAL_MODE": "local_mode",
     "DEV_MODE": "dev_mode",
     "CU_ENABLE_PASSBYREF": "enable_passbyref",
     "CU_PASSBYREF_TTL_SECONDS": "passbyref_ttl_seconds",
     "CU_PASSBYREF_THRESHOLD_BYTES": "passbyref_threshold_bytes",
     "CU_BLACKBOARD_PRUNE_INTERVAL_SECONDS": "blackboard_prune_interval_seconds",
     # Security (systemd-creds on prod, env fallback on dev)
+    "CU_PLATFORM_SECRET": "security.platform_secret",
     "CU_PROJECT_SECRET": "security.project_secret",
 }
 
@@ -135,21 +142,6 @@ def _resolve_mappings(
             _set_path(kwargs, field_path, value)
 
 
-def _load_dotenv_chain(*, max_parents: int = 8) -> None:
-    """Load the nearest ``.env`` from cwd, then walk up (monorepo subdir runs)."""
-    try:
-        from dotenv import load_dotenv
-    except ImportError:
-        return
-
-    cwd = Path.cwd()
-    for directory in (cwd, *list(cwd.parents)[:max_parents]):
-        env_file = directory / ".env"
-        if env_file.is_file():
-            _ = load_dotenv(env_file, override=False)
-            return
-
-
 def load_service_config(
     cls: type[_T],
     service_name: str,
@@ -160,7 +152,7 @@ def load_service_config(
     fallback_dirs: list[Path] | None = None,
 ) -> _T:
     """Build a service config from YAML file + env/creds overrides."""
-    _load_dotenv_chain()
+    load_dotenv_chain()
 
     # Legacy alias used in older local .env files.
     if not os.environ.get("CU_CONFIG_DIR") and os.environ.get("CONTEXTUNITY_CONFIG_DIR"):
@@ -174,6 +166,14 @@ def load_service_config(
         else read_service_file(service_name, fallback_dirs=fallback_dirs)
     )
     if file_data:
+        if "local_mode" in file_data:
+            from ..exceptions import ConfigurationError
+
+            raise ConfigurationError(
+                "local_mode is a CLI-owned runtime fact and cannot be set in service configuration; "
+                "use `contextunity local ...` for the local runtime",
+                code="CONFIGURATION_ERROR",
+            )
         _ = _deep_merge(kwargs, file_data)
 
     _resolve_mappings(kwargs, SHARED_ENV_MAPPINGS)

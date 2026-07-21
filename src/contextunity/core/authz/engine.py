@@ -139,6 +139,19 @@ def authorize(
         "agent_id": token.agent_id or "",
     }
 
+    if registration_project_id:
+        from ..tokens import ProjectBound
+
+        binding = auth.project_binding if isinstance(auth, VerifiedAuthContext) else token.project_binding
+        if not isinstance(binding, ProjectBound) or binding.project_id != registration_project_id:
+            return AuthzDecision(
+                allowed=False,
+                reason=f"Token project binding does not match registration project '{registration_project_id}'",
+                effective_permissions=effective_perms,
+                effective_tenant=resolved_tenant,
+                audit_tags=audit,
+            )
+
     # ── Check 1: Token expiry ────────────────────────────
     if token.is_expired():
         return AuthzDecision(

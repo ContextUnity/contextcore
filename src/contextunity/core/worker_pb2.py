@@ -18,7 +18,7 @@ _sym_db = _symbol_database.Default()
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b"\n\x0cworker.proto\x12\x13\x63ontextunity.worker\x1a\x11\x63ontextunit.proto2\xd5\x02\n\rWorkerService\x12O\n\rStartWorkflow\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12O\n\rGetTaskStatus\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12M\n\x0b\x45xecuteCode\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12S\n\x11RegisterSchedules\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnitb\x06proto3"
+    b'\n\x0cworker.proto\x12\x13\x63ontextunity.worker\x1a\x11\x63ontextunit.proto2\xfd\x04\n\rWorkerService\x12O\n\rStartWorkflow\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12O\n\rGetTaskStatus\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12M\n\x0b\x45xecuteCode\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12S\n\x11RegisterSchedules\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12_\n\x1d\x41rchiveExecutionTraceArtifact\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12_\n\x1dRestoreExecutionTraceArtifact\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnit\x12\x64\n"PurgeExecutionTraceArtifactArchive\x12\x1e.contextunity.core.ContextUnit\x1a\x1e.contextunity.core.ContextUnitb\x06proto3'
 )
 
 _globals = globals()
@@ -27,5 +27,5 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "worker_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
     DESCRIPTOR._loaded_options = None
     _globals["_WORKERSERVICE"]._serialized_start = 57
-    _globals["_WORKERSERVICE"]._serialized_end = 398
+    _globals["_WORKERSERVICE"]._serialized_end = 694
 # @@protoc_insertion_point(module_scope)

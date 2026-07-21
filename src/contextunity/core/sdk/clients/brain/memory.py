@@ -1,20 +1,25 @@
-"""Memory methods - episodic events and retention.
+"""Conversation History, Blackboard, and retention methods.
 
 All operations are delegated to the Brain gRPC service.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from datetime import datetime
+from typing import TYPE_CHECKING, Literal
+from uuid import UUID
 
 from contextunity.core.grpc_client_errors import wrap_client_error
-from contextunity.core.sdk.payload import (
-    copy_wire_payload,
-    get_int,
-    get_json_dict,
-    get_str,
+from contextunity.core.sdk.conversation import (
+    ConversationAppendReceipt,
+    ConversationHistoryStats,
+    ConversationKind,
+    ConversationProjection,
+    ConversationRecord,
+    ConversationRetentionReceipt,
+    ConversationRole,
 )
-from contextunity.core.sdk.responses import EpisodeRecord
+from contextunity.core.sdk.payload import copy_wire_payload, get_int
 from contextunity.core.types import ContextUnitPayload, JsonDict
 
 from ...contextunit import ContextUnit
@@ -26,97 +31,95 @@ else:
 
 
 class MemoryMixin(_MixinBase):
-    """Mixin with episodic and entity memory operations via gRPC."""
+    """Mixin with Conversation History and Blackboard operations via gRPC."""
 
     # =========================================
-    # Episodic Memory
+    # Conversation History
     # =========================================
 
-    async def add_episode(
+    async def append_conversation_record(
         self,
         *,
-        tenant_id: str,
-        user_id: str | None = None,
-        content: str,
-        session_id: str | None = None,
-        metadata: JsonDict | None = None,
-    ) -> str:
-        """Add a conversation episode to Brain's episodic memory.
-
-        Args:
-            tenant_id: Tenant identifier for isolation.
-            user_id: User identifier.
-            content: Episode content (conversation summary/note).
-            session_id: Optional session identifier.
-            metadata: Additional metadata.
-
-        Returns:
-            The ID of the stored episode.
-        """
-        unit = ContextUnit(
-            payload={
-                "tenant_id": tenant_id,
-                "user_id": user_id,
-                "content": content,
-                "session_id": session_id or "",
-                "metadata": metadata or {},
-            },
-            provenance=["sdk:brain_client:add_episode"],
-        )
-
-        req = unit.to_protobuf(self._cu_pb2)
-        grpc_metadata = self._get_metadata()
-        with wrap_client_error("Brain", "AddEpisode"):
-            response_pb = await self._stub.AddEpisode(req, metadata=grpc_metadata)
-        result = ContextUnit.from_protobuf(response_pb)
-        return str(result.unit_id)
-
-    async def get_recent_episodes(
-        self,
-        *,
+        record_id: UUID,
         tenant_id: str,
         user_id: str,
-        limit: int = 5,
-    ) -> list[EpisodeRecord]:
-        """Get recent episodes for a user from Brain's episodic memory.
-
-        Args:
-            tenant_id: Tenant identifier for isolation.
-            user_id: User identifier.
-            limit: Maximum number of episodes to return.
-
-        Returns:
-            List of episode dicts with id, content, metadata, created_at.
-        """
+        session_id: str | None,
+        role: ConversationRole,
+        kind: ConversationKind,
+        content: str,
+        content_hash: str,
+        source_hash: str,
+        graph_run_id: UUID | None,
+        metadata_version: Literal[1] = 1,
+        idempotency_key: str,
+        metadata: JsonDict | None = None,
+    ) -> ConversationAppendReceipt:
+        """Append one provenance-complete immutable conversation record."""
+        if metadata_version != 1:
+            raise ValueError("metadata_version must be 1")
         unit = ContextUnit(
             payload={
+                "record_id": str(record_id),
                 "tenant_id": tenant_id,
                 "user_id": user_id,
-                "limit": limit,
+                "session_id": session_id,
+                "role": role,
+                "kind": kind,
+                "content": content,
+                "content_hash": content_hash,
+                "source_hash": source_hash,
+                "graph_run_id": str(graph_run_id) if graph_run_id is not None else None,
+                "metadata_version": metadata_version,
+                "idempotency_key": idempotency_key,
+                "metadata": metadata or {},
             },
-            provenance=["sdk:brain_client:get_recent_episodes"],
+            provenance=["sdk:brain_client:append_conversation_record"],
         )
 
         req = unit.to_protobuf(self._cu_pb2)
         grpc_metadata = self._get_metadata()
-        episodes: list[EpisodeRecord] = []
-        with wrap_client_error("Brain", "GetRecentEpisodes"):
-            async for response_pb in self._stub.GetRecentEpisodes(req, metadata=grpc_metadata):
+        with wrap_client_error("Brain", "AppendConversationRecord"):
+            response_pb = await self._stub.AppendConversationRecord(req, metadata=grpc_metadata)
+        result = ContextUnit.from_protobuf(response_pb)
+        return ConversationAppendReceipt.model_validate(copy_wire_payload(result.payload))
+
+    async def query_conversation_history(
+        self,
+        *,
+        tenant_id: str,
+        projection: ConversationProjection,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        graph_run_id: UUID | None = None,
+        older_than_days: int | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[ConversationRecord]:
+        """Run one bounded canonical history projection."""
+        unit = ContextUnit(
+            payload={
+                "tenant_id": tenant_id,
+                "projection": projection,
+                "user_id": user_id,
+                "session_id": session_id,
+                "graph_run_id": str(graph_run_id) if graph_run_id is not None else None,
+                "older_than_days": older_than_days,
+                "limit": limit,
+                "offset": offset,
+            },
+            provenance=["sdk:brain_client:query_conversation_history"],
+        )
+
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        records: list[ConversationRecord] = []
+        with wrap_client_error("Brain", "QueryConversationHistory"):
+            async for response_pb in self._stub.QueryConversationHistory(req, metadata=grpc_metadata):
                 result = ContextUnit.from_protobuf(response_pb)
-                p = result.payload
-                episodes.append(
-                    EpisodeRecord(
-                        id=get_str(p, "id"),
-                        user_id=get_str(p, "user_id"),
-                        content=get_str(p, "content"),
-                        session_id=get_str(p, "session_id"),
-                        metadata=get_json_dict(p, "metadata"),
-                        created_at=get_str(p, "created_at"),
-                    )
-                )
-                if len(episodes) >= limit:
+                records.append(ConversationRecord.model_validate(copy_wire_payload(result.payload)))
+                if len(records) >= limit:
                     break
-        return episodes
+        return records
 
     # =========================================
     # Blackboard (Pass-by-Reference)
@@ -211,109 +214,69 @@ class MemoryMixin(_MixinBase):
         result = ContextUnit.from_protobuf(response_pb)
         return get_int(result.payload, "deleted_count")
 
-    # Retention & Distillation
+    # Retention and statistics
     # =========================================
 
-    async def retention_cleanup(
+    async def get_conversation_history_stats(
         self,
         *,
-        tenant_id: str = "default",
-        older_than_days: int = 30,
-        episode_ids: list[str] | None = None,
-    ) -> int:
-        """Delete old episodic events (retention policy).
-
-        Args:
-            tenant_id: Tenant identifier.
-            older_than_days: Delete episodes older than this many days.
-            episode_ids: Optional specific episode IDs to delete.
-
-        Returns:
-            Number of deleted episodes.
-        """
-        unit = ContextUnit(
-            payload={
-                "tenant_id": tenant_id,
-                "older_than_days": older_than_days,
-                "episode_ids": episode_ids,
-            },
-            provenance=["sdk:brain_client:retention_cleanup"],
-        )
-
-        req = unit.to_protobuf(self._cu_pb2)
-        grpc_metadata = self._get_metadata()
-        with wrap_client_error("Brain", "RetentionCleanup"):
-            response_pb = await self._stub.RetentionCleanup(req, metadata=grpc_metadata)
-        result = ContextUnit.from_protobuf(response_pb)
-        return get_int(result.payload, "deleted_count")
-
-    async def get_old_episodes(
-        self,
-        *,
-        tenant_id: str = "default",
-        older_than_days: int = 30,
-        limit: int = 100,
-    ) -> list[EpisodeRecord]:
-        """Get episodes older than N days (for distillation).
-
-        Args:
-            tenant_id: Tenant identifier.
-            older_than_days: Threshold in days.
-            limit: Maximum batch size.
-
-        Returns:
-            List of episode dicts with id, user_id, content, metadata, created_at,
-            source_hash, and graph_run_id when present on the wire.
-        """
-        unit = ContextUnit(
-            payload={
-                "tenant_id": tenant_id,
-                "older_than_days": older_than_days,
-                "limit": limit,
-            },
-            provenance=["sdk:brain_client:get_old_episodes"],
-        )
-
-        req = unit.to_protobuf(self._cu_pb2)
-        grpc_metadata = self._get_metadata()
-        episodes: list[EpisodeRecord] = []
-        with wrap_client_error("Brain", "GetOldEpisodes"):
-            async for response_pb in self._stub.GetOldEpisodes(req, metadata=grpc_metadata):
-                result = ContextUnit.from_protobuf(response_pb)
-                p = result.payload
-                episodes.append(
-                    EpisodeRecord(
-                        id=get_str(p, "id"),
-                        user_id=get_str(p, "user_id"),
-                        content=get_str(p, "content"),
-                        session_id="",
-                        metadata=get_json_dict(p, "metadata"),
-                        created_at=get_str(p, "created_at"),
-                        source_hash=get_str(p, "source_hash"),
-                        graph_run_id=get_str(p, "graph_run_id"),
-                    )
-                )
-                if len(episodes) >= limit:
-                    break
-        return episodes
-
-    async def get_episode_stats(
-        self,
-        *,
-        tenant_id: str = "default",
-    ) -> ContextUnitPayload:
-        """Get episode count and date range for a tenant."""
+        tenant_id: str,
+    ) -> ConversationHistoryStats:
+        """Get content-free Conversation History statistics."""
         unit = ContextUnit(
             payload={"tenant_id": tenant_id},
-            provenance=["sdk:brain_client:get_episode_stats"],
+            provenance=["sdk:brain_client:get_conversation_history_stats"],
         )
-
         req = unit.to_protobuf(self._cu_pb2)
         grpc_metadata = self._get_metadata()
-        with wrap_client_error("Brain", "GetEpisodeStats"):
-            response_pb = await self._stub.GetEpisodeStats(req, metadata=grpc_metadata)
+        with wrap_client_error("Brain", "GetConversationHistoryStats"):
+            response_pb = await self._stub.GetConversationHistoryStats(req, metadata=grpc_metadata)
         result = ContextUnit.from_protobuf(response_pb)
-        return copy_wire_payload(result.payload)
+        return ConversationHistoryStats.model_validate(copy_wire_payload(result.payload))
+
+    async def apply_conversation_retention(
+        self,
+        *,
+        tenant_id: str,
+        record_ids: list[UUID],
+        cutoff: datetime,
+        hold_evidence_hash: str,
+    ) -> ConversationRetentionReceipt:
+        """Apply explicit evidence-backed Conversation History retention."""
+        unit = ContextUnit(
+            payload={
+                "tenant_id": tenant_id,
+                "record_ids": [str(record_id) for record_id in record_ids],
+                "cutoff": cutoff.isoformat(),
+                "policy_version": "contextunity.conversation-retention/v1",
+                "hold_evidence_hash": hold_evidence_hash,
+            },
+            provenance=["sdk:brain_client:apply_conversation_retention"],
+        )
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        with wrap_client_error("Brain", "ApplyConversationRetention"):
+            response_pb = await self._stub.ApplyConversationRetention(req, metadata=grpc_metadata)
+        result = ContextUnit.from_protobuf(response_pb)
+        return ConversationRetentionReceipt.model_validate(copy_wire_payload(result.payload))
+
+    async def apply_execution_trace_retention(
+        self,
+        *,
+        tenant_id: str,
+        older_than_days: int = 30,
+    ) -> int:
+        """Apply terminal Execution Trace retention."""
+        unit = ContextUnit(
+            payload={"tenant_id": tenant_id, "older_than_days": older_than_days},
+            provenance=["sdk:brain_client:apply_execution_trace_retention"],
+        )
+        req = unit.to_protobuf(self._cu_pb2)
+        grpc_metadata = self._get_metadata()
+        with wrap_client_error("Brain", "ApplyExecutionTraceRetention"):
+            response_pb = await self._stub.ApplyExecutionTraceRetention(req, metadata=grpc_metadata)
+        result = ContextUnit.from_protobuf(response_pb)
+        return get_int(result.payload, "deleted_count")
 
 
 __all__ = ["MemoryMixin"]

@@ -16,6 +16,8 @@ SERVICE_SESSION_PERMISSION_PROFILES: Final[dict[str, tuple[str, ...]]] = {
         Permissions.TRACE_WRITE,
         Permissions.MEMORY_READ,
         Permissions.MEMORY_WRITE,
+        Permissions.SHIELD_TRACE_ARTIFACT_PROTECT,
+        Permissions.WORKER_TRACE_ARTIFACT_ARCHIVE,
     ),
     "router": (
         Permissions.ROUTER_EXECUTE,
@@ -67,6 +69,7 @@ BRAIN_CALLER_PERMISSION_PROFILES: Final[dict[str, tuple[str, ...]]] = {
         Permissions.BRAIN_READ,
         Permissions.MEMORY_READ,
         Permissions.TRACE_READ,
+        Permissions.TRACE_ARTIFACT_READ,
     ),
     "commerce": (
         Permissions.BRAIN_READ,

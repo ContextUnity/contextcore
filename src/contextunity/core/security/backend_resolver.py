@@ -17,6 +17,7 @@ from collections.abc import Awaitable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from ..auth_posture import AuthRuntimePosture
     from ..config import SharedConfig
     from ..signing import VerifierBackend
 
@@ -220,15 +221,18 @@ async def build_verifier_backend(
     shield_url: str | None = None,
     service_name: str = "Service",
     config: SharedConfig | None = None,
+    posture: AuthRuntimePosture | None = None,
+    allow_local_platform_hmac: bool = False,
 ) -> VerifierBackend | None:
     """Parse the kid and build the appropriate verifier backend.
 
-    Session tokens resolve Ed25519 public keys from Shield. HMAC tokens use
-    ``CU_PROJECT_SECRET`` directly.
+    Session tokens resolve Ed25519 public keys from Shield. HMAC tokens use the
+    posture-resolved ``CU_PLATFORM_SECRET`` trust root.
 
     Resolution order:
-      1. Shield bootstrap (Ed25519 session tokens)
-      2. ``CU_PROJECT_SECRET`` env (HMAC bootstrap tokens)
+      1. Resolve the trusted runtime posture (or consume the supplied result)
+      2. Admit exactly one candidate authority for the token family
+      3. Build the bounded verifier selected by ``kid``
     """
     parts = token_str.rsplit(".", 2)
     if len(parts) != 3:
@@ -241,7 +245,23 @@ async def build_verifier_backend(
 
     project_id, key_version = kid.split(":", 1)
 
+    if config is None:
+        from ..config import get_core_config
+
+        config = get_core_config()
+
+    if posture is None:
+        from ..auth_posture import resolve_auth_runtime_posture
+
+        posture = resolve_auth_runtime_posture(
+            local_mode=config.local_mode,
+            shield_enabled=bool(shield_url),
+        )
+
     if "session" in key_version:
+        if not posture.shield_enabled:
+            logger.warning("Rejecting Shield session token while Shield authority is disabled")
+            return None
         if not shield_url:
             logger.warning("No Shield URL configured for session token project %s", project_id)
             return None
@@ -252,12 +272,28 @@ async def build_verifier_backend(
             return cached
         return await _bootstrap_ed25519_from_shield(project_id, kid, shield_url, service_name, config=config)
 
-    from ..config import get_core_config
+    if "hmac" not in key_version:
+        logger.warning("Rejecting token with unsupported key version: %s", key_version)
+        return None
+    if posture.shield_enabled:
+        if not (posture.is_local and allow_local_platform_hmac and project_id == "platform"):
+            logger.warning("Rejecting HMAC token on Shield-backed project runtime")
+            return None
 
-    secret = get_core_config().security.project_secret
+    from ..auth_posture import resolve_platform_hmac_secret
+
+    try:
+        secret = resolve_platform_hmac_secret(
+            posture,
+            platform_secret=config.security.platform_secret,
+            project_secret=config.security.project_secret,
+        )
+    except ValueError as exc:
+        logger.error("Auth secret configuration rejected: %s", exc)
+        return None
     if not secret:
         logger.warning(
-            "No CU_PROJECT_SECRET found for project %s (kid=%s, key_version=%s)",
+            "No CU_PLATFORM_SECRET found for HMAC verifier candidate %s (kid=%s, key_version=%s)",
             project_id,
             kid,
             key_version,

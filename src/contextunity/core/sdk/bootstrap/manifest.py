@@ -376,8 +376,24 @@ def sign_prompt_integrity(
             )
         return
 
-    project_secret = get_core_config().security.project_secret
-    if not project_secret:
+    config = get_core_config()
+    from contextunity.core.auth_posture import (
+        resolve_auth_runtime_posture,
+        resolve_platform_hmac_secret,
+    )
+
+    posture = resolve_auth_runtime_posture(local_mode=config.local_mode, shield_enabled=False)
+    try:
+        platform_secret = resolve_platform_hmac_secret(
+            posture,
+            platform_secret=config.security.platform_secret,
+            project_secret=config.security.project_secret,
+        )
+    except ValueError as exc:
+        from contextunity.core.exceptions import ConfigurationError
+
+        raise ConfigurationError(str(exc)) from exc
+    if not platform_secret:
         # Fail closed: a manifest that ships LLM prompts MUST sign them. Silently
         # skipping (the old behaviour) would register unsigned prompts that the
         # runtime then cannot tamper-check — i.e. infra-level prompt injection.
@@ -385,18 +401,18 @@ def sign_prompt_integrity(
             from contextunity.core.exceptions import ConfigurationError
 
             raise ConfigurationError(
-                f"Project '{project_id}' manifest defines LLM prompt(s) but CU_PROJECT_SECRET "
+                f"Project '{project_id}' manifest defines LLM prompt(s) but CU_PLATFORM_SECRET "
                 "is not set. Prompt-integrity signing is mandatory when prompts are present: "
-                "set CU_PROJECT_SECRET (OSS) or enable services.shield.enabled (Enterprise). "
+                "set CU_PLATFORM_SECRET (no-Shield) or enable services.shield.enabled. "
                 "Refusing to register unsigned prompts (fail-closed — WS-9)."
             )
-        logger.debug("No CU_PROJECT_SECRET and no signable prompts — nothing to sign")
+        logger.debug("No CU_PLATFORM_SECRET and no signable prompts — nothing to sign")
         return
 
     from contextunity.core.sdk.prompt_integrity import sign_prompt
     from contextunity.core.signing import HmacBackend
 
-    backend = HmacBackend(project_id, project_secret)
+    backend = HmacBackend(project_id, platform_secret)
     signed_count = 0
 
     for config, nodes in graph_entries:

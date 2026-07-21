@@ -8,10 +8,23 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, ClassVar
+from uuid import UUID
 
 from contextunity.core.grpc_client_errors import wrap_client_error
 from contextunity.core.router_pb2_grpc import RouterServiceStub
-from contextunity.core.sdk.payload import copy_wire_payload, get_dict, get_str
+from contextunity.core.sdk.clients.router.fault_spool_models import (
+    FaultSpoolBatchResult,
+    FaultSpoolOperatorRecord,
+    FaultSpoolOperatorStatus,
+    FaultSpoolTerminalPurgeResult,
+)
+from contextunity.core.sdk.payload import (
+    copy_wire_payload,
+    get_dict,
+    get_json_dict,
+    get_json_dict_list,
+    get_str,
+)
 from contextunity.core.sdk.responses import (
     StreamPayload,
     is_brain_event,
@@ -116,11 +129,9 @@ class RouterClient(_RouterBase):
         Args:
             graph_name: Name of the registered graph (e.g., "rlm_bulk_matcher", "gardener").
             payload: Graph input state (becomes the "input" field).
-            metadata: Key-value pairs merged into input.metadata on the Router side.
-                      Use this to pass per-call settings such as ``langfuse_enabled``,
-                      ``langfuse_project_id``, etc.  The caller is responsible for
-                      reading these from its own config layer. Tenant identity is
-                      derived from the ContextToken — never passed in-band.
+            metadata: Bounded execution metadata merged into input.metadata.
+                      Tenant identity is derived from the ContextToken and is never
+                      accepted in-band.
 
         Returns:
             Full graph execution state from the Router wire payload.
@@ -148,6 +159,80 @@ class RouterClient(_RouterBase):
 
         response = ContextUnit.from_protobuf(response_pb)
         return copy_wire_payload(response.payload)
+
+    async def get_fault_spool_status(self) -> FaultSpoolOperatorStatus:
+        """Read Router-local bounded spool state through the authorized RPC."""
+        unit = ContextUnit(payload={}, provenance=["sdk:router_client:get_fault_spool_status"])
+        with wrap_client_error("Router", "GetFaultSpoolStatus"):
+            response_pb = await self._stub.GetFaultSpoolStatus(
+                unit.to_protobuf(self._cu_pb2), metadata=self._get_metadata()
+            )
+        response = ContextUnit.from_protobuf(response_pb)
+        return FaultSpoolOperatorStatus.model_validate(get_json_dict(response.payload, "fault_spool"))
+
+    async def list_fault_spool_records(self, *, limit: int = 20) -> list[FaultSpoolOperatorRecord]:
+        """Read at most 100 sanitized records without their tenant or delivery payload."""
+        if limit < 1 or limit > 100:
+            raise ValueError("fault spool limit must be between 1 and 100")
+        unit = ContextUnit(
+            payload={"limit": limit},
+            provenance=["sdk:router_client:list_fault_spool_records"],
+        )
+        with wrap_client_error("Router", "ListFaultSpoolRecords"):
+            response_pb = await self._stub.ListFaultSpoolRecords(
+                unit.to_protobuf(self._cu_pb2), metadata=self._get_metadata()
+            )
+        response = ContextUnit.from_protobuf(response_pb)
+        return [
+            FaultSpoolOperatorRecord.model_validate(record)
+            for record in get_json_dict_list(response.payload, "records")
+        ]
+
+    async def replay_fault_spool(self) -> FaultSpoolBatchResult:
+        """Request one C0-bounded Router-local replay batch as an authorized operator."""
+        unit = ContextUnit(payload={}, provenance=["sdk:router_client:replay_fault_spool"])
+        with wrap_client_error("Router", "ReplayFaultSpool"):
+            response_pb = await self._stub.ReplayFaultSpool(
+                unit.to_protobuf(self._cu_pb2), metadata=self._get_metadata()
+            )
+        response = ContextUnit.from_protobuf(response_pb)
+        return FaultSpoolBatchResult.model_validate(get_json_dict(response.payload, "batch"))
+
+    async def discard_fault_spool_record(
+        self,
+        *,
+        record_id: UUID,
+        disposition_id: str,
+        reason_code: str,
+    ) -> FaultSpoolOperatorRecord:
+        """Persist one explicit authorized policy disposition; it never deletes a row."""
+        unit = ContextUnit(
+            payload={
+                "record_id": str(record_id),
+                "disposition_id": disposition_id,
+                "reason_code": reason_code,
+            },
+            provenance=["sdk:router_client:discard_fault_spool_record"],
+        )
+        with wrap_client_error("Router", "DiscardFaultSpoolRecord"):
+            response_pb = await self._stub.DiscardFaultSpoolRecord(
+                unit.to_protobuf(self._cu_pb2), metadata=self._get_metadata()
+            )
+        response = ContextUnit.from_protobuf(response_pb)
+        return FaultSpoolOperatorRecord.model_validate(get_json_dict(response.payload, "record"))
+
+    async def purge_fault_spool_terminal_records(self) -> FaultSpoolTerminalPurgeResult:
+        """Purge one C0-bounded terminal retention batch as an authorized operator."""
+        unit = ContextUnit(
+            payload={},
+            provenance=["sdk:router_client:purge_fault_spool_terminal_records"],
+        )
+        with wrap_client_error("Router", "PurgeFaultSpoolTerminalRecords"):
+            response_pb = await self._stub.PurgeFaultSpoolTerminalRecords(
+                unit.to_protobuf(self._cu_pb2), metadata=self._get_metadata()
+            )
+        response = ContextUnit.from_protobuf(response_pb)
+        return FaultSpoolTerminalPurgeResult.model_validate(get_json_dict(response.payload, "purge"))
 
     async def stream_agent(
         self,

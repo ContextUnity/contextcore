@@ -11,7 +11,7 @@ from contextunity.core.types import JsonValue, is_json_value
 from pydantic import ValidationError
 
 from ..logging import get_contextunit_logger
-from ..tokens import ContextToken
+from ..tokens import ContextToken, PlatformBound, ProjectBinding, ProjectBound
 from .contracts import TokenPayloadDict, TokenSessionDict, is_token_payload_dict
 
 logger = get_contextunit_logger(__name__)
@@ -50,6 +50,30 @@ def _parse_json(raw: bytes | str) -> JsonValue:
     return repr(loaded)
 
 
+def _project_binding_from_payload(data: TokenPayloadDict | TokenSessionDict) -> ProjectBinding | None:
+    """Parse the closed signed binding; absence remains legacy-unbound."""
+    raw = data.get("project_binding")
+    if raw is None:
+        return None
+    kind = raw.get("kind")
+    project_id = raw.get("project_id")
+    if kind == "project":
+        if not isinstance(project_id, str):
+            raise ValueError("ProjectBound token binding requires a string project_id")
+        return ProjectBound(project_id)
+    if kind == "platform":
+        if project_id is not None:
+            raise ValueError("PlatformBound token binding requires project_id=null")
+        return PlatformBound()
+    raise ValueError("Token project binding has an unknown kind")
+
+
+def _project_binding_payload(binding: ProjectBinding) -> dict[str, JsonValue]:
+    if isinstance(binding, ProjectBound):
+        return {"kind": "project", "project_id": binding.project_id}
+    return {"kind": "platform", "project_id": None}
+
+
 def token_from_payload_dict(data: TokenPayloadDict) -> ContextToken:
     """Build a ContextToken from a decoded payload mapping."""
     token_id = data.get("token_id")
@@ -64,6 +88,7 @@ def token_from_payload_dict(data: TokenPayloadDict) -> ContextToken:
 
     return ContextToken(
         token_id=token_id,
+        project_binding=_project_binding_from_payload(data),
         permissions=_string_tuple(data.get("permissions")),
         allowed_tenants=_string_tuple(data.get("allowed_tenants")),
         exp_unix=data.get("exp_unix"),
@@ -80,6 +105,7 @@ def token_from_session_dict(data: TokenSessionDict) -> ContextToken:
     """Build a ContextToken from session-stored token data."""
     return ContextToken(
         token_id=data.get("token_id", ""),
+        project_binding=_project_binding_from_payload(data),
         permissions=_string_tuple(data.get("permissions")),
         allowed_tenants=_string_tuple(data.get("allowed_tenants")),
         exp_unix=data.get("exp_unix"),
@@ -97,11 +123,13 @@ def serialize_token(
     backend: LocalSigningBackend,
 ) -> str:
     """Serialize ContextToken to string for network transmission."""
-    data: dict[str, str | list[str] | float | None] = {
+    data: dict[str, JsonValue] = {
         "token_id": token.token_id,
         "permissions": list(token.permissions),
         "provenance": list(token.provenance),
     }
+    if token.project_binding is not None:
+        data["project_binding"] = _project_binding_payload(token.project_binding)
     if token.allowed_tenants:
         data["allowed_tenants"] = list(token.allowed_tenants)
     if token.exp_unix is not None:
@@ -152,7 +180,7 @@ def verify_token_string(
             logger.warning("Failed to decode token payload after verification")
             return None
         return token_from_payload_dict(decoded)
-    except (JSONDecodeError, UnicodeDecodeError, ValidationError):
+    except (JSONDecodeError, UnicodeDecodeError, ValidationError, ValueError):
         logger.warning("Failed to decode token payload after verification")
         return None
 

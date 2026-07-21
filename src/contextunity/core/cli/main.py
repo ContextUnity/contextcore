@@ -9,7 +9,6 @@ import typer
 
 # Import cleaned logic from existing command scripts
 from contextunity.core.cli.mint import mint_hmac as _mint_hmac
-from contextunity.core.cli.mint import mint_redis as _mint_redis
 from contextunity.core.cli.mint import mint_shield as _mint_shield
 from contextunity.core.cli.validate import main as validate_main
 from rich.console import Console
@@ -34,12 +33,6 @@ def mint_hmac():
 def mint_shield():
     """Generate a new SHIELD_MASTER_KEY for contextunity.shield Enterprise."""
     _mint_shield()
-
-
-@app.command("redis")
-def mint_redis():
-    """Print a deprecation notice for REDIS_SECRET_KEY minting."""
-    _mint_redis()
 
 
 @app.command("validate")

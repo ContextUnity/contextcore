@@ -36,4 +36,10 @@ service WorkerService {
     // Request payload: {project_id, schedules: [...]}
     // Response payload: {status, registered_count}
     rpc RegisterSchedules(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
+    // Brain-only encrypted Trace artifact cold-offload lifecycle. Worker receives
+    // opaque Shield ciphertext and returns storage receipts without content keys.
+    rpc ArchiveExecutionTraceArtifact(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc RestoreExecutionTraceArtifact(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc PurgeExecutionTraceArtifactArchive(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 }

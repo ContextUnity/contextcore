@@ -10,6 +10,7 @@ revocation are delegated to ``backend_resolver``.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import replace
 from typing import TYPE_CHECKING, TypeVar, override
 
 import grpc
@@ -20,6 +21,7 @@ from contextunity.core.types import GrpcServicerContext
 from ..tokens import ContextToken
 
 if TYPE_CHECKING:
+    from ..auth_posture import AuthRuntimePosture
     from ..config import SharedConfig
 
 logger = get_contextunit_logger(__name__)
@@ -27,10 +29,14 @@ logger = get_contextunit_logger(__name__)
 _RequestT = TypeVar("_RequestT")
 _ResponseT = TypeVar("_ResponseT")
 
-# Method prefixes that bypass permission checks
-_SKIP_PREFIXES = (
-    "grpc.health.v1",
-    "grpc.reflection.v1",
+# Exact official methods that bypass token permission checks.
+_PUBLIC_METHODS = frozenset(
+    {
+        "/grpc.health.v1.Health/Check",
+        "/grpc.health.v1.Health/Watch",
+        "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo",
+        "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
+    }
 )
 
 
@@ -74,7 +80,7 @@ def _should_skip(method: str) -> bool:
     Returns:
         bool: True if the operation was successful, False otherwise.
     """
-    return any(prefix in method for prefix in _SKIP_PREFIXES)
+    return method in _PUBLIC_METHODS
 
 
 # ── Permission check ────────────────────────────────────────────
@@ -118,9 +124,9 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
     Sits before all handlers and:
     1. Logs caller identity
     2. Extracts ContextToken string from gRPC metadata
-    3. Infers project_id from composite kid
-    4. Dynamically builds the verification backend (from env/Shield)
-    5. Validates the token cryptographically
+    3. Uses composite kid only for bounded verifier lookup
+    4. Validates the token cryptographically under the resolved posture
+    5. Resolves the signed project/platform binding after verification
     6. Checks permissions
     7. Aborts with ``UNAUTHENTICATED`` / ``PERMISSION_DENIED`` if any check fails
     """
@@ -132,6 +138,8 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
         service_name: str = "Service",
         shield_url: str | None = None,
         config: SharedConfig | None = None,
+        posture: AuthRuntimePosture | None = None,
+        allow_local_platform_hmac: bool = False,
     ) -> None:
         """Initialize the unified service permission interceptor.
 
@@ -139,12 +147,31 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
             rpc_permission_map: Mapping of RPC methods to their required permission string.
             service_name: Name of the service being intercepted.
             shield_url: Optional URL to the ContextShield service for key resolution.
+            allow_local_platform_hmac: Explicitly admit the local platform
+                operator authority on this service surface. The default is
+                fail-closed; the flag has no effect outside Local-with-Shield.
         """
         self._rpc_map: dict[str, str] = rpc_permission_map
         self._service_name: str = service_name
         self._shield_url: str | None = shield_url
         self._config: SharedConfig | None = config
-        logger.info("%s interceptor initialized (enforce mode, shield_url=%s)", self._service_name, self._shield_url)
+        if posture is None:
+            from ..auth_posture import resolve_auth_runtime_posture
+            from ..config import get_core_config
+
+            resolved_config = config if config is not None else get_core_config()
+            posture = resolve_auth_runtime_posture(
+                local_mode=resolved_config.local_mode,
+                shield_enabled=bool(shield_url),
+            )
+        self._posture = posture
+        self._allow_local_platform_hmac = allow_local_platform_hmac
+        logger.info(
+            "%s interceptor initialized (enforce mode, posture=%s, shield_url=%s)",
+            self._service_name,
+            self._posture.value,
+            self._shield_url,
+        )
 
     async def _is_token_revoked(self, token: ContextToken) -> bool:
         """Delegate to ``backend_resolver.is_token_revoked``.
@@ -176,6 +203,8 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
             shield_url=self._shield_url,
             service_name=self._service_name,
             config=self._config,
+            posture=self._posture,
+            allow_local_platform_hmac=self._allow_local_platform_hmac,
         )
 
     @override
@@ -219,6 +248,7 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
 
         # Build Verifier Backend & Verify Token
         token: ContextToken | None = None
+        binding_error: str | None = None
         caller_id = "anonymous"
         tenant_info = ""
 
@@ -250,6 +280,32 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
                 # Fetch a fresh key from Shield and retry exactly once.
                 if token is None and self._shield_url:
                     token = await self._retry_with_fresh_key(token_str)
+
+                if token is not None:
+                    parts = token_str.rsplit(".", 2)
+                    kid = parts[0] if len(parts) == 3 else ""
+                    verifier_project_id, _, key_version = kid.partition(":")
+                    from ..auth_posture import (
+                        LEGACY_PROJECT_BINDING_MIGRATION_ENABLED,
+                        VerifierAuthority,
+                        resolve_verified_project_binding,
+                    )
+
+                    authority = (
+                        VerifierAuthority.SHIELD_PROJECT
+                        if "session" in key_version
+                        else VerifierAuthority.PLATFORM_HMAC
+                    )
+                    try:
+                        resolved_binding = resolve_verified_project_binding(
+                            token,
+                            authority=authority,
+                            verifier_project_id=verifier_project_id,
+                            allow_legacy_project=LEGACY_PROJECT_BINDING_MIGRATION_ENABLED,
+                        )
+                        token = replace(token, project_binding=resolved_binding)
+                    except PermissionError as exc:
+                        binding_error = str(exc)
         else:
             logger.info(
                 "%s RPC %s | caller=anonymous",
@@ -272,6 +328,9 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
             deny_code = grpc.StatusCode.UNAUTHENTICATED
         elif token is None:
             deny_reason = "invalid token (cryptographic verification failed)"
+            deny_code = grpc.StatusCode.UNAUTHENTICATED
+        elif binding_error is not None:
+            deny_reason = f"invalid token binding ({binding_error})"
             deny_code = grpc.StatusCode.UNAUTHENTICATED
         elif token.is_expired():
             deny_reason = f"token expired (token '{mask_token_id(token.token_id)}')"
@@ -304,16 +363,10 @@ class ServicePermissionInterceptor(grpc.aio.ServerInterceptor):
         if token is not None and token_str:
             from ..authz.context import VerifiedAuthContext, set_auth_context
 
-            # Extract project_id from kid
-            project_id = None
-            parts = token_str.rsplit(".", 2)
-            if len(parts) == 3 and ":" in parts[0]:
-                project_id = parts[0].split(":", 1)[0]
-
             auth_ctx = VerifiedAuthContext.from_token(
                 token,
                 token_str,
-                project_id=project_id,
+                project_binding=token.project_binding,
             )
             set_auth_context(auth_ctx)
 

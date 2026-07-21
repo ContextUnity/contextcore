@@ -37,8 +37,14 @@ def _deep_merge_wire(base: dict[str, WireValue], override: dict[str, WireValue])
 def _router_service_config(router_config: RouterConfigSection) -> dict[str, WireValue]:
     """Return Router project-wide runtime domains projected into each graph config."""
     data: dict[str, object] = router_config.model_dump(exclude_none=True)
+    projected: dict[str, WireValue] = {}
     memory = data.get("memory")
-    return {"memory": memory} if is_json_dict(memory) else {}
+    if is_json_dict(memory):
+        projected["memory"] = memory
+    verdict = data.get("verdict")
+    if is_json_dict(verdict):
+        projected["verdict"] = verdict
+    return projected
 
 
 def _graph_typed_config(graph_config: RouterGraphConfig | None) -> dict[str, WireValue]:
@@ -200,11 +206,6 @@ class ArtifactGenerator:
             "allowed_tools": (router.policy.allowed_tools or [] if router.policy else []),
             "models_ref": (router.policy.models_ref if router.policy else None),
             "prompts_ref": (router.policy.prompts_ref if router.policy else None),
-            "langfuse": (
-                router.policy.langfuse.model_dump(exclude_none=True)
-                if router.policy and router.policy.langfuse
-                else None
-            ),
         }
 
         if router.policy and router.policy.models:
@@ -214,6 +215,12 @@ class ArtifactGenerator:
         if router.config.conductor is not None:
             conductor = router.config.conductor.model_dump(exclude_none=True)
 
+        observability: dict[str, WireValue] = {}
+        if self.manifest.observability and self.manifest.observability.tracing:
+            tracing = self.manifest.observability.tracing.model_dump(exclude_none=True)
+            if is_json_dict(tracing):
+                observability = {"tracing": tracing}
+
         bundle = RouterRegistrationBundle(
             project_id=self.manifest.project.id,
             default_graph=router.default_graph,
@@ -221,6 +228,7 @@ class ArtifactGenerator:
             services=self.manifest.services.model_dump(exclude_none=True),
             policy=policy,
             conductor=conductor,
+            observability=observability,
             secrets=None,
         )
         apply_allowed_tenants_to_bundle(bundle, self.manifest.project)

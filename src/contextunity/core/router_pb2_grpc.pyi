@@ -44,7 +44,7 @@ class RouterServiceStub:
     """Execute a single turn of an agent
     Request payload: {agent_id, input, config?}
     Tenant/user identity is derived from ContextToken (SPOT).
-    Response payload: {output, wall_ms?, langfuse_trace_id?, langfuse_trace_url?}
+    Response payload: {output, wall_ms?}
     """
     StreamAgent: _grpc.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
     """Stream agent execution (for UI with real-time output)
@@ -96,16 +96,12 @@ class RouterServiceStub:
     Project connects once and acts as remote executor for its tools.
     Uses existing gRPC connection — no new ports needed.
 
-    Flow:
-    1. Project → Router: {"action": "ready", "project_id": "nszu",
-                           "tools": ["execute_medical_sql"]}
-    2. Router → Project: {"action": "execute", "tool": "execute_medical_sql",
-                           "request_id": "abc", "args": {"sql": "SELECT ..."}}
-    3. Project → Router: {"action": "result", "request_id": "abc",
-                           "columns": [...], "rows": [...], "row_count": N}
-    4. On error:
-       Project → Router: {"action": "error", "request_id": "abc",
-                           "error": "timeout"}
+    Closed payload protocol: contextunity.tool-delivery/v1.
+    Project sends ExecutorReady, AcceptedAck, FinalDeliveryReceipt and heartbeat.
+    Router sends ExecutorRegistered, DeliveryRequest, DeliveryStatusRequest and keepalive.
+    Unknown versions, directions and legacy action maps fail closed. AcceptedAck does
+    not prove an effect was uncommitted; replay requires an adapter-authoritative
+    not_started receipt with replay_safe=true and the same idempotency identity.
 
     Security: Requires a ContextToken with "stream:executor" or
     "stream:executor:{project_id}" permission.
@@ -156,8 +152,20 @@ class RouterServiceStub:
 
     Secrets are NEVER included in the response (sanitized server-side).
     Security: Requires "router:introspect" permission.
-    In CU_LOCAL_MODE, HMAC tokens are accepted even when Shield is primary.
+    In CLI-owned local runtime, platform HMAC is admitted on declared local surfaces.
     """
+    GetFaultSpoolStatus: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    """Router-local FaultSpool operator surface. Responses never contain tenant IDs,
+    fault payloads, raw exceptions, or filesystem paths. The caller reaches only
+    this Router instance's spool; Worker spools are not addressable here.
+    Security: status requires admin:read; replay/disposition require admin:write.
+    """
+    ListFaultSpoolRecords: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    ReplayFaultSpool: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    DiscardFaultSpoolRecord: _grpc.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]
+    PurgeFaultSpoolTerminalRecords: _grpc.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]
 
 @_typing.type_check_only
 class RouterServiceAsyncStub(RouterServiceStub):
@@ -174,7 +182,7 @@ class RouterServiceAsyncStub(RouterServiceStub):
     """Execute a single turn of an agent
     Request payload: {agent_id, input, config?}
     Tenant/user identity is derived from ContextToken (SPOT).
-    Response payload: {output, wall_ms?, langfuse_trace_id?, langfuse_trace_url?}
+    Response payload: {output, wall_ms?}
     """
     StreamAgent: _aio.UnaryStreamMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
     """Stream agent execution (for UI with real-time output)
@@ -226,16 +234,12 @@ class RouterServiceAsyncStub(RouterServiceStub):
     Project connects once and acts as remote executor for its tools.
     Uses existing gRPC connection — no new ports needed.
 
-    Flow:
-    1. Project → Router: {"action": "ready", "project_id": "nszu",
-                           "tools": ["execute_medical_sql"]}
-    2. Router → Project: {"action": "execute", "tool": "execute_medical_sql",
-                           "request_id": "abc", "args": {"sql": "SELECT ..."}}
-    3. Project → Router: {"action": "result", "request_id": "abc",
-                           "columns": [...], "rows": [...], "row_count": N}
-    4. On error:
-       Project → Router: {"action": "error", "request_id": "abc",
-                           "error": "timeout"}
+    Closed payload protocol: contextunity.tool-delivery/v1.
+    Project sends ExecutorReady, AcceptedAck, FinalDeliveryReceipt and heartbeat.
+    Router sends ExecutorRegistered, DeliveryRequest, DeliveryStatusRequest and keepalive.
+    Unknown versions, directions and legacy action maps fail closed. AcceptedAck does
+    not prove an effect was uncommitted; replay requires an adapter-authoritative
+    not_started receipt with replay_safe=true and the same idempotency identity.
 
     Security: Requires a ContextToken with "stream:executor" or
     "stream:executor:{project_id}" permission.
@@ -286,8 +290,20 @@ class RouterServiceAsyncStub(RouterServiceStub):
 
     Secrets are NEVER included in the response (sanitized server-side).
     Security: Requires "router:introspect" permission.
-    In CU_LOCAL_MODE, HMAC tokens are accepted even when Shield is primary.
+    In CLI-owned local runtime, platform HMAC is admitted on declared local surfaces.
     """
+    GetFaultSpoolStatus: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    """Router-local FaultSpool operator surface. Responses never contain tenant IDs,
+    fault payloads, raw exceptions, or filesystem paths. The caller reaches only
+    this Router instance's spool; Worker spools are not addressable here.
+    Security: status requires admin:read; replay/disposition require admin:write.
+    """
+    ListFaultSpoolRecords: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    ReplayFaultSpool: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    DiscardFaultSpoolRecord: _aio.UnaryUnaryMultiCallable[_contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit]  # type: ignore[assignment]
+    PurgeFaultSpoolTerminalRecords: _aio.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]  # type: ignore[assignment]
 
 class RouterServiceServicer(metaclass=_abc_1.ABCMeta):
     """=====================================================
@@ -307,7 +323,7 @@ class RouterServiceServicer(metaclass=_abc_1.ABCMeta):
         """Execute a single turn of an agent
         Request payload: {agent_id, input, config?}
         Tenant/user identity is derived from ContextToken (SPOT).
-        Response payload: {output, wall_ms?, langfuse_trace_id?, langfuse_trace_url?}
+        Response payload: {output, wall_ms?}
         """
 
     @_abc_1.abstractmethod
@@ -389,16 +405,12 @@ class RouterServiceServicer(metaclass=_abc_1.ABCMeta):
         Project connects once and acts as remote executor for its tools.
         Uses existing gRPC connection — no new ports needed.
 
-        Flow:
-        1. Project → Router: {"action": "ready", "project_id": "nszu",
-                               "tools": ["execute_medical_sql"]}
-        2. Router → Project: {"action": "execute", "tool": "execute_medical_sql",
-                               "request_id": "abc", "args": {"sql": "SELECT ..."}}
-        3. Project → Router: {"action": "result", "request_id": "abc",
-                               "columns": [...], "rows": [...], "row_count": N}
-        4. On error:
-           Project → Router: {"action": "error", "request_id": "abc",
-                               "error": "timeout"}
+        Closed payload protocol: contextunity.tool-delivery/v1.
+        Project sends ExecutorReady, AcceptedAck, FinalDeliveryReceipt and heartbeat.
+        Router sends ExecutorRegistered, DeliveryRequest, DeliveryStatusRequest and keepalive.
+        Unknown versions, directions and legacy action maps fail closed. AcceptedAck does
+        not prove an effect was uncommitted; replay requires an adapter-authoritative
+        not_started receipt with replay_safe=true and the same idempotency identity.
 
         Security: Requires a ContextToken with "stream:executor" or
         "stream:executor:{project_id}" permission.
@@ -461,8 +473,45 @@ class RouterServiceServicer(metaclass=_abc_1.ABCMeta):
 
         Secrets are NEVER included in the response (sanitized server-side).
         Security: Requires "router:introspect" permission.
-        In CU_LOCAL_MODE, HMAC tokens are accepted even when Shield is primary.
+        In CLI-owned local runtime, platform HMAC is admitted on declared local surfaces.
         """
+
+    @_abc_1.abstractmethod
+    def GetFaultSpoolStatus(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Router-local FaultSpool operator surface. Responses never contain tenant IDs,
+        fault payloads, raw exceptions, or filesystem paths. The caller reaches only
+        this Router instance's spool; Worker spools are not addressable here.
+        Security: status requires admin:read; replay/disposition require admin:write.
+        """
+
+    @_abc_1.abstractmethod
+    def ListFaultSpoolRecords(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def ReplayFaultSpool(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def DiscardFaultSpoolRecord(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def PurgeFaultSpoolTerminalRecords(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
 
 def add_RouterServiceServicer_to_server(
     servicer: RouterServiceServicer, server: _typing.Union[_grpc.Server, _aio.Server]

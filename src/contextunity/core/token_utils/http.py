@@ -6,6 +6,7 @@ for Django views and external webhook endpoints.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from ..exceptions import ConfigurationError
@@ -115,8 +116,8 @@ def build_verifier_backend_from_token_string(
 ) -> TokenVerifier | None:
     """Build a verifier backend from a serialized token string.
 
-    Session tokens fetch public keys from Shield; HMAC tokens use
-    ``CU_PROJECT_SECRET`` directly.
+    Session tokens fetch public keys from Shield; HMAC tokens use the
+    posture-resolved ``CU_PLATFORM_SECRET`` root.
     """
     parts = token_str.strip().rsplit(".", 2)
     if len(parts) != 3:
@@ -129,7 +130,21 @@ def build_verifier_backend_from_token_string(
 
     project_id, key_version = kid.split(":", 1)
 
+    from ..auth_posture import (
+        resolve_auth_runtime_posture,
+        resolve_platform_hmac_secret,
+    )
+    from ..config import get_core_config
+
+    resolved_config = config if config is not None else get_core_config()
+    posture = resolve_auth_runtime_posture(
+        local_mode=resolved_config.local_mode,
+        shield_enabled=bool(shield_url),
+    )
+
     if "session" in key_version:
+        if not posture.shield_enabled:
+            return None
         if not shield_url:
             logger.warning("No Shield URL configured for session token project %s", project_id)
             return None
@@ -154,9 +169,18 @@ def build_verifier_backend_from_token_string(
             return None
         return None
 
-    from ..config import get_core_config
-
-    secret = get_core_config().security.project_secret
+    if "hmac" not in key_version:
+        return None
+    if posture.shield_enabled and not (posture.is_local and project_id == "platform"):
+        return None
+    try:
+        secret = resolve_platform_hmac_secret(
+            posture,
+            platform_secret=resolved_config.security.platform_secret,
+            project_secret=resolved_config.security.project_secret,
+        )
+    except ValueError:
+        return None
     if not secret:
         return None
 
@@ -191,7 +215,25 @@ def extract_and_verify_token_from_http_request(
         if backend is None:
             logger.warning("No verifier backend available for HTTP token")
             return None
-        return verify_token_string(token_str, backend)
+        token = verify_token_string(token_str, backend)
+        if token is None:
+            return None
+        kid = token_str.rsplit(".", 2)[0]
+        verifier_project_id, _, key_version = kid.partition(":")
+        from ..auth_posture import (
+            LEGACY_PROJECT_BINDING_MIGRATION_ENABLED,
+            VerifierAuthority,
+            resolve_verified_project_binding,
+        )
+
+        authority = VerifierAuthority.SHIELD_PROJECT if "session" in key_version else VerifierAuthority.PLATFORM_HMAC
+        binding = resolve_verified_project_binding(
+            token,
+            authority=authority,
+            verifier_project_id=verifier_project_id,
+            allow_legacy_project=LEGACY_PROJECT_BINDING_MIGRATION_ENABLED,
+        )
+        return replace(token, project_binding=binding)
     except Exception as e:
         logger.warning("Failed to verify token from HTTP request: %s", e)
         return None

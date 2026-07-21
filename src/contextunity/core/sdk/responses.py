@@ -151,8 +151,7 @@ class ShieldStatsWireFields(TypedDict, total=False):
 
 
 GraphSearchResult: TypeAlias = ContextUnitPayload
-EpisodeStatsResult: TypeAlias = ContextUnitPayload
-MemoryLayerName: TypeAlias = Literal["episodic_events", "cells", "embedding_jobs"]
+MemoryLayerName: TypeAlias = Literal["conversation_records", "cells", "embedding_jobs"]
 
 
 class GraphSearchWireFields(TypedDict, total=False):
@@ -162,30 +161,6 @@ class GraphSearchWireFields(TypedDict, total=False):
     edges: list[JsonDict]
     error: str
     message: str
-
-
-class EpisodeStatsWireFields(TypedDict, total=False):
-    """Common ``BrainClient.get_episode_stats()`` wire keys."""
-
-    total: int
-    oldest: str
-    newest: str
-    tenant_id: str
-    error: str
-    message: str
-
-
-class EpisodeRecord(TypedDict, total=False):
-    """Single episodic memory record from Brain."""
-
-    id: str
-    user_id: str
-    content: str
-    session_id: str
-    metadata: JsonDict
-    created_at: str
-    source_hash: str
-    graph_run_id: str
 
 
 class SynapseRecord(TypedDict, total=False):
@@ -286,8 +261,6 @@ class ExecuteNodeWireFields(TypedDict, total=False):
     output: ContextUnitPayload
     node_name: str
     execution_ms: int
-    langfuse_trace_id: str
-    langfuse_trace_url: str
     error: str
     message: str
 
@@ -344,7 +317,23 @@ class TraceRecord(TypedDict, total=False):
     security_flags: JsonDict
     metadata: JsonDict
     provenance: list[str]
+    graph_run_id: str
+    payload_digest: str
+    terminal_status: str
+    terminal_reason: str
+    trace_schema_version: str
+    prompt_evidence: list[JsonDict]
+    steps: list[JsonDict]
     created_at: str
+
+
+class TraceFinalizationReceipt(TypedDict):
+    """Durable Brain receipt for one terminal graph-run finalization."""
+
+    trace_id: str
+    graph_run_id: str
+    digest: str
+    outcome: Literal["created", "duplicate"]
 
 
 __all__ = [
@@ -374,11 +363,9 @@ __all__ = [
     # Brain
     "GraphSearchResult",
     "GraphSearchWireFields",
-    "EpisodeRecord",
-    "EpisodeStatsResult",
-    "EpisodeStatsWireFields",
     "SynapseRecord",
     "TraceRecord",
+    "TraceFinalizationReceipt",
     # Worker
     "StartWorkflowResult",
     "GetTaskStatusResult",

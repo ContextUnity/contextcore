@@ -92,11 +92,13 @@ class TestBuildVerifierBackend:
     def test_hmac_backend_success(self, monkeypatch):
         from contextunity.core.config import get_core_config
 
-        monkeypatch.setattr(get_core_config().security, "project_secret", "my-secret")
+        security = get_core_config().security
+        monkeypatch.setattr(security, "platform_secret", "my-secret")
+        monkeypatch.setattr(security, "project_secret", "")
 
         from contextunity.core.token_utils.http import build_verifier_backend_from_token_string
 
-        backend = build_verifier_backend_from_token_string("proj:v1.payload.sig")
+        backend = build_verifier_backend_from_token_string("proj:hmac-v1.payload.sig")
 
         assert backend is not None
         assert backend.__class__.__name__ == "HmacBackend"
@@ -104,11 +106,13 @@ class TestBuildVerifierBackend:
     def test_hmac_backend_missing_secret(self, monkeypatch):
         from contextunity.core.config import get_core_config
 
-        monkeypatch.setattr(get_core_config().security, "project_secret", "")
+        security = get_core_config().security
+        monkeypatch.setattr(security, "platform_secret", "")
+        monkeypatch.setattr(security, "project_secret", "")
 
         from contextunity.core.token_utils.http import build_verifier_backend_from_token_string
 
-        assert build_verifier_backend_from_token_string("proj:v1.payload.sig") is None
+        assert build_verifier_backend_from_token_string("proj:hmac-v1.payload.sig") is None
 
     def test_ed25519_backend_requires_shield_url(self, monkeypatch):
         from contextunity.core.token_utils.http import build_verifier_backend_from_token_string

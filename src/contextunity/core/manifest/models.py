@@ -8,7 +8,7 @@ from typing import ClassVar, Literal, Self
 from contextunity.core.exceptions import ConfigurationError
 from contextunity.core.manifest import router as _router
 from contextunity.core.tenant_policy import validate_tenant_id
-from contextunity.core.types import WireValue
+from contextunity.core.types import WireValue, is_object_dict
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ModelsLLMPolicy = _router.ModelsLLMPolicy
@@ -18,11 +18,12 @@ RetryPolicy = _router.RetryPolicy
 RouterEdge = _router.RouterEdge
 RouterGraph = _router.RouterGraph
 RouterGraphBuiltin = _router.RouterGraphBuiltin
-RouterLangfusePolicy = _router.RouterLangfusePolicy
 RouterNode = _router.RouterNode
 RouterNodeMeta = _router.RouterNodeMeta
 RouterNodeType = _router.RouterNodeType
 RouterPolicy = _router.RouterPolicy
+RouterControlAction = _router.RouterControlAction
+RouterVerdictConfig = _router.RouterVerdictConfig
 RouterGraphConfig = _router.RouterGraphConfig
 RouterGraphMemoryConfig = _router.RouterGraphMemoryConfig
 RouterMemoryConfig = _router.RouterMemoryConfig
@@ -37,6 +38,60 @@ class ManifestModel(BaseModel):
     """Base Pydantic model for manifest schema sections."""
 
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+
+
+class ModelIOEvidenceConfig(ManifestModel):
+    """Project narrowing for protected model-I/O evidence and external projection."""
+
+    capture: Literal["disabled", "brain_protected"] = "disabled"
+    failure_policy: Literal["required", "best_effort"] = "required"
+    lifecycle_profile_id: str = Field(
+        default="trace-artifacts-standard",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-z][a-z0-9_-]*$",
+    )
+    external_projection: Literal["none", "redacted"] = "none"
+
+    @model_validator(mode="after")
+    def validate_projection_requires_capture(self) -> "ModelIOEvidenceConfig":
+        if self.external_projection == "redacted" and self.capture != "brain_protected":
+            raise ValueError("redacted model I/O projection requires brain_protected capture")
+        return self
+
+
+class ObservabilityTracingConfig(ManifestModel):
+    """Project C1 tracing selection; endpoint and credentials remain C0-owned."""
+
+    transport: Literal["disabled", "exporter_profile", "oss_direct"] = "disabled"
+    profile_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-z][a-z0-9_-]*$",
+    )
+    sample_ratio: float = Field(default=1.0, ge=0.0, le=1.0)
+    model_io: ModelIOEvidenceConfig = Field(default_factory=ModelIOEvidenceConfig)
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_legacy_langfuse(cls, value: object) -> object:
+        """Reject removed callback configuration with an actionable migration."""
+        if not is_object_dict(value):
+            return value
+        if value.get("transport") == "legacy_langfuse" or "legacy_langfuse" in value:
+            raise ValueError("legacy_langfuse is removed; select exporter_profile, oss_direct, or disabled")
+        return value
+
+    @model_validator(mode="after")
+    def validate_transport_selection(self) -> "ObservabilityTracingConfig":
+        if self.transport == "exporter_profile" and self.profile_id is None:
+            raise ValueError("exporter_profile tracing requires profile_id")
+        if self.transport != "exporter_profile" and self.profile_id is not None:
+            raise ValueError("profile_id requires exporter_profile tracing")
+        if self.model_io.external_projection == "redacted" and self.transport == "disabled":
+            raise ValueError("redacted model I/O projection requires an external transport")
+        return self
 
 
 # -----------------------------------------------------------------------------
@@ -115,11 +170,12 @@ class ShieldSection(ManifestModel):
 
 
 class ObservabilitySection(ManifestModel):
-    """Defines health and readiness checks for the project infrastructure."""
+    """Project health/readiness settings plus optional tracing configuration."""
 
     health_probe: bool
     readiness_check_mode: Literal["stream", "poll"]
     expected_tools: list[str] | None = None
+    tracing: ObservabilityTracingConfig | None = None
 
 
 # -----------------------------------------------------------------------------
@@ -218,6 +274,7 @@ class RouterRegistrationBundle(ManifestModel):
     services: dict[str, WireValue] = Field(default_factory=dict)
     policy: dict[str, WireValue] = Field(default_factory=dict)
     conductor: dict[str, WireValue] = Field(default_factory=dict)
+    observability: dict[str, WireValue] = Field(default_factory=dict)
     secrets: dict[str, str] | None = None
 
     @property

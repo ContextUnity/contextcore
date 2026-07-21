@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import ClassVar, Literal, Self
 
+from contextunity.core.control import ControlAction
 from contextunity.core.types import JsonDict, is_json_value, is_object_dict
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
@@ -523,15 +524,6 @@ class ModelsPolicy(RouterManifestModel):
     embeddings: ModelsEmbeddingsPolicy | None = None
 
 
-class RouterLangfusePolicy(RouterManifestModel):
-    """Langfuse observability toggle and secret refs."""
-
-    tracing_enabled: bool | None = None
-    public_key_ref: str | None = None
-    secret_key_ref: str | None = None
-    host_ref: str | None = None
-
-
 class RouterPolicy(RouterManifestModel):
     """Global execution policies for the Router, including allowed tools and model selection."""
 
@@ -539,7 +531,6 @@ class RouterPolicy(RouterManifestModel):
     models_ref: str | None = None
     models: ModelsPolicy | None = None
     prompts_ref: str | None = None
-    langfuse: RouterLangfusePolicy | None = None
 
     @model_validator(mode="after")
     def check_models_policy_mutually_exclusive(self) -> Self:
@@ -632,6 +623,47 @@ class RouterGraphMemoryConfig(RouterManifestModel):
     auto_extract: RouterAutoExtractConfig | None = None
 
 
+RouterControlAction = ControlAction
+
+
+class RouterVerdictConfig(RouterManifestModel):
+    """C1/C2 narrowing for the C0-owned mid-execution verdict policy."""
+
+    verifier_ref: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:@/-]*$",
+    )
+    max_provider_attempts: int | None = Field(default=None, ge=1, le=4_096)
+    max_node_attempts: int | None = Field(default=None, ge=1, le=4_096)
+    max_graph_cycles: int | None = Field(default=None, ge=1, le=4_096)
+    max_side_effect_attempts: int | None = Field(default=None, ge=1, le=4_096)
+    max_input_tokens: int | None = Field(default=None, ge=1, le=1_000_000_000)
+    max_output_tokens: int | None = Field(default=None, ge=1, le=1_000_000_000)
+    max_cost_micros: int | None = Field(default=None, ge=1, le=1_000_000_000_000)
+    max_wall_time_seconds: float | None = Field(default=None, gt=0, le=3_600)
+    stagnation_window: int | None = Field(default=None, ge=1, le=64)
+    low_q_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    allowed_actions: list[RouterControlAction] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=7,
+    )
+
+    @field_validator("allowed_actions")
+    @classmethod
+    def _validate_unique_actions(
+        cls,
+        value: list[RouterControlAction] | None,
+    ) -> list[RouterControlAction] | None:
+        if value is not None and len(value) != len(set(value)):
+            raise ValueError("verdict allowed_actions must be unique")
+        if value is not None and "abort_hard" not in value:
+            raise ValueError("verdict allowed_actions must retain abort_hard")
+        return value
+
+
 class RouterGraphConfig(RouterManifestModel):
     """Typed graph ``config`` block; opaque executor keys belong in ``runtime``.
 
@@ -642,6 +674,7 @@ class RouterGraphConfig(RouterManifestModel):
     """
 
     memory: RouterGraphMemoryConfig | None = None
+    verdict: RouterVerdictConfig | None = None
 
 
 class RouterConductorConfig(RouterManifestModel):
@@ -649,7 +682,7 @@ class RouterConductorConfig(RouterManifestModel):
 
     Explicit model pins stay under ``router.config.policy.models``; this block
     owns CheapestViable gates, budget/quality floors, and token estimates.
-    Catalog path is **L0-only** (``router.yml`` / ``CU_ROUTER_CONDUCTOR_MODELS_CATALOG_PATH``);
+    Catalog path is **C0-only** (``router.yml`` / ``CU_ROUTER_CONDUCTOR_MODELS_CATALOG_PATH``);
     it must not appear on project manifests (``extra=forbid`` rejects it).
     Phase 5 may extend with Engram/Dream signals without moving pins here.
     """
@@ -669,11 +702,12 @@ class RouterConductorConfig(RouterManifestModel):
 
 
 class RouterConfigSection(RouterManifestModel):
-    """Typed ``router.config`` block (v1alpha8): policy + memory + conductor."""
+    """Typed ``router.config`` block (v1alpha8) projected into runtime graphs."""
 
     policy: RouterPolicy
     memory: RouterMemoryConfig | None = None
     conductor: RouterConductorConfig | None = None
+    verdict: RouterVerdictConfig | None = None
 
 
 class RouterSection(RouterManifestModel):

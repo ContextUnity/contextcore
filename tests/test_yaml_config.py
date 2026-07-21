@@ -305,7 +305,10 @@ class TestLoadServiceConfig:
 
     @patch.dict(os.environ, {}, clear=True)
     def test_defaults_no_file(self) -> None:
-        with patch(f"{_FACTORY}.read_service_file", return_value={}):
+        with (
+            patch(f"{_FACTORY}.read_service_file", return_value={}),
+            patch(f"{_FACTORY}.load_dotenv_chain"),
+        ):
             cfg = load_service_config(DemoServiceConfig, "demo")
         assert cfg.demo_port == 9090
         assert cfg.demo_name == "demo"

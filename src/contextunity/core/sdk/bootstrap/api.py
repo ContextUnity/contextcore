@@ -251,6 +251,9 @@ def _register_and_start_impl(
         backend,
         prompts_for_shield,
         tuple(allowed_tenants),
+        config.delivery_resume_window_seconds,
+        config.delivery_max_cache_entries,
+        config.delivery_max_message_bytes,
     )
 
     if background:

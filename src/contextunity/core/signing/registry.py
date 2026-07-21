@@ -28,6 +28,7 @@ def set_signing_backend(backend: AuthBackend) -> None:
 def get_signing_backend(
     project_id: str | None = None,
     project_secret: str | None = None,
+    platform_secret: str | None = None,
     shield_url: str | None = None,
     *,
     shield_enabled: bool = False,
@@ -36,27 +37,32 @@ def get_signing_backend(
     if _active_backend is not None and project_id is None:
         return _active_backend
 
-    if project_secret is None or shield_url is None:
-        from contextunity.core.config import get_core_config
+    from contextunity.core.config import get_core_config
 
-        config = get_core_config()
-        if project_secret is None:
-            project_secret = config.security.project_secret
-        if shield_url is None:
-            shield_url = config.shield_url
+    config = get_core_config()
+    if project_secret is None:
+        project_secret = config.security.project_secret
+    if platform_secret is None:
+        platform_secret = config.security.platform_secret
+    if shield_url is None:
+        shield_url = config.shield_url
 
     if not project_id:
         raise ConfigurationError(
-            message="No signing backend configured. Either:\n  1. Call set_signing_backend() during bootstrap, or\n  2. Pass project_id= and set CU_PROJECT_SECRET env var.",
+            message=(
+                "No signing backend configured. Either:\n"
+                "  1. Call set_signing_backend() during bootstrap, or\n"
+                "  2. Pass project_id= with CU_PLATFORM_SECRET (no Shield) "
+                "or CU_PROJECT_SECRET (Shield bootstrap)."
+            ),
             code="CONFIGURATION_ERROR",
         )
-    if not project_secret:
-        raise ConfigurationError(
-            message="CU_PROJECT_SECRET is required. Set it via env var or pass project_secret= to get_signing_backend().",
-            code="CONFIGURATION_ERROR",
-        )
-
     if shield_enabled:
+        if not project_secret:
+            raise ConfigurationError(
+                message="CU_PROJECT_SECRET is required for Shield bootstrap.",
+                code="CONFIGURATION_ERROR",
+            )
         if not shield_url:
             raise ConfigurationError(
                 message="Shield is enabled in manifest but CU_SHIELD_GRPC_URL is not set.",
@@ -80,7 +86,26 @@ def get_signing_backend(
             shield_url=shield_url,
         )
     else:
-        backend = HmacBackend(project_id=project_id, project_secret=project_secret)
+        from contextunity.core.auth_posture import (
+            resolve_auth_runtime_posture,
+            resolve_platform_hmac_secret,
+        )
+
+        posture = resolve_auth_runtime_posture(
+            local_mode=config.local_mode,
+            shield_enabled=False,
+        )
+        hmac_secret = resolve_platform_hmac_secret(
+            posture,
+            platform_secret=platform_secret or "",
+            project_secret=project_secret or "",
+        )
+        if not hmac_secret:
+            raise ConfigurationError(
+                message="CU_PLATFORM_SECRET is required for no-Shield HMAC authentication.",
+                code="CONFIGURATION_ERROR",
+            )
+        backend = HmacBackend(project_id=project_id, project_secret=hmac_secret)
 
     set_signing_backend(backend)
     return backend

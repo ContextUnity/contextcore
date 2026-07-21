@@ -77,6 +77,7 @@ class TestSessionTokenBackend:
             backend = configure_service_signing_backend(
                 security,
                 project_id="sample_project",
+                local_mode=False,
                 shield_enabled=True,
                 shield_url="shield:50054",
                 service_name="worker",
@@ -97,6 +98,7 @@ class TestSessionTokenBackend:
             configure_service_signing_backend(
                 security,
                 project_id="sample_project",
+                local_mode=False,
                 shield_enabled=True,
                 shield_url="shield:50054",
                 service_name="worker",
@@ -151,12 +153,13 @@ class TestHmacGetAuthMetadata:
         data = json.loads(raw)
 
         # Structure: all required fields present
-        for field in ("token_id", "permissions", "allowed_tenants", "user_id", "agent_id", "user_namespace"):
+        for field in ("token_id", "permissions", "allowed_tenants", "user_id", "agent_id"):
             assert field in data, f"Missing required field: {field}"
 
         # Values: correct defaults
         assert data["user_id"] == "system"
         assert data["agent_id"] == "project:tenant_x"
+        assert data.get("user_namespace", "default") == "default"
         assert "tenant_x" in data["allowed_tenants"]
         assert Permissions.SHIELD_SESSION_TOKEN_ISSUE in data["permissions"]
         assert Permissions.SHIELD_PROJECT_KEY_ROTATE in data["permissions"]

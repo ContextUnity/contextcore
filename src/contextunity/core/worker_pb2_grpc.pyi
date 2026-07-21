@@ -65,6 +65,18 @@ class WorkerServiceStub:
     Request payload: {project_id, schedules: [...]}
     Response payload: {status, registered_count}
     """
+    ArchiveExecutionTraceArtifact: _grpc.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]
+    """Brain-only encrypted Trace artifact cold-offload lifecycle. Worker receives
+    opaque Shield ciphertext and returns storage receipts without content keys.
+    """
+    RestoreExecutionTraceArtifact: _grpc.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]
+    PurgeExecutionTraceArtifactArchive: _grpc.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]
 
 @_typing.type_check_only
 class WorkerServiceAsyncStub(WorkerServiceStub):
@@ -102,6 +114,18 @@ class WorkerServiceAsyncStub(WorkerServiceStub):
     Request payload: {project_id, schedules: [...]}
     Response payload: {status, registered_count}
     """
+    ArchiveExecutionTraceArtifact: _aio.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]  # type: ignore[assignment]
+    """Brain-only encrypted Trace artifact cold-offload lifecycle. Worker receives
+    opaque Shield ciphertext and returns storage receipts without content keys.
+    """
+    RestoreExecutionTraceArtifact: _aio.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]  # type: ignore[assignment]
+    PurgeExecutionTraceArtifactArchive: _aio.UnaryUnaryMultiCallable[
+        _contextunit_pb2.ContextUnit, _contextunit_pb2.ContextUnit
+    ]  # type: ignore[assignment]
 
 class WorkerServiceServicer(metaclass=_abc_1.ABCMeta):
     """=====================================================
@@ -160,6 +184,29 @@ class WorkerServiceServicer(metaclass=_abc_1.ABCMeta):
         Request payload: {project_id, schedules: [...]}
         Response payload: {status, registered_count}
         """
+
+    @_abc_1.abstractmethod
+    def ArchiveExecutionTraceArtifact(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]:
+        """Brain-only encrypted Trace artifact cold-offload lifecycle. Worker receives
+        opaque Shield ciphertext and returns storage receipts without content keys.
+        """
+
+    @_abc_1.abstractmethod
+    def RestoreExecutionTraceArtifact(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
+    @_abc_1.abstractmethod
+    def PurgeExecutionTraceArtifactArchive(
+        self,
+        request: _contextunit_pb2.ContextUnit,
+        context: _ServicerContext,
+    ) -> _typing.Union[_contextunit_pb2.ContextUnit, _abc.Awaitable[_contextunit_pb2.ContextUnit]]: ...
 
 def add_WorkerServiceServicer_to_server(
     servicer: WorkerServiceServicer, server: _typing.Union[_grpc.Server, _aio.Server]

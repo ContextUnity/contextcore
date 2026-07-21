@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
+from contextunity.core.sdk.execution_trace_artifacts import (
+    ProtectedExecutionTraceArtifactEnvelope,
+    ProtectExecutionTraceArtifactRequest,
+    UnprotectedExecutionTraceArtifact,
+    UnprotectExecutionTraceArtifactRequest,
+)
 from contextunity.core.sdk.payload import copy_wire_payload
 from contextunity.core.shield_pb2_grpc import ShieldServiceStub
 from contextunity.core.types import ContextUnitPayload
@@ -115,25 +121,23 @@ class ShieldClient(_ShieldBase):
         )
         return copy_wire_payload(res)
 
-    async def encrypt(
-        self, *, data: str, algorithm: str = "aes-256-gcm", key_ref: str = "default"
-    ) -> ContextUnitPayload:
-        """Encrypt plaintext data using Shield's KMS."""
-        res = await self._call_unary(
-            self._stub.Encrypt,
-            {"plaintext": data, "backend": algorithm, "key_ref": key_ref},
-            rpc_name="Encrypt",
-        )
-        return copy_wire_payload(res)
+    async def protect_execution_trace_artifact(
+        self,
+        request: ProtectExecutionTraceArtifactRequest,
+    ) -> ProtectedExecutionTraceArtifactEnvelope:
+        """Protect one closed purpose/identity-bound Trace artifact."""
+        payload: ContextUnitPayload = request.model_dump(mode="json")
+        res = await self._call_unary(self._stub.Encrypt, payload, rpc_name="Encrypt")
+        return ProtectedExecutionTraceArtifactEnvelope.model_validate(copy_wire_payload(res))
 
-    async def decrypt(self, *, ciphertext_b64: str) -> ContextUnitPayload:
-        """Decrypt ciphertext using Shield's KMS."""
-        res = await self._call_unary(
-            self._stub.Decrypt,
-            {"ciphertext_b64": ciphertext_b64},
-            rpc_name="Decrypt",
-        )
-        return copy_wire_payload(res)
+    async def unprotect_execution_trace_artifact(
+        self,
+        request: UnprotectExecutionTraceArtifactRequest,
+    ) -> UnprotectedExecutionTraceArtifact:
+        """Recover one already-authorized identity-bound Trace artifact."""
+        payload: ContextUnitPayload = request.model_dump(mode="json")
+        res = await self._call_unary(self._stub.Decrypt, payload, rpc_name="Decrypt")
+        return UnprotectedExecutionTraceArtifact.model_validate(copy_wire_payload(res))
 
     async def issue_session_token(
         self,

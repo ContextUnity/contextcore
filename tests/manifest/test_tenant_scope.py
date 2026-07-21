@@ -99,7 +99,9 @@ def test_require_token_covers_allowed_tenants_accepts_verified_auth_context() ->
         permissions=("tools:register:sample_project",),
         allowed_tenants=("sample_project", "sample_project-staging"),
     )
-    auth_ctx = VerifiedAuthContext.from_token(token, "raw-token", project_id="sample_project")
+    from contextunity.core.tokens import ProjectBound
+
+    auth_ctx = VerifiedAuthContext.from_token(token, "raw-token", project_binding=ProjectBound("sample_project"))
     require_token_covers_allowed_tenants(
         auth_ctx,
         allowed_tenants=["sample_project", "sample_project-staging"],
@@ -113,7 +115,9 @@ def test_require_token_covers_allowed_tenants_rejects_missing_scope_on_auth_cont
         permissions=("tools:register:sample_project",),
         allowed_tenants=("sample_project",),
     )
-    auth_ctx = VerifiedAuthContext.from_token(token, "raw-token", project_id="sample_project")
+    from contextunity.core.tokens import ProjectBound
+
+    auth_ctx = VerifiedAuthContext.from_token(token, "raw-token", project_binding=ProjectBound("sample_project"))
     with pytest.raises(SecurityError):
         require_token_covers_allowed_tenants(
             auth_ctx,
@@ -127,7 +131,9 @@ def test_require_token_covers_allowed_tenants_rejects_empty_non_admin_scope() ->
         token_id="bootstrap",
         permissions=("tools:register:sample_project",),
     )
-    auth_ctx = VerifiedAuthContext.from_token(token, "raw-token", project_id="sample_project")
+    from contextunity.core.tokens import ProjectBound
+
+    auth_ctx = VerifiedAuthContext.from_token(token, "raw-token", project_binding=ProjectBound("sample_project"))
 
     with pytest.raises(SecurityError):
         require_token_covers_allowed_tenants(

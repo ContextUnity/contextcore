@@ -34,9 +34,14 @@ def minimal_sample_project_payload() -> dict:
                     "allowed_tools": ["execute_test_sql"],
                     "models_ref": "router/models.yaml",
                     "prompts_ref": "router/prompts/",
-                    "langfuse": {"tracing_enabled": True},
                 },
             },
+        },
+        "observability": {
+            "health_probe": True,
+            "readiness_check_mode": "stream",
+            "expected_tools": ["execute_test_sql"],
+            "tracing": {"transport": "disabled"},
         },
         "brain": {
             "tenant_scope": "single",
@@ -58,6 +63,86 @@ def test_positive_sample_project_validates(minimal_sample_project_payload):
     assert project.project.id == "tenant_a"
     assert project.services.worker.enabled is False
     assert getattr(project, "worker", None) is None
+
+
+def test_rejects_legacy_policy_langfuse_wrapper(minimal_sample_project_payload):
+    minimal_sample_project_payload["router"]["config"]["policy"]["langfuse"] = {
+        "tracing_enabled": True,
+    }
+
+    with pytest.raises(ValidationError) as exc:
+        ContextUnityProject(**minimal_sample_project_payload)
+
+    assert "langfuse" in str(exc.value)
+
+
+def test_tracing_defaults_external_transport_and_model_io_off(
+    minimal_sample_project_payload,
+):
+    minimal_sample_project_payload["observability"]["tracing"] = {}
+
+    project = ContextUnityProject(**minimal_sample_project_payload)
+
+    assert project.observability is not None
+    assert project.observability.tracing is not None
+    assert project.observability.tracing.transport == "disabled"
+    assert project.observability.tracing.model_io.capture == "disabled"
+    assert project.observability.tracing.model_io.external_projection == "none"
+
+
+def test_tracing_accepts_protected_capture_without_external_export(
+    minimal_sample_project_payload,
+):
+    minimal_sample_project_payload["observability"]["tracing"] = {
+        "transport": "disabled",
+        "model_io": {
+            "capture": "brain_protected",
+            "failure_policy": "required",
+            "lifecycle_profile_id": "trace-artifacts-standard",
+            "external_projection": "none",
+        },
+    }
+
+    project = ContextUnityProject(**minimal_sample_project_payload)
+
+    assert project.observability is not None
+    assert project.observability.tracing is not None
+    assert project.observability.tracing.model_io.capture == "brain_protected"
+
+
+@pytest.mark.parametrize(
+    "tracing",
+    [
+        {"transport": "legacy_langfuse"},
+        {"legacy_langfuse": {"enabled": True}},
+    ],
+)
+def test_tracing_rejects_legacy_langfuse_with_migration_message(
+    minimal_sample_project_payload,
+    tracing,
+):
+    minimal_sample_project_payload["observability"]["tracing"] = tracing
+
+    with pytest.raises(ValidationError) as exc:
+        ContextUnityProject(**minimal_sample_project_payload)
+
+    error = str(exc.value)
+    assert "legacy_langfuse is removed" in error
+    assert "exporter_profile" in error
+    assert "disabled" in error
+
+
+def test_tracing_rejects_redacted_projection_without_protected_capture(
+    minimal_sample_project_payload,
+):
+    minimal_sample_project_payload["observability"]["tracing"] = {
+        "transport": "exporter_profile",
+        "profile_id": "safe-otlp",
+        "model_io": {"external_projection": "redacted"},
+    }
+
+    with pytest.raises(ValidationError, match="brain_protected"):
+        ContextUnityProject(**minimal_sample_project_payload)
 
 
 def test_reject_extra_fields(minimal_sample_project_payload):
@@ -263,8 +348,8 @@ def test_router_config_conductor_block_accepted(minimal_sample_project_payload):
     assert project.router.config.conductor.quality_threshold == 0.75
 
 
-def test_router_config_conductor_rejects_l1_catalog_path(minimal_sample_project_payload):
-    """Catalog path is L0-only; L1 manifest must not carry models_catalog_path."""
+def test_router_config_conductor_rejects_c1_catalog_path(minimal_sample_project_payload):
+    """Catalog path is C0-only; C1 manifest must not carry models_catalog_path."""
     from pydantic import ValidationError
 
     minimal_sample_project_payload["router"]["config"]["conductor"] = {
@@ -274,6 +359,30 @@ def test_router_config_conductor_rejects_l1_catalog_path(minimal_sample_project_
     with pytest.raises(ValidationError) as exc:
         ContextUnityProject(**minimal_sample_project_payload)
     assert "models_catalog_path" in str(exc.value)
+
+
+def test_observability_tracing_selection_is_closed_and_has_no_destination_fields() -> None:
+    from contextunity.core.manifest.models import ObservabilityTracingConfig
+
+    selected = ObservabilityTracingConfig(
+        transport="exporter_profile",
+        profile_id="otlp_prod",
+        sample_ratio=0.25,
+    )
+    assert selected.profile_id == "otlp_prod"
+
+    with pytest.raises(ValueError, match="requires profile_id"):
+        ObservabilityTracingConfig(transport="exporter_profile")
+    with pytest.raises(ValueError, match="profile_id requires"):
+        ObservabilityTracingConfig(transport="disabled", profile_id="unexpected")
+    with pytest.raises(ValueError):
+        ObservabilityTracingConfig.model_validate(
+            {
+                "transport": "exporter_profile",
+                "profile_id": "otlp_prod",
+                "endpoint": "https://attacker.invalid/v1/traces",
+            }
+        )
 
 
 def test_artifact_generator_projects_router_memory_and_graph_runtime(minimal_sample_project_payload):
@@ -300,6 +409,45 @@ def test_artifact_generator_projects_router_memory_and_graph_runtime(minimal_sam
     # Opaque runtime must NOT be re-mixed into typed config (alpha8).
     assert "max_retries" not in config
     assert bundle.graph["main"]["runtime"] == {"max_retries": 2}
+    assert bundle.observability == {
+        "tracing": {
+            "transport": "disabled",
+            "sample_ratio": 1.0,
+            "model_io": {
+                "capture": "disabled",
+                "failure_policy": "required",
+                "lifecycle_profile_id": "trace-artifacts-standard",
+                "external_projection": "none",
+            },
+        }
+    }
+
+
+def test_artifact_generator_projects_typed_verdict_limits_with_graph_narrowing(
+    minimal_sample_project_payload,
+):
+    minimal_sample_project_payload["router"]["config"]["verdict"] = {
+        "verifier_ref": "node:project_verifier",
+        "max_node_attempts": 20,
+        "max_cost_micros": 50_000,
+        "allowed_actions": ["continue", "request_replan", "abort_hard"],
+    }
+    minimal_sample_project_payload["router"]["graph"]["main"]["config"] = {
+        "verdict": {
+            "verifier_ref": "node:graph_verifier",
+            "max_node_attempts": 12,
+        }
+    }
+
+    project = ContextUnityProject(**minimal_sample_project_payload)
+    bundle = ArtifactGenerator(project).generate_router_registration_bundle()
+
+    assert bundle.graph["main"]["config"]["verdict"] == {
+        "verifier_ref": "node:graph_verifier",
+        "max_node_attempts": 12,
+        "max_cost_micros": 50_000,
+        "allowed_actions": ["continue", "request_replan", "abort_hard"],
+    }
 
 
 def test_graph_runtime_rejects_non_json_values(minimal_sample_project_payload):

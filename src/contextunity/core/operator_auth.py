@@ -6,12 +6,13 @@ from contextunity.core.exceptions import ConfigurationError, SecurityError
 from contextunity.core.permissions import Permissions
 from contextunity.core.signing import HmacBackend
 from contextunity.core.token_utils import serialize_token, verify_token_string
-from contextunity.core.tokens import ContextToken, TokenBuilder
+from contextunity.core.tokens import ContextToken, PlatformBound, TokenBuilder
 
 _LOCAL_READ_PERMISSIONS: tuple[str, ...] = (
     Permissions.ADMIN_READ,
     Permissions.BRAIN_READ,
     Permissions.TRACE_READ,
+    Permissions.TRACE_ARTIFACT_READ,
     Permissions.MEMORY_READ,
 )
 
@@ -19,8 +20,14 @@ _LOCAL_PLATFORM_PERMISSIONS: tuple[str, ...] = (
     Permissions.ADMIN_ALL,
     Permissions.ADMIN_READ,
     Permissions.BRAIN_READ,
+    Permissions.BRAIN_WRITE,
+    Permissions.BRAIN_EMBED,
+    Permissions.DOCS_READ,
+    Permissions.DOCS_WRITE,
     Permissions.TRACE_READ,
+    Permissions.TRACE_ARTIFACT_READ,
     Permissions.MEMORY_READ,
+    Permissions.ROUTER_INTROSPECT,
 )
 
 # Explicit TTL contract — local platform admin is short-lived; scoped tenant tokens longer.
@@ -30,12 +37,10 @@ LOCAL_SCOPED_TTL_S = 604_800.0  # 7d
 
 def mint_local_operator_token(
     *,
-    project_id: str,
-    project_secret: str,
+    platform_secret: str,
     allowed_tenants: tuple[str, ...] | None = None,
     ttl_s: float | None = None,
     agent_id: str = "local:operator",
-    user_id: str = "local-operator",
 ) -> tuple[str, ContextToken, float]:
     """Mint a local HMAC operator token.
 
@@ -44,10 +49,10 @@ def mint_local_operator_token(
 
     Scoped (``allowed_tenants`` non-empty): ``admin:read`` only, restricted tenants.
     """
-    secret = project_secret.strip()
+    secret = platform_secret.strip()
     if not secret:
         raise ConfigurationError(
-            "CU_PROJECT_SECRET is required for local operator login",
+            "CU_PLATFORM_SECRET is required for local operator login",
             code="CONFIGURATION_ERROR",
         )
 
@@ -60,14 +65,14 @@ def mint_local_operator_token(
         tenants = ()
         effective_ttl = ttl_s if ttl_s is not None else LOCAL_PLATFORM_ADMIN_TTL_S
 
-    backend = HmacBackend(project_id, secret)
+    backend = HmacBackend("platform", secret)
     token = TokenBuilder().mint_root(
         user_ctx={},
         permissions=permissions,
+        project_binding=PlatformBound(),
         allowed_tenants=tenants,
         ttl_s=effective_ttl,
         agent_id=agent_id,
-        user_id=user_id,
     )
     bearer = serialize_token(token, backend=backend)
     verified = verify_token_string(bearer, backend)

@@ -24,6 +24,7 @@ from .context import (
     set_auth_context,
 )
 from .engine import AuthzDecision, authorize
+from .tenant import resolve_single_tenant_scope, resolve_token_tenant
 
 __all__ = [
     "AccessManager",
@@ -33,5 +34,7 @@ __all__ = [
     "get_auth_context",
     "require_auth_context",
     "reset_auth_context",
+    "resolve_single_tenant_scope",
+    "resolve_token_tenant",
     "set_auth_context",
 ]

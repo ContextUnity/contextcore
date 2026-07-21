@@ -23,10 +23,10 @@ service BrainService {
     // Core Knowledge Operations
     // =========================================
 
-    // Semantic/Hybrid search
-    // Request payload: {tenant_id, query_text, limit?, source_types?}
-    // Response payload: {id, content, score, source_type, metadata}
-    rpc Search(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
+    // Canonical BrainCell semantic/hybrid search.
+    // Request payload: {tenant_id?, query_text, limit?, min_score?, source_types?, scope_path?, user_id?}
+    // Response payload: {id, tenant_id, cell_kind, content, score, vector_score?, text_score?, source_type, source_ref?, scope_path?, content_hash?, confidence, visibility, metadata}
+    rpc SearchCells(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // Graph Traversal
     // Request payload: {tenant_id, entrypoint_ids, max_hops?, allowed_relations?}
@@ -38,15 +38,10 @@ service BrainService {
     // Response payload: {success}
     rpc CreateKGRelation(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
-    // Upsert content (generic)
-    // Request payload: {tenant_id, content, source_type, metadata?}
+    // Explicit document ingestion with enrichment/chunking semantics.
+    // Request payload: {tenant_id?, content, source_type, metadata?, user_id?}
     // Response payload: {id, success}
-    rpc Upsert(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
-
-    // Query memory (hybrid search with provenance)
-    // Request payload: {tenant_id, content, filters?}
-    // Response payload: {content, metadata, score}
-    rpc QueryMemory(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
+    rpc IngestDocument(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Phase 3: Canonical BrainCell API
     // Upsert a canonical BrainCell over current knowledge storage.
@@ -66,6 +61,12 @@ service BrainService {
     // Response payload: {id, tenant_id, cell_kind, content, metadata, source_type, source_ref, scope_path, content_hash, confidence, visibility, created_at, updated_at}
     rpc GetCell(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
+    // Atomically delete bounded, exact documentation cells only when every
+    // supplied id/content_hash target still matches in the resolved tenant.
+    // Request payload: {tenant_id?, targets:[{cell_id, content_hash}]}
+    // Response payload: {status: deleted|conflict, deleted_count, expected_count}
+    rpc DeleteDocumentationCells(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
     // Durable asynchronous embedding enrichment. Payloads contain references
     // and status only; Brain keeps cell text/provider calls internal.
     rpc EnqueueCellEmbedding(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
@@ -82,32 +83,23 @@ service BrainService {
 
 
     // =========================================
-    // Episodic & Entity Memory
+    // Conversation History
     // =========================================
 
-    // Add conversation episode
-    // Request payload: {user_id, tenant_id, session_id?, content, metadata?}
-    rpc AddEpisode(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    // Append one immutable conversation record with canonical hashes and idempotency.
+    rpc AppendConversationRecord(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
-    // Get recent episodes for a user
-    // Request payload: {tenant_id, user_id, limit?}
-    // Response payload: {id, content, metadata, created_at}
-    rpc GetRecentEpisodes(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
+    // Run one bounded recent/older/session/trace-related projection.
+    rpc QueryConversationHistory(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
-    // Get episodes older than N days (retention / synthesis)
-    // Request payload: {tenant_id, older_than_days?, limit?}
-    // Response payload: {id, user_id, content, metadata, created_at, source_hash?, graph_run_id?}
-    rpc GetOldEpisodes(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
+    // Return content-free tenant statistics.
+    rpc GetConversationHistoryStats(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
-    // Get episode count and date range for a tenant
-    // Request payload: {tenant_id}
-    // Response payload: {total, oldest, newest, tenant_id}
-    rpc GetEpisodeStats(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    // Apply explicit, evidence-backed Conversation History retention.
+    rpc ApplyConversationRetention(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
-    // Delete old episodes for a tenant, optionally restricted to explicit IDs
-    // Request payload: {tenant_id, older_than_days, episode_ids?}
-    // Response payload: {deleted_count}
-    rpc RetentionCleanup(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    // Apply age-based terminal Execution Trace retention.
+    rpc ApplyExecutionTraceRetention(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // =========================================
     // Agent Traces
@@ -125,18 +117,40 @@ service BrainService {
     //   timing_ms, security_flags, metadata, created_at}
     rpc GetTraces(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
+    // Protected per-provider-attempt model-I/O artifact lifecycle. Payloads are
+    // closed ContextUnit contracts; immutable Trace JSON stores refs only.
+    rpc ReserveExecutionTraceArtifact(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc FinalizeExecutionTraceArtifact(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc GetExecutionTraceArtifact(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc ArchiveExecutionTraceArtifact(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc RestoreExecutionTraceArtifact(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc PurgeExecutionTraceArtifact(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
     // =========================================
-    // Taxonomy Operations
+    // UniversalDebugBus
     // =========================================
 
-    // Upsert taxonomy entry
-    // Request payload: {tenant_id, domain, name, path, keywords?, metadata?}
-    rpc UpsertTaxonomy(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
-
-    // Get taxonomy entries
-    // Request payload: {tenant_id, domain?}
-    // Response payload: {domain, name, path, keywords, metadata}
-    rpc GetTaxonomy(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
+    // Tenant-scoped negative-experience evidence only. Occurrences/cases are
+    // separate from Execution Trace; no generic event API is introduced.
+    // Request payload: {occurrence: FaultOccurrence}; response: {case: DebugCase}.
+    rpc ReportFaultOccurrence(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    // Request payload: {attempt: MitigationAttempt}; response: {case: DebugCase}.
+    rpc ReportMitigationAttempt(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    // Request payload: {evidence: RecoveryEvidence}; response: {case: DebugCase}.
+    rpc ReportRecoveryEvidence(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    // Request payload: {case_id, expected_case_revision, resolution_id}; response: {case: DebugCase}.
+    rpc ResolveDebugCase(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    // Request payload: {case_id, trigger_occurrence_id, expected_case_revision}; response: {case: DebugCase}.
+    rpc ReopenDebugCase(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    // Request payload: {case_id, tenant_id?}; response: {case: DebugCase}.
+    // Any tenant request is checked against verified caller authority.
+    rpc GetDebugCase(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    // Request payload: {query: DebugCaseQuery}; tenant comes only from verified context.
+    // One {case: DebugCase} per bounded response.
+    rpc QueryDebugCases(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
+    // Request payload: {query: DebugCaseQuery}; recurrence requires fault_count >= 2.
+    // Tenant comes only from verified context; one {case: DebugCase} per response.
+    rpc QueryRecurringFaults(contextunity.core.ContextUnit) returns (stream contextunity.core.ContextUnit);
 
     // =========================================
     // Blackboard Operations (Flat Memory)
@@ -184,6 +198,13 @@ service BrainService {
     // Response payload: {id, q_action, q_hypothesis, q_relevance, q_composite, updated_at}
     rpc UpdateSynapseQ(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
+    // Store one immutable delayed outcome and let Brain resolve eligible learning.
+    // Request: {observation: {trace_id, graph_run_id, verdict_digest,
+    //   observation_kind, source_authority, source_ref, occurred_at, idempotency_key}}
+    // Response: {observation_id, trace_id, graph_run_id, policy_version,
+    //   decision, applied_synapse_ids}
+    rpc ReportOutcomeObservation(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+
     // =========================================
     // DuckDB Operations
     // =========================================
@@ -226,14 +247,14 @@ service BrainService {
     // Response payload: {analytics: {...}}
     rpc AdminGetSystemAnalytics(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
-    // Cross-tenant memory layer stats (episodes, knowledge node counts).
+  // Cross-tenant Conversation History, BrainCell, and embedding-job counts.
     // Requires admin:read.
     // tenant_id is optional only when token has admin:all; otherwise required.
     // Request payload: {layer?, tenant_id?}
     // Response payload: {layer_stats: {...}}
     rpc AdminGetMemoryLayerStats(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
-    // Distinct filter values from agent_traces (for admin UI dropdowns).
+    // Distinct filter values from execution traces (for admin UI dropdowns).
     // Requires admin:read.
     // tenant_id is optional only when token has admin:all; otherwise required.
     // Request payload: {tenant_id?}
@@ -247,19 +268,6 @@ service BrainService {
     // Response payload: {traces: [...]}
     rpc AdminGetSessionTraces(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
-    // Fetch episodic_events related to a trace by trace_id (cross-tenant).
-    // Requires admin:read.
-    // Tenant scope is resolved from the trace's own tenant_id (by-id lookup).
-    // Request payload: {trace_id}
-    // Response payload: {episodes: [...]}
-    rpc AdminGetRelatedEpisodes(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
-
-    // Cross-tenant episodic event search with pagination.
-    // Requires admin:read.
-    // tenant_id is optional only when token has admin:all; otherwise required.
-    // Request payload: {tenant_id?, user_id?, session_id?, hours?, limit?, offset?}
-    // Response payload: {events: [...], total: int}
-    rpc AdminSearchEpisodes(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // List cells with optional tenant/kind filter (cross-tenant).
     // Requires admin:read.

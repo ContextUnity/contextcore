@@ -54,11 +54,12 @@ def _bootstrap_metadata(
     the attenuated ``ContextToken`` for an Ed25519 session token (Shield enterprise).
     """
     from contextunity.core.token_utils import create_grpc_metadata_with_token
-    from contextunity.core.tokens import ContextToken
+    from contextunity.core.tokens import ContextToken, ProjectBound
 
     auth = _resolve_auth_backend(backend)
     token = ContextToken(
         token_id=f"{project_id}-{token_id_suffix}",
+        project_binding=ProjectBound(project_id),
         permissions=permissions,
         allowed_tenants=allowed_tenants or (project_id,),
         exp_unix=time.time() + _TOKEN_TTL_REGISTER,
@@ -343,7 +344,7 @@ def register_schedules(
     from contextunity.core.sdk.payload import get_int
 
     config = get_core_config()
-    tenant_id = get_tenant_id() or project_id
+    tenant_id = get_tenant_id()
 
     worker_url = resolve_service_endpoint(
         "worker", configured_host=config.worker_url, default_host="localhost:50052", tenant_id=tenant_id

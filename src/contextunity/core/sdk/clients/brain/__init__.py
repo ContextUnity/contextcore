@@ -12,18 +12,22 @@ from .commerce import CommerceCompatMixin
 from .embedding import EmbeddingMixin
 from .knowledge import KnowledgeMixin
 from .memory import MemoryMixin
+from .outcomes import OutcomeObservationMixin
 from .synapses import SynapseMixin
 from .traces import TraceMixin
+from .udb import UdbMixin
 
 
 class BrainClient(
     BrainAdminMixin,
     CommerceCompatMixin,
+    OutcomeObservationMixin,
     KnowledgeMixin,
     EmbeddingMixin,
     MemoryMixin,
     SynapseMixin,
     TraceMixin,
+    UdbMixin,
     BrainClientBase,
 ):
     """Client for interacting with contextunity.brain using ContextUnit protocol.
@@ -33,7 +37,7 @@ class BrainClient(
 
     Example:
         client = BrainClient(host="localhost:50051")
-        results = await client.search(
+        results = await client.search_cells(
             tenant_id="default",
             query_text="renewable energy breakthrough",
             limit=5,

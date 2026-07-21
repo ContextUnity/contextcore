@@ -15,7 +15,7 @@ service RouterService {
     // Execute a single turn of an agent
     // Request payload: {agent_id, input, config?}
     // Tenant/user identity is derived from ContextToken (SPOT).
-    // Response payload: {output, wall_ms?, langfuse_trace_id?, langfuse_trace_url?}
+    // Response payload: {output, wall_ms?}
     rpc ExecuteAgent(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 
     // Stream agent execution (for UI with real-time output)
@@ -75,16 +75,12 @@ service RouterService {
     // Project connects once and acts as remote executor for its tools.
     // Uses existing gRPC connection — no new ports needed.
     //
-    // Flow:
-    // 1. Project → Router: {"action": "ready", "project_id": "nszu",
-    //                        "tools": ["execute_medical_sql"]}
-    // 2. Router → Project: {"action": "execute", "tool": "execute_medical_sql",
-    //                        "request_id": "abc", "args": {"sql": "SELECT ..."}}
-    // 3. Project → Router: {"action": "result", "request_id": "abc",
-    //                        "columns": [...], "rows": [...], "row_count": N}
-    // 4. On error:
-    //    Project → Router: {"action": "error", "request_id": "abc",
-    //                        "error": "timeout"}
+    // Closed payload protocol: contextunity.tool-delivery/v1.
+    // Project sends ExecutorReady, AcceptedAck, FinalDeliveryReceipt and heartbeat.
+    // Router sends ExecutorRegistered, DeliveryRequest, DeliveryStatusRequest and keepalive.
+    // Unknown versions, directions and legacy action maps fail closed. AcceptedAck does
+    // not prove an effect was uncommitted; replay requires an adapter-authoritative
+    // not_started receipt with replay_safe=true and the same idempotency identity.
     //
     // Security: Requires a ContextToken with "stream:executor" or
     // "stream:executor:{project_id}" permission.
@@ -136,6 +132,15 @@ service RouterService {
     //
     // Secrets are NEVER included in the response (sanitized server-side).
     // Security: Requires "router:introspect" permission.
-    // In CU_LOCAL_MODE, HMAC tokens are accepted even when Shield is primary.
+    // In CLI-owned local runtime, platform HMAC is admitted on declared local surfaces.
     rpc IntrospectRegistrations(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    // Router-local FaultSpool operator surface. Responses never contain tenant IDs,
+    // fault payloads, raw exceptions, or filesystem paths. The caller reaches only
+    // this Router instance's spool; Worker spools are not addressable here.
+    // Security: status requires admin:read; replay/disposition require admin:write.
+    rpc GetFaultSpoolStatus(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc ListFaultSpoolRecords(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc ReplayFaultSpool(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc DiscardFaultSpoolRecord(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
+    rpc PurgeFaultSpoolTerminalRecords(contextunity.core.ContextUnit) returns (contextunity.core.ContextUnit);
 }

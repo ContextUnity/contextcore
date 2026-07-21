@@ -167,5 +167,39 @@ class TestDiscoverServices:
         # broken JSON instance is skipped silently
         assert len(result) == 3
 
+    def test_discovery_isolates_one_get_failure_and_always_closes_client(self):
+        from contextunity.core.discovery import discover_services
+
+        class _FailingGetRedis(FakeRedisDict):
+            def __init__(self) -> None:
+                super().__init__(
+                    {
+                        "contextunity:services:brain:broken": "ignored",
+                        "contextunity:services:brain:healthy": json.dumps(
+                            {
+                                "endpoint": "localhost:50051",
+                                "service": "brain",
+                                "instance": "healthy",
+                                "tenants": [],
+                            }
+                        ),
+                    }
+                )
+                self.closed = False
+
+            def get(self, key: str) -> str | bytes | None:
+                if key.endswith(":broken"):
+                    raise ConnectionError("one key failed")
+                return super().get(key)
+
+            def close(self) -> None:
+                self.closed = True
+
+        fake = _FailingGetRedis()
+        with patch("redis.from_url", return_value=fake):
+            result = discover_services("brain", redis_url="redis://fake")
+        assert [service.instance for service in result] == ["healthy"]
+        assert fake.closed
+
 
 pytestmark = pytest.mark.unit

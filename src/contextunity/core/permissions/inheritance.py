@@ -26,6 +26,8 @@ PERMISSION_INHERITANCE: dict[str, tuple[str, ...]] = {
         Permissions.MEMORY_READ,
         Permissions.MEMORY_WRITE,
         Permissions.TRACE_READ,
+        Permissions.TRACE_ARTIFACT_READ,
+        Permissions.TRACE_ARTIFACT_LIFECYCLE,
         Permissions.TRACE_WRITE,
     ),
     Permissions.ROUTER_EXECUTE: (Permissions.SHIELD_CHECK, Permissions.SHIELD_SECRETS_READ),
@@ -40,13 +42,18 @@ PERMISSION_INHERITANCE: dict[str, tuple[str, ...]] = {
     # the Brain RPC permissions QueryCells/UpsertCell still enforce, so a
     # memory:read-only token works end-to-end against real Brain without
     # authors also listing brain:read.
-    Permissions.MEMORY_READ: (Permissions.BRAIN_READ,),
+    Permissions.MEMORY_READ: (Permissions.BRAIN_READ, Permissions.CONVERSATION_READ),
     Permissions.MEMORY_WRITE: (Permissions.MEMORY_READ, Permissions.BRAIN_WRITE),
     Permissions.BRAIN_WRITE: (Permissions.BRAIN_READ,),
     Permissions.BRAIN_EMBED: (Permissions.BRAIN_READ,),
     Permissions.DOCS_READ: (Permissions.BRAIN_READ,),
     Permissions.DOCS_WRITE: (Permissions.DOCS_READ, Permissions.BRAIN_WRITE),
-    Permissions.ADMIN_TRACE: (Permissions.TRACE_READ,),
+    Permissions.ADMIN_TRACE: (
+        Permissions.TRACE_READ,
+        Permissions.TRACE_ARTIFACT_READ,
+        Permissions.TRACE_ARTIFACT_LIFECYCLE,
+    ),
+    Permissions.ADMIN_READ: (Permissions.CONVERSATION_READ,),
     Permissions.PRIVACY_ALL: (
         Permissions.PRIVACY_ANONYMIZE,
         Permissions.PRIVACY_DEANONYMIZE,

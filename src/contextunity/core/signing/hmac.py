@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 
 from contextunity.core.exceptions import ConfigurationError
 from contextunity.core.logging import get_contextunit_logger
-from contextunity.core.parsing import json_dumps
 from contextunity.core.sdk.types import GrpcMetadata
 
 from .protocols import SignedPayload
@@ -90,7 +89,8 @@ class HmacBackend:
 
     def get_auth_metadata(self) -> GrpcMetadata:
         from contextunity.core.permissions import Permissions
-        from contextunity.core.tokens import TokenBuilder
+        from contextunity.core.token_utils.serialization import serialize_token
+        from contextunity.core.tokens import ProjectBound, TokenBuilder
 
         token = TokenBuilder().mint_root(
             user_ctx={},
@@ -99,27 +99,13 @@ class HmacBackend:
                 Permissions.SHIELD_PROJECT_KEY_ROTATE,
             ],
             ttl_s=3600,
+            project_binding=ProjectBound(self._project_id),
             allowed_tenants=(self._project_id,),
             user_id="system",
             agent_id=f"project:{self._project_id}",
         )
 
-        data: dict[str, str | list[str] | float | None] = {
-            "token_id": token.token_id,
-            "permissions": list(token.permissions),
-            "allowed_tenants": list(token.allowed_tenants),
-            "user_id": token.user_id,
-            "agent_id": token.agent_id,
-            "user_namespace": token.user_namespace,
-        }
-        if token.exp_unix is not None:
-            data["exp_unix"] = token.exp_unix
-        if token.revocation_id:
-            data["revocation_id"] = token.revocation_id
-
-        payload = json_dumps(data, sort_keys=True).encode()
-        signed = self.sign(payload)
-        return (("authorization", f"Bearer {signed.serialize()}"),)
+        return (("authorization", f"Bearer {serialize_token(token, backend=self)}"),)
 
     def create_grpc_metadata(self, token: ContextToken | str) -> GrpcMetadata:
         if isinstance(token, str):

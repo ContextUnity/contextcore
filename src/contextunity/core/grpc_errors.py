@@ -39,6 +39,8 @@ StreamItem = TypeVar("StreamItem")
 _ERROR_CODE_MAP: dict[str, str] = {
     "UNAUTHENTICATED": "UNAUTHENTICATED",
     "PERMISSION_DENIED": "PERMISSION_DENIED",
+    "RESOURCE_EXHAUSTED": "RESOURCE_EXHAUSTED",
+    "DEADLINE_EXCEEDED": "DEADLINE_EXCEEDED",
     "CONFIGURATION_ERROR": "FAILED_PRECONDITION",
     "SHIELD_DECRYPTION_ERROR": "FAILED_PRECONDITION",
     "SECURITY_ERROR": "PERMISSION_DENIED",
@@ -126,6 +128,7 @@ def _status_code_from_name(name: str) -> grpc.StatusCode:
         "ABORTED": grpc.StatusCode.ABORTED,
         "NOT_FOUND": grpc.StatusCode.NOT_FOUND,
         "UNAVAILABLE": grpc.StatusCode.UNAVAILABLE,
+        "RESOURCE_EXHAUSTED": grpc.StatusCode.RESOURCE_EXHAUSTED,
         "DEADLINE_EXCEEDED": grpc.StatusCode.DEADLINE_EXCEEDED,
         "INVALID_ARGUMENT": grpc.StatusCode.INVALID_ARGUMENT,
         "INTERNAL": grpc.StatusCode.INTERNAL,

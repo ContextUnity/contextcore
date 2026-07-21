@@ -95,11 +95,13 @@ def get_allowed_tenants() -> tuple[str, ...]:
 
 
 def get_tenant_id() -> str:
-    """Legacy helper — returns the first allowed tenant.
+    """Return the sole project tenant or fail when scope is ambiguous."""
+    from contextunity.core.authz import resolve_single_tenant_scope
 
-    Prefer ``get_allowed_tenants()`` for multi-tenant projects.
-    """
-    return _allowed_tenants[0] if _allowed_tenants else ""
+    return resolve_single_tenant_scope(
+        _allowed_tenants,
+        boundary="SDK project identity",
+    )
 
 
 def reset_project_identity() -> None:

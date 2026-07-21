@@ -76,21 +76,9 @@ class BaseServiceClient(Generic[StubT]):
         from contextunity.core.config import get_core_config
         from contextunity.core.discovery import resolve_service_endpoint
         from contextunity.core.grpc_utils import create_channel
-        from contextunity.core.sdk.identity import get_tenant_id
         from contextunity.core.sdk.types import TokenProviderFactory as TokenProviderFactoryProtocol
 
         self._cu_pb2 = contextunit_pb2
-
-        config = get_core_config()
-        t_id = tenant_id or get_tenant_id()
-        configured_host = getattr(config, self._config_url_attr, "") or ""
-
-        self.host = host or resolve_service_endpoint(
-            self._service_name,
-            configured_host=configured_host,
-            default_host=f"localhost:{self._default_port}",
-            tenant_id=t_id,
-        )
 
         from contextunity.core.tokens import ContextToken as _CT
 
@@ -101,6 +89,31 @@ class BaseServiceClient(Generic[StubT]):
             self._token = token
         elif isinstance(token, TokenProviderFactoryProtocol):
             self._token_factory = token
+
+        config = get_core_config()
+        discovery_tenant = tenant_id
+        if self._token is not None:
+            from contextunity.core.authz import resolve_token_tenant
+            from contextunity.core.exceptions import SecurityError
+
+            try:
+                discovery_tenant = resolve_token_tenant(
+                    self._token,
+                    requested_tenant_id=tenant_id,
+                    boundary=f"{self._service_name} client discovery",
+                )
+            except SecurityError:
+                if tenant_id is not None:
+                    raise
+                discovery_tenant = None
+        configured_host = getattr(config, self._config_url_attr, "") or ""
+
+        self.host = host or resolve_service_endpoint(
+            self._service_name,
+            configured_host=configured_host,
+            default_host=f"localhost:{self._default_port}",
+            tenant_id=discovery_tenant,
+        )
 
         self.channel = create_channel(self.host)
         self._stub = self._stub_class(self.channel)

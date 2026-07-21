@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import pytest
 from contextunity.core import contextunit_pb2
@@ -59,18 +60,25 @@ async def test_brain_client_keeps_legacy_match_duckdb_surface():
 
 
 @pytest.mark.asyncio
-async def test_brain_client_get_old_episodes_preserves_provenance_wire_fields():
+async def test_brain_client_query_conversation_history_returns_strict_records():
     class _Stub:
-        async def GetOldEpisodes(self, req, metadata=None):
+        async def QueryConversationHistory(self, req, metadata=None):
             yield ContextUnit(
                 payload={
-                    "id": "ep-1",
+                    "record_id": "11111111-1111-4111-8111-111111111111",
+                    "tenant_id": "tenant-a",
                     "user_id": "user-1",
-                    "content": "old episode",
-                    "metadata": {"source_hash": "sha256:meta", "synapse_ids": ["syn-1"]},
+                    "session_id": "session-a",
+                    "role": "assistant",
+                    "kind": "turn_summary",
+                    "content": "old conversation",
+                    "content_hash": "sha256:" + "a" * 64,
+                    "source_hash": "sha256:" + "b" * 64,
+                    "graph_run_id": "22222222-2222-4222-8222-222222222222",
                     "created_at": "2026-01-01T00:00:00Z",
-                    "source_hash": "sha256:wire",
-                    "graph_run_id": "graph-run-1",
+                    "metadata_version": 1,
+                    "idempotency_key": "worker:summary:1",
+                    "metadata": {"synapse_ids": ["syn-1"]},
                 }
             ).to_protobuf(contextunit_pb2)
 
@@ -79,20 +87,38 @@ async def test_brain_client_get_old_episodes_preserves_provenance_wire_fields():
     client._cu_pb2 = contextunit_pb2
     client._get_metadata = lambda: ()
 
-    episodes = await client.get_old_episodes(tenant_id="tenant-a", older_than_days=30, limit=10)
+    records = await client.query_conversation_history(
+        tenant_id="tenant-a", projection="older_than", older_than_days=30, limit=10
+    )
 
-    assert episodes == [
-        {
-            "id": "ep-1",
-            "user_id": "user-1",
-            "content": "old episode",
-            "session_id": "",
-            "metadata": {"source_hash": "sha256:meta", "synapse_ids": ["syn-1"]},
-            "created_at": "2026-01-01T00:00:00Z",
-            "source_hash": "sha256:wire",
-            "graph_run_id": "graph-run-1",
-        }
-    ]
+    assert records[0].record_id == UUID("11111111-1111-4111-8111-111111111111")
+    assert records[0].source_hash == "sha256:" + "b" * 64
+
+
+@pytest.mark.asyncio
+async def test_brain_client_execution_trace_retention_has_dedicated_rpc():
+    captured: dict[str, object] = {}
+
+    class _Stub:
+        async def ApplyExecutionTraceRetention(self, req, metadata=None):
+            captured["payload"] = MessageToDict(req.payload)
+            return ContextUnit(payload={"deleted_count": 3}).to_protobuf(contextunit_pb2)
+
+    client = BrainClient.__new__(BrainClient)
+    client._stub = _Stub()
+    client._cu_pb2 = contextunit_pb2
+    client._get_metadata = lambda: ()
+
+    deleted = await client.apply_execution_trace_retention(
+        tenant_id="tenant-a",
+        older_than_days=45,
+    )
+
+    assert deleted == 3
+    assert captured["payload"] == {
+        "tenant_id": "tenant-a",
+        "older_than_days": 45.0,
+    }
 
 
 @pytest.mark.asyncio
@@ -208,7 +234,7 @@ async def test_router_execute_agent_preserves_graph_state_keys():
                 payload={
                     "response": "done",
                     "session_id": "sess-1",
-                    "metadata": {"langfuse_enabled": False},
+                    "metadata": {"transport": "disabled"},
                     "match_stats": {"matched": 3},
                     "matches": [{"id": "a"}],
                 }
@@ -238,7 +264,6 @@ async def test_router_execute_node_preserves_extra_wire_keys():
                     "output": {"rlm_matches": [{"id": "a"}]},
                     "node_name": "rlm_process",
                     "execution_ms": 42,
-                    "langfuse_trace_id": "trace-1",
                     "custom_metric": 99,
                 }
             ).to_protobuf(contextunit_pb2)
@@ -257,7 +282,6 @@ async def test_router_execute_node_preserves_extra_wire_keys():
     assert result["node_name"] == "rlm_process"
     assert result["output"] == {"rlm_matches": [{"id": "a"}]}
     assert result["execution_ms"] == 42
-    assert result["langfuse_trace_id"] == "trace-1"
     assert result["custom_metric"] == 99
 
 
@@ -307,6 +331,100 @@ def test_router_execute_node_rejects_removed_tenant_id_kwarg():
             state={},
             tenant_id="tenant-a",
         )
+
+
+@pytest.mark.asyncio
+async def test_router_fault_spool_sdk_uses_only_sanitized_operator_projections() -> None:
+    record_id = "00000000-0000-0000-0000-000000000001"
+    status = {
+        "pending_count": 1,
+        "replayed_count": 0,
+        "poison_count": 0,
+        "discarded_by_policy_count": 0,
+        "oldest_pending_age_seconds": 4,
+        "capacity_state": "available",
+        "last_error_code": "udb.delivery_failed",
+    }
+    record = {
+        "record_id": record_id,
+        "delivery_kind": "occurrence",
+        "state": "pending",
+        "attempt_count": 1,
+        "next_attempt_at": "2026-07-17T00:00:00Z",
+        "last_error_code": "udb.delivery_failed",
+    }
+    captured: dict[str, object] = {}
+
+    class _Stub:
+        async def GetFaultSpoolStatus(self, req, metadata=None):
+            return ContextUnit(payload={"fault_spool": {"enabled": True, "status": status}}).to_protobuf(
+                contextunit_pb2
+            )
+
+        async def ListFaultSpoolRecords(self, req, metadata=None):
+            return ContextUnit(payload={"records": [record]}).to_protobuf(contextunit_pb2)
+
+        async def ReplayFaultSpool(self, req, metadata=None):
+            return ContextUnit(
+                payload={
+                    "batch": {
+                        "lease_acquired": True,
+                        "claimed_count": 1,
+                        "outcomes": [{"record_id": record_id, "state": "replayed"}],
+                        "status": {**status, "pending_count": 0, "replayed_count": 1},
+                    }
+                }
+            ).to_protobuf(contextunit_pb2)
+
+        async def DiscardFaultSpoolRecord(self, req, metadata=None):
+            captured["discard_payload"] = MessageToDict(req.payload)
+            return ContextUnit(payload={"record": {**record, "state": "discarded_by_policy"}}).to_protobuf(
+                contextunit_pb2
+            )
+
+        async def PurgeFaultSpoolTerminalRecords(self, req, metadata=None):
+            captured["purge_payload"] = MessageToDict(req.payload)
+            return ContextUnit(
+                payload={
+                    "purge": {
+                        "purge_id": "00000000-0000-0000-0000-000000000002",
+                        "actor_id": "operator:alice",
+                        "purged_count": 1,
+                        "retention_seconds": 604800,
+                        "purged_at": "2026-07-17T00:00:00Z",
+                    }
+                }
+            ).to_protobuf(contextunit_pb2)
+
+    client = router_module.RouterClient.__new__(router_module.RouterClient)
+    client._stub = _Stub()
+    client._cu_pb2 = contextunit_pb2
+    client._get_metadata = lambda: ()
+
+    operator_status = await client.get_fault_spool_status()
+    records = await client.list_fault_spool_records()
+    batch = await client.replay_fault_spool()
+    discarded = await client.discard_fault_spool_record(
+        record_id=UUID(record_id),
+        disposition_id="operator:discard:1",
+        reason_code="operator.not_replayable",
+    )
+    purged = await client.purge_fault_spool_terminal_records()
+
+    assert operator_status.enabled is True
+    assert operator_status.status is not None
+    assert operator_status.status.pending_count == 1
+    assert records[0].record_id == UUID(record_id)
+    assert batch.outcomes[0].state == "replayed"
+    assert discarded.state == "discarded_by_policy"
+    assert purged.actor_id == "operator:alice"
+    assert purged.purged_count == 1
+    assert captured["discard_payload"] == {
+        "record_id": record_id,
+        "disposition_id": "operator:discard:1",
+        "reason_code": "operator.not_replayable",
+    }
+    assert captured["purge_payload"] == {}
 
 
 @pytest.mark.asyncio
